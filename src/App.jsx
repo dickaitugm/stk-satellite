@@ -34,35 +34,63 @@ function AutoFitBounds({ wrapperRef }) {
             if (!wrapperRef.current) return;
 
             const currentZoom = map.getZoom();
-            if (currentZoom > 1.5) {
-                map.invalidateSize(); // hanya perbaiki layout
+            if (currentZoom > 2.25) {
+                map.invalidateSize();
                 return;
             }
 
-            // === Pertahankan rasio 2:1 (lebar:tinggi) ===
+            // === Maintain 2:1 aspect ratio ===
             const width = wrapperRef.current.clientWidth;
             const height = width / 2;
             wrapperRef.current.style.height = `${height}px`;
 
-            // Fit ulang dunia
             map.invalidateSize();
             map.fitBounds(worldBounds, { animate: false });
         };
 
         fitMap();
 
-        // === Integrasi dengan Electron ===
+        // === Restrict vertical pan (lock latitude) ===
+        let isClamping = false; // guard flag to prevent recursion
+
+        const clampVertical = () => {
+            if (isClamping) return; // avoid recursion loop
+
+            const center = map.getCenter();
+            const zoom = map.getZoom();
+
+            // lock latitude around 0° (equator)
+            const lockedLat = 0;
+
+            if (Math.abs(center.lat - lockedLat) > 0.0001) {
+                isClamping = true; // enable guard before panTo
+                map.panTo([lockedLat, center.lng], { animate: false });
+                isClamping = false; // release guard
+            }
+        };
+
+        // only allow horizontal movement
+        map.on("move", clampVertical);
+
+        // === optional: log zoom level for debugging ===
+        map.on("zoomend", () => {
+            console.log("Current Zoom:", map.getZoom());
+        });
+
+        // === Electron resize integration ===
         if (window.electronAPI) {
             window.electronAPI.onWindowResize(() => {
                 fitMap();
             });
         }
 
-        // Jika tanpa Electron (misal dev mode di browser)
         const observer = new ResizeObserver(fitMap);
         if (wrapperRef.current) observer.observe(wrapperRef.current);
 
-        return () => observer.disconnect();
+        return () => {
+            observer.disconnect();
+            map.off("move", clampVertical);
+        };
     }, [map, wrapperRef]);
 
     return null;
@@ -110,18 +138,13 @@ export default function App() {
             <MapContainer
                 crs={L.CRS.EPSG4326}
                 zoomSnap={0.25}
-                worldCopyJump={false}
+                worldCopyJump={true}
                 zoomControl={true}
                 style={{
                     width: "100%",
                     height: "100%",
                     background: "#050505",
                 }}
-                maxBounds={[
-                    [-90, -180],
-                    [90, 180],
-                ]}
-                maxBoundsViscosity={1.0}
                 center={[0, 0]}
                 zoom={1}
             >
