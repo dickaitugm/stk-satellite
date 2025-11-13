@@ -1,80 +1,216 @@
-import { MapContainer, TileLayer, Marker, Popup, useMap } from "react-leaflet";
+import React, { useState, useRef } from "react";
+import {
+    MapContainer,
+    WMSTileLayer,
+    LayersControl,
+    ScaleControl,
+    LayerGroup,
+    Marker,
+    Popup,
+} from "react-leaflet";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
-import { useEffect, useRef, useState } from "react";
-import * as satellite from "satellite.js/dist/satellite.es.js";
 
-// Fix default marker icon path
-delete L.Icon.Default.prototype._getIconUrl;
-L.Icon.Default.mergeOptions({
-    iconRetinaUrl: "https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon-2x.png",
-    iconUrl: "https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png",
-    shadowUrl: "https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png",
+// --- Perbaikan Ikon Marker Leaflet (Vite/Webpack) ---
+import iconUrl from "leaflet/dist/images/marker-icon.png";
+import iconShadowUrl from "leaflet/dist/images/marker-shadow.png";
+let DefaultIcon = L.icon({
+    iconUrl,
+    shadowUrl: iconShadowUrl,
+    iconAnchor: [12, 41],
+    popupAnchor: [1, -34],
 });
-
-// ===== TLE Example (LAPAN-A3) =====
-const TLE_LINE_1 = "1 41603U 16040E   24317.51868056  .00000023  00000-0  11000-4 0  9990";
-const TLE_LINE_2 = "2 41603  97.4014  84.1077 0010368 231.2014 128.7893 15.21897947489817";
-
-function SatelliteMarker() {
-    const [position, setPosition] = useState([0, 0]);
-    const [altitude, setAltitude] = useState(0);
-    const satrec = useRef(satellite.twoline2satrec(TLE_LINE_1, TLE_LINE_2));
-    const lastPosition = useRef([0, 0]);
-    const lastUpdate = useRef(Date.now());
-
-    useEffect(() => {
-        let frameId;
-        const update = () => {
-            const now = new Date();
-            const gmst = satellite.gstime(now);
-            const eci = satellite.propagate(satrec.current, now);
-            const gdPos = satellite.eciToGeodetic(eci.position, gmst);
-
-            const lat = satellite.degreesLat(gdPos.latitude);
-            const lon = satellite.degreesLong(gdPos.longitude);
-            const alt = gdPos.height * 1000;
-
-            // Lerp animasi posisi
-            const [prevLat, prevLon] = lastPosition.current;
-            const dt = (Date.now() - lastUpdate.current) / 1000;
-            const lerpFactor = Math.min(1, dt * 2); // kecepatan transisi
-            const smoothLat = prevLat + (lat - prevLat) * lerpFactor;
-            const smoothLon = prevLon + (lon - prevLon) * lerpFactor;
-
-            setPosition([smoothLat, smoothLon]);
-            setAltitude(alt.toFixed(0));
-
-            lastPosition.current = [smoothLat, smoothLon];
-            lastUpdate.current = Date.now();
-            frameId = requestAnimationFrame(update);
-        };
-
-        update();
-        return () => cancelAnimationFrame(frameId);
-    }, []);
-
-    return (
-        <Marker position={position}>
-            <Popup>
-                <b>LAPAN-A3</b>
-                <br />
-                Lat: {position[0].toFixed(4)}° <br />
-                Lon: {position[1].toFixed(4)}° <br />
-                Alt: {altitude} m
-            </Popup>
-        </Marker>
-    );
-}
+L.Marker.prototype.options.icon = DefaultIcon;
 
 export default function App() {
+    const [mapCenter] = useState([0, 118]); // Tengah Indonesia
+    const [mapZoom] = useState(3);
+
+    const orbitLayerRef = useRef(null);
+    const satelliteLayerRef = useRef(null);
+
+    // --- Daftar URL WMS ---
+    const nasaWmsUrl = "https://gibs.earthdata.nasa.gov/wms/epsg4326/best/wms.cgi";
+    const mundialisWmsUrl = "http://ows.mundialis.de/services/service?";
+    const gmrtWmsUrl = "https://www.gmrt.org/services/mapserver/wms.cgi";
+    const openTopoUrl = "https://ows.terrestris.de/osm/service?";
+    const usgsHydroUrl =
+        "https://basemap.nationalmap.gov/arcgis/services/USGSHydroCached/MapServer/WMSServer?";
+    const eumetsatUrl = "https://view.eumetsat.int/geoserver/ows?";
+    const metNorwayUrl =
+        "https://thredds.met.no/thredds/wms/met.no/observations/metobs_temperature_1hour_statistic.nc?";
+
     return (
-        <MapContainer center={[0, 110]} zoom={3} style={{ height: "100vh", width: "100%" }}>
-            <TileLayer
-                url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-                attribution="© OpenStreetMap"
-            />
-            <SatelliteMarker />
-        </MapContainer>
+        <div className="w-screen h-screen relative bg-gray-900">
+            <MapContainer
+                center={mapCenter}
+                zoom={mapZoom}
+                crs={L.CRS.EPSG4326}
+                minZoom={1}
+                maxZoom={10}
+                style={{ height: "100%", width: "100%", background: "#050505" }}
+                maxBounds={[
+                    [-90, -180],
+                    [90, 180],
+                ]}
+                maxBoundsViscosity={1.0}
+            >
+                {/* === Kontrol Layer === */}
+                <LayersControl position="topright">
+                    {/* --- NASA GIBS Layers --- */}
+                    <LayersControl.BaseLayer checked name="NASA Blue Marble">
+                        <WMSTileLayer
+                            url={nasaWmsUrl}
+                            params={{
+                                layers: "BlueMarble_NextGeneration",
+                                format: "image/jpeg",
+                                version: "1.3.0",
+                            }}
+                            attribution="NASA GIBS"
+                        />
+                    </LayersControl.BaseLayer>
+
+                    <LayersControl.BaseLayer name="NASA True Color (VIIRS)">
+                        <WMSTileLayer
+                            url={nasaWmsUrl}
+                            params={{
+                                layers: "VIIRS_SNPP_CorrectedReflectance_TrueColor",
+                                format: "image/jpeg",
+                                version: "1.3.0",
+                            }}
+                            attribution="NASA GIBS"
+                        />
+                    </LayersControl.BaseLayer>
+
+                    <LayersControl.BaseLayer name="NASA City Lights (Night)">
+                        <WMSTileLayer
+                            url={nasaWmsUrl}
+                            params={{
+                                layers: "VIIRS_CityLights_2012",
+                                format: "image/png",
+                                transparent: true,
+                                version: "1.3.0",
+                            }}
+                            attribution="NASA GIBS"
+                        />
+                    </LayersControl.BaseLayer>
+
+                    {/* --- Mundialis --- */}
+                    <LayersControl.BaseLayer name="Mundialis Topo + OSM Overlay">
+                        <WMSTileLayer
+                            url={mundialisWmsUrl}
+                            params={{
+                                layers: "TOPO-WMS,OSM-Overlay-WMS",
+                                format: "image/png",
+                                transparent: true,
+                            }}
+                            attribution="Mundialis"
+                        />
+                    </LayersControl.BaseLayer>
+
+                    <LayersControl.BaseLayer name="Mundialis Hillshade">
+                        <WMSTileLayer
+                            url={mundialisWmsUrl}
+                            params={{
+                                layers: "SRTM30-Colored-Hillshade",
+                                format: "image/png",
+                                transparent: true,
+                            }}
+                            attribution="Mundialis"
+                        />
+                    </LayersControl.BaseLayer>
+
+                    {/* --- GMRT Bathymetry --- */}
+                    <LayersControl.BaseLayer name="GMRT Bathymetry">
+                        <WMSTileLayer
+                            url={gmrtWmsUrl}
+                            params={{
+                                layers: "GMRT",
+                                format: "image/png",
+                                transparent: true,
+                            }}
+                            attribution="Marine-Geo"
+                        />
+                    </LayersControl.BaseLayer>
+
+                    {/* --- OpenTopoMap (Terrestris) --- */}
+                    <LayersControl.BaseLayer name="OpenTopoMap (Terrestris)">
+                        <WMSTileLayer
+                            url={openTopoUrl}
+                            params={{
+                                layers: "OSM-WMS",
+                                format: "image/png",
+                                transparent: true,
+                            }}
+                            attribution="© OpenTopoMap via terrestris"
+                        />
+                    </LayersControl.BaseLayer>
+
+                    {/* --- USGS Hydrographic (Rivers) --- */}
+                    <LayersControl.BaseLayer name="USGS Hydrography">
+                        <WMSTileLayer
+                            url={usgsHydroUrl}
+                            params={{
+                                layers: "0",
+                                format: "image/png",
+                                transparent: true,
+                            }}
+                            attribution="USGS National Map"
+                        />
+                    </LayersControl.BaseLayer>
+
+                    {/* --- EUMETSAT Europe Clouds --- */}
+                    <LayersControl.BaseLayer name="EUMETSAT Europe Clouds">
+                        <WMSTileLayer
+                            url={eumetsatUrl}
+                            params={{
+                                layers: "msg_fes:europe_ir108",
+                                format: "image/png",
+                                transparent: true,
+                            }}
+                            attribution="EUMETSAT View"
+                        />
+                    </LayersControl.BaseLayer>
+
+                    {/* --- MET Norway (Temperature) --- */}
+                    <LayersControl.BaseLayer name="MET Norway Temperature">
+                        <WMSTileLayer
+                            url={metNorwayUrl}
+                            params={{
+                                layers: "air_temperature",
+                                format: "image/png",
+                                transparent: true,
+                            }}
+                            attribution="MET Norway"
+                        />
+                    </LayersControl.BaseLayer>
+                </LayersControl>
+
+                {/* Skala Peta */}
+                <ScaleControl position="bottomleft" imperial={false} />
+
+                {/* Orbit & Satelit Layer */}
+                <LayerGroup ref={orbitLayerRef}></LayerGroup>
+
+                <LayerGroup ref={satelliteLayerRef}>
+                    <Marker position={[0, 118]}>
+                        <Popup>LAPAN-A3 (Dummy Marker)</Popup>
+                    </Marker>
+                </LayerGroup>
+            </MapContainer>
+
+            {/* Overlay UI */}
+            <div className="absolute top-4 left-4 z-[1000] p-4 bg-black/70 rounded-lg border border-gray-700 shadow-xl backdrop-blur-md pointer-events-none">
+                <h1 className="text-xl font-bold text-white tracking-wide">
+                    🌍 STK-Like Earth WMS Viewer
+                </h1>
+                <div className="flex items-center gap-2 mt-1">
+                    <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse"></span>
+                    <p className="text-xs text-gray-300 font-mono">
+                        Projection: Equirectangular (EPSG:4326)
+                    </p>
+                </div>
+            </div>
+        </div>
     );
 }
