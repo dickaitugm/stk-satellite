@@ -47,10 +47,12 @@ export default function SidebarLeft() {
             <div className="relative">
                 <button
                     onClick={toggleCollapse}
-                    className="absolute top-1/10 -translate-y-1/2 bg-base-300 hover:bg-base-200 border border-base-content/20 rounded-r-md h-20 w-6 flex items-center justify-center transition-colors duration-200 shadow-lg z-10"
+                    className="absolute top-1/8 -translate-y-1/2 bg-base-300 hover:bg-base-200 hover:cursor-pointer 
+                    border border-base-content/20 rounded-r-md h-20 w-6 flex items-center justify-center 
+                    transition-colors duration-200 shadow-lg z-10"
                     title={isCollapsed ? "Expand sidebar" : "Collapse sidebar"}
                 >
-                    <div className="transform -rotate-90 text-xs font-medium text-base-content/70">
+                    <div className="transform rotate-90 text-xs font-medium text-base-content/70">
                         Object
                     </div>
                 </button>
