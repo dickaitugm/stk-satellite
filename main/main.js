@@ -1,5 +1,5 @@
 import { app, BrowserWindow, Menu } from "electron";
-import { registerIpcHandlers } from "./src/services/ipcHandlers.js";
+import { registerIpcHandlers } from "../src/services/ipcHandlers.js";
 import { fileURLToPath } from "url";
 import path from "path";
 
