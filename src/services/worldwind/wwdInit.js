@@ -5,8 +5,13 @@ import WorldWind from "worldwindjs";
  * Initialize WorldWindow pada elemen canvas (element or id)
  * Returns the WorldWindow instance.
  */
-export default function initWorldWindow(canvasElementOrId) {
-    console.log("initWorldWindow called with:", canvasElementOrId);
+export default function initWorldWindow(canvasElementOrId, initialEyeDistance = 17000000) {
+    console.log(
+        "initWorldWindow called with:",
+        canvasElementOrId,
+        "Initial eye distance:",
+        initialEyeDistance
+    );
 
     const canvas =
         typeof canvasElementOrId === "string"
@@ -79,6 +84,43 @@ export default function initWorldWindow(canvasElementOrId) {
         }
     };
     window.addEventListener("resize", onResize);
+
+    // Set initial camera position
+    try {
+        // Set lookAt position at surface level (altitude = 0)
+        const initialPosition = new WW.Position(0, 0, 0); // Center at 0,0 at surface
+        wwd.navigator.lookAtLocation = initialPosition;
+
+        // Set range (eye distance) separately
+        wwd.navigator.range = initialEyeDistance;
+        console.log("Initial camera position set - Lat: 0, Lng: 0, Range:", initialEyeDistance);
+
+        // Limit latitude bounds to prevent over-zooming
+        const originalHandleSecondaryPointerAction = wwd.navigator.handleSecondaryPointerAction;
+        wwd.navigator.handleSecondaryPointerAction = function (recognizer) {
+            const result = originalHandleSecondaryPointerAction.call(this, recognizer);
+
+            // Constrain latitude to -90 to 90 degrees
+            if (this.lookAtLocation.latitude > 90) {
+                this.lookAtLocation.latitude = 90;
+            } else if (this.lookAtLocation.latitude < -90) {
+                this.lookAtLocation.latitude = -90;
+            }
+
+            // Constrain eye distance
+            if (this.range < 1000000) {
+                // Min 1000 km
+                this.range = 1000000;
+            } else if (this.range > 100000000) {
+                // Max 100000 km
+                this.range = 100000000;
+            }
+
+            return result;
+        };
+    } catch (err) {
+        console.error("Error setting initial camera position:", err);
+    }
 
     // Initial redraw
     setTimeout(() => {
