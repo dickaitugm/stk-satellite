@@ -3,6 +3,7 @@ import WorldWind from "worldwindjs";
 
 export default function Globe2D() {
     const wwdRef = useRef(null);
+    const fixingRef = useRef(false);
 
     useEffect(() => {
         const canvas = document.getElementById("globeCanvas");
@@ -22,7 +23,7 @@ export default function Globe2D() {
         wwd.addLayer(new WorldWind.CoordinatesDisplayLayer(wwd));
 
         // ==========================================================
-        // FUNCTION: GET BORDER CENTER COORDINATES
+        // FUNCTION: GET BORDER CENTER COORDINATES (ENHANCED)
         // ==========================================================
         const getCanvasBordersLatLon = () => {
             const wwd = wwdRef.current;
@@ -46,18 +47,88 @@ export default function Globe2D() {
                         latitude: pos.latitude,
                         longitude: pos.longitude
                     };
-
-                    console.log(
-                        `[BORDER ${name.toUpperCase()}]`,
-                        "Lat:", pos.latitude.toFixed(6),
-                        "Lon:", pos.longitude.toFixed(6)
-                    );
                 } else {
                     result[name] = null;
                 }
             });
 
             return result;
+        };
+
+        // Legacy function for compatibility with existing code
+        const getBorders = () => {
+            const borders = getCanvasBordersLatLon();
+            return {
+                top: borders.top ? borders.top.latitude : null,
+                bottom: borders.bottom ? borders.bottom.latitude : null
+            };
+        };
+
+        // ==========================
+        // AUTO FIX PAN - OPTIMIZED
+        // ==========================
+        const startFix = () => {
+            if (fixingRef.current) return;
+            fixingRef.current = true;
+
+            const overlay = document.getElementById("loadingOverlay");
+            overlay.style.display = "flex";
+
+            const BASE_PAN_SPEED = 1.0; // Increased from 0.25
+            const MAX_FRAME = 200; // Reduced from 600
+            let frame = 0;
+            let lastRedrawFrame = 0;
+            const REDRAW_INTERVAL = 3; // Redraw every 3 frames instead of every frame
+
+            const animate = () => {
+                if (frame++ > MAX_FRAME) {
+                    fixingRef.current = false;
+                    overlay.style.display = "none";
+                    return;
+                }
+
+                const borders = getBorders();
+                const topNull = borders.top === null;
+                const bottomNull = borders.bottom === null;
+
+                // Jika dua-duanya OK → selesai
+                if (!topNull && !bottomNull) {
+                    fixingRef.current = false;
+                    overlay.style.display = "none";
+                    return;
+                }
+
+                const nav = wwdRef.current.navigator;
+
+                // Dynamic speed based on how far off we are
+                let dynamicSpeed = BASE_PAN_SPEED;
+                
+                // If both borders are null, we're really far off - move faster
+                if (topNull && bottomNull) {
+                    dynamicSpeed = BASE_PAN_SPEED * 2.0;
+                }
+
+                // ====== LOGIKA BENAR dengan DYNAMIC SPEED ======
+                // TOP border null → kamera terlalu naik → PAN TURUN
+                if (topNull) {
+                    nav.lookAtLocation.latitude -= dynamicSpeed;
+                }
+
+                // BOTTOM border null → kamera terlalu turun → PAN NAIK
+                if (bottomNull) {
+                    nav.lookAtLocation.latitude += dynamicSpeed;
+                }
+
+                // Optimized redraw - only redraw every few frames
+                if (frame - lastRedrawFrame >= REDRAW_INTERVAL) {
+                    wwd.redraw();
+                    lastRedrawFrame = frame;
+                }
+
+                requestAnimationFrame(animate);
+            };
+
+            requestAnimationFrame(animate);
         };
 
         // ==========================================================
@@ -77,19 +148,10 @@ export default function Globe2D() {
 
             if (pickList.objects.length > 0 && pickList.objects[0].position) {
                 const pos = pickList.objects[0].position;
-
-                console.log(
-                    "Mouse Lat:", pos.latitude.toFixed(6),
-                    "Lon:", pos.longitude.toFixed(6),
-                    "Elev:", pos.altitude.toFixed(2)
-                );
-
-                // panggil terus saat mouse bergerak
-                getCanvasBordersLatLon();
+                // Optional: Enable for debugging
+                // console.log("Mouse Lat:", pos.latitude.toFixed(6), "Lon:", pos.longitude.toFixed(6));
             }
         };
-
-        canvas.addEventListener("mousemove", handleMouseMove);
 
         // ==========================================================
         // DRAG LIMIT: TOP & BOTTOM BORDER PROTECTION
@@ -149,21 +211,82 @@ export default function Globe2D() {
             canvas.style.cursor = "";
         };
 
-        // register listeners
+        // ==========================
+        // ON RESIZE
+        // ==========================
+        const onResize = () => {
+            setTimeout(() => {
+                const borders = getBorders();
+
+                if (borders.top === null || borders.bottom === null) {
+                    startFix();
+                }
+            }, 150);
+        };
+
+        // Register all event listeners
+        canvas.addEventListener("mousemove", handleMouseMove);
         canvas.addEventListener("pointerdown", onPointerDown, { passive: true });
-        window.addEventListener("pointerup", onPointerUp, { passive: true });
         canvas.addEventListener("pointermove", onPointerMoveCapture, { capture: true, passive: false });
+        window.addEventListener("pointerup", onPointerUp, { passive: true });
+        window.addEventListener("resize", onResize);
 
         // cleanup
         return () => {
             canvas.removeEventListener("mousemove", handleMouseMove);
             canvas.removeEventListener("pointerdown", onPointerDown);
-            window.removeEventListener("pointerup", onPointerUp);
             canvas.removeEventListener("pointermove", onPointerMoveCapture, { capture: true });
+            window.removeEventListener("pointerup", onPointerUp);
+            window.removeEventListener("resize", onResize);
         };
+
     }, []);
 
     return (
-        <canvas id="globeCanvas" className="w-full h-full bg-black"></canvas>
+        <>
+            <canvas
+                id="globeCanvas"
+                className="w-full h-full bg-black"
+            ></canvas>
+
+            <div
+                id="loadingOverlay"
+                style={{
+                    display: "none",
+                    position: "fixed",
+                    inset: 0,
+                    background: "rgba(0,0,0,1)", // Full black background
+                    color: "white",
+                    flexDirection: "column",
+                    justifyContent: "center",
+                    alignItems: "center",
+                    fontSize: "20px",
+                    fontWeight: "bold",
+                    zIndex: 9999
+                }}
+            >
+                {/* Loading Spinner */}
+                <div
+                    style={{
+                        width: "60px",
+                        height: "60px",
+                        border: "6px solid rgba(255,255,255,0.3)",
+                        borderTop: "6px solid white",
+                        borderRadius: "50%",
+                        animation: "spin 1s linear infinite",
+                        marginBottom: "20px"
+                    }}
+                ></div>
+                Adjusting map...
+                
+                {/* CSS Animation for spinner */}
+                <style jsx>{`
+                    @keyframes spin {
+                        0% { transform: rotate(0deg); }
+                        100% { transform: rotate(360deg); }
+                    }
+                `}</style>
+            </div>
+        </>
     );
 }
