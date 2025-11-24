@@ -392,17 +392,17 @@ const Globe2D = ({ isSimulating, onMouseMove }) => {
 
         {/* Border Sensors Labels */}
         {/* TOP */}
-        <div className="absolute top-0 left-1/2 -translate-x-1/2 bg-slate-900/90 text-white text-[10px] px-2 py-1 rounded-b border border-slate-500/50 flex flex-col items-center z-10 shadow-lg">
+        <div className={`absolute top-0 left-1/2 -translate-x-1/2 bg-slate-900/90 text-white text-[10px] px-2 py-1 rounded-b border border-slate-500/50 flex flex-col items-center z-10 shadow-lg transition-opacity duration-1000 ${!isLoading ? 'opacity-100' : 'opacity-0'}`}>
           <div className={`w-2 h-2 rounded-full mb-1 ${borderStats.top ? 'bg-green-500 animate-pulse' : 'bg-red-500'}`} />
           <span>{borderStats.top ? `${borderStats.top.lat.toFixed(2)}°, ${borderStats.top.lon.toFixed(2)}°` : 'NO SIGNAL'}</span>
         </div>
         {/* BOTTOM */}
-        <div className="absolute bottom-0 left-1/2 -translate-x-1/2 bg-slate-900/90 text-white text-[10px] px-2 py-1 rounded-t border border-slate-500/50 flex flex-col-reverse items-center z-10 shadow-lg">
+        <div className={`absolute bottom-0 left-1/2 -translate-x-1/2 bg-slate-900/90 text-white text-[10px] px-2 py-1 rounded-t border border-slate-500/50 flex flex-col-reverse items-center z-10 shadow-lg transition-opacity duration-1000 ${!isLoading ? 'opacity-100' : 'opacity-0'}`}>
           <div className={`w-2 h-2 rounded-full mt-1 ${borderStats.bottom ? 'bg-green-500 animate-pulse' : 'bg-red-500'}`} />
           <span>{borderStats.bottom ? `${borderStats.bottom.lat.toFixed(2)}°, ${borderStats.bottom.lon.toFixed(2)}°` : 'NO SIGNAL'}</span>
         </div>
         {/* LEFT */}
-        <div className="absolute top-1/2 left-0 -translate-y-1/2 bg-slate-900/90 text-white text-[10px] px-1 py-1 rounded-r border border-slate-500/50 flex flex-row items-center z-10 shadow-lg">
+        <div className={`absolute top-1/2 left-0 -translate-y-1/2 bg-slate-900/90 text-white text-[10px] px-1 py-1 rounded-r border border-slate-500/50 flex flex-row items-center z-10 shadow-lg transition-opacity duration-1000 ${!isLoading ? 'opacity-100' : 'opacity-0'}`}>
           <div className={`w-2 h-2 rounded-full mr-1 ${borderStats.left ? 'bg-green-500 animate-pulse' : 'bg-red-500'}`} />
           <div className="flex flex-col">
             {borderStats.left ? (
@@ -414,7 +414,7 @@ const Globe2D = ({ isSimulating, onMouseMove }) => {
           </div>
         </div>
         {/* RIGHT */}
-        <div className="absolute top-1/2 right-0 -translate-y-1/2 bg-slate-900/90 text-white text-[10px] px-1 py-1 rounded-l border border-slate-500/50 flex flex-row-reverse items-center z-10 shadow-lg">
+        <div className={`absolute top-1/2 right-0 -translate-y-1/2 bg-slate-900/90 text-white text-[10px] px-1 py-1 rounded-l border border-slate-500/50 flex flex-row-reverse items-center z-10 shadow-lg transition-opacity duration-1000 ${!isLoading ? 'opacity-100' : 'opacity-0'}`}>
           <div className={`w-2 h-2 rounded-full ml-1 ${borderStats.right ? 'bg-green-500 animate-pulse' : 'bg-red-500'}`} />
           <div className="flex flex-col text-right">
             {borderStats.right ? (
@@ -427,7 +427,7 @@ const Globe2D = ({ isSimulating, onMouseMove }) => {
         </div>
 
         {/* Overlay UI (Info Box) */}
-        <div className="absolute top-2 left-2 bg-black/50 backdrop-blur-sm p-2 rounded border border-white/10 text-xs text-white">
+        <div className={`absolute top-2 left-2 bg-black/50 backdrop-blur-sm p-2 rounded border border-white/10 text-xs text-white transition-opacity duration-1000 ${!isLoading ? 'opacity-100' : 'opacity-0'}`}>
           <div className="font-bold text-blue-400 mb-1">ENGINE STATUS</div>
           <div>Mode: Globe2D</div>
           <div>Layer: BMNG (NASA)</div>
