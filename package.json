@@ -8,7 +8,7 @@
         "dev": "vite",
         "build:react": "vite build",
         "start": "electron .",
-        "dev:electron": "concurrently \"vite build --watch\" \"electron .\"",
+        "dev:electron": "cross-env NODE_ENV=development concurrently -k \"vite\" \"wait-on http://localhost:5173 && electron .\"",
         "build": "npm run build:react && electron-builder --win --x64"
     },
     "dependencies": {

@@ -6,31 +6,6 @@ import {
 } from 'lucide-react';
 import WorldWind from "worldwindjs";
 
-/**
- * UTILITIES
- */
-// Fungsi untuk memuat script eksternal (WorldWind)
-const useWorldWindScript = (src) => {
-  const [loaded, setLoaded] = useState(false);
-
-  useEffect(() => {
-    if (window.WorldWind) {
-      setLoaded(true);
-      return;
-    }
-    const script = document.createElement('script');
-    script.src = src;
-    script.async = true;
-    script.onload = () => setLoaded(true);
-    document.body.appendChild(script);
-
-    return () => {
-      // Cleanup jika diperlukan (biasanya biarkan script tetap ada)
-    };
-  }, [src]);
-
-  return loaded;
-};
 
 /**
  * KOMPONEN: TopNavbar
@@ -121,8 +96,38 @@ const Globe2D = ({ isSimulating, onMouseMove }) => {
   const containerRef = useRef(null);
   const canvasRef = useRef(null);
   const wwdRef = useRef(null);
+  const isStableRef = useRef(false); // Ref for stability status
   const [dimensions, setDimensions] = useState({ width: 0, height: 0 });
-  const [range, setRange] = useState(20000000); // 20,000 km
+  const [range, setRange] = useState(300000); // 20,000 km
+  const [borderStats, setBorderStats] = useState({
+    top: null,
+    bottom: null,
+    left: null,
+    right: null
+  });
+
+  // Listener to disable vertical pan when stable
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+
+    const preventVerticalPan = () => {
+      if (isStableRef.current && wwdRef.current) {
+        // Lock latitude to 0
+        wwdRef.current.navigator.lookAtLocation.latitude = 0;
+      }
+    };
+
+    canvas.addEventListener('mousemove', preventVerticalPan);
+    canvas.addEventListener('touchmove', preventVerticalPan);
+    canvas.addEventListener('wheel', preventVerticalPan);
+
+    return () => {
+      canvas.removeEventListener('mousemove', preventVerticalPan);
+      canvas.removeEventListener('touchmove', preventVerticalPan);
+      canvas.removeEventListener('wheel', preventVerticalPan);
+    };
+  }, []);
   
   // 1. Load WorldWindJS
   // const isScriptLoaded = useWorldWindScript("https://files.worldwind.arc.nasa.gov/artifactory/web/0.9.0/worldwind.min.js");
@@ -209,6 +214,92 @@ const Globe2D = ({ isSimulating, onMouseMove }) => {
     }
   }, [range]);
 
+  // Auto-Adjust Range & Pan to Fit World Vertically (-90 to 90)
+  useEffect(() => {
+    if (!wwdRef.current || dimensions.height === 0) return;
+    const wwd = wwdRef.current;
+    const { top, bottom } = borderStats;
+    
+    // STABILITY THRESHOLD (When to stop)
+    // We stop if we see at least 88 degrees. 
+    // Going for 90 is risky as it flirts with the background (null).
+    const STABILITY_THRESHOLD = 88; 
+    
+    // CALCULATION TARGET (What to aim for)
+    // We aim for 89 degrees to leave a 1 degree buffer from the void.
+    const CALC_TARGET = 89;
+
+    // Check if we are stable
+    const isStable = top && bottom && Math.abs(top.lat) >= STABILITY_THRESHOLD && Math.abs(bottom.lat) >= STABILITY_THRESHOLD;
+    
+    isStableRef.current = isStable; 
+
+    if (!isStable) {
+       // Force Center (0,0)
+       wwd.navigator.lookAtLocation.latitude = 0;
+       wwd.navigator.lookAtLocation.longitude = 0;
+       
+       if (!top || !bottom) {
+          // Case 1: Hit Background (Too far out)
+          // Action: Zoom In gently to recover. 
+          // 0.95 is safe. 0.6 was too aggressive and caused looping.
+          setRange(prev => prev * 0.95);
+       } else {
+          // Case 2: Map Visible but cropped (Too close)
+          const currentLat = Math.abs(top.lat);
+          
+          // Only adjust if we are significantly off
+          if (currentLat < STABILITY_THRESHOLD && currentLat > 0.1) {
+             // Calculate ratio to reach CALC_TARGET
+             let ratio = CALC_TARGET / currentLat;
+             // Clamp ratio to avoid wild jumps
+             ratio = Math.min(ratio, 2.0); 
+             setRange(prev => prev * ratio);
+          }
+       }
+    }
+  }, [borderStats, dimensions.height]);
+
+  // Border Sensors (Detect Lat/Lon at canvas edges)
+  useEffect(() => {
+    const interval = setInterval(() => {
+      if (!wwdRef.current || !canvasRef.current) return;
+      const wwd = wwdRef.current;
+      const { width, height } = dimensions;
+      if (width <= 0 || height <= 0) return;
+
+      // NOTE: Removed Range Sync to prevent conflict with Auto-Adjust logic
+      
+      const getPick = (x, y) => {
+        // pickTerrain requires WorldWind.Vec2
+        const pickList = wwd.pickTerrain(new WorldWind.Vec2(x, y));
+        if (pickList.objects.length > 0 && pickList.objects[0].position) {
+          return {
+            lat: pickList.objects[0].position.latitude,
+            lon: pickList.objects[0].position.longitude
+          };
+        }
+        return null;
+      };
+
+      // Use a small buffer from edges to ensure we pick inside the canvas
+      const top = getPick(width / 2, 5);
+      const bottom = getPick(width / 2, height - 5);
+      const left = getPick(5, height / 2);
+      const right = getPick(width - 5, height / 2);
+
+      setBorderStats({
+        top: top,
+        bottom: bottom,
+        left: left,
+        right: right
+      });
+
+    }, 100); // Faster updates (100ms) for smoother calibration
+
+    return () => clearInterval(interval);
+  }, [dimensions]);
+
   // 5. Mouse Handler (Menggunakan Math 2D sederhana yang lebih cepat dari Picking WorldWind untuk UI status)
   const handleMouseMoveInternal = (e) => {
     if (!canvasRef.current) return;
@@ -245,6 +336,42 @@ const Globe2D = ({ isSimulating, onMouseMove }) => {
           >
             Your browser does not support HTML5 Canvas.
           </canvas>
+
+        {/* Border Sensors Labels */}
+        {/* TOP */}
+        <div className="absolute top-0 left-1/2 -translate-x-1/2 bg-slate-900/90 text-white text-[10px] px-2 py-1 rounded-b border border-slate-500/50 flex flex-col items-center z-10 shadow-lg">
+          <div className={`w-2 h-2 rounded-full mb-1 ${borderStats.top ? 'bg-green-500 animate-pulse' : 'bg-red-500'}`} />
+          <span>{borderStats.top ? `${borderStats.top.lat.toFixed(2)}°, ${borderStats.top.lon.toFixed(2)}°` : 'NO SIGNAL'}</span>
+        </div>
+        {/* BOTTOM */}
+        <div className="absolute bottom-0 left-1/2 -translate-x-1/2 bg-slate-900/90 text-white text-[10px] px-2 py-1 rounded-t border border-slate-500/50 flex flex-col-reverse items-center z-10 shadow-lg">
+          <div className={`w-2 h-2 rounded-full mt-1 ${borderStats.bottom ? 'bg-green-500 animate-pulse' : 'bg-red-500'}`} />
+          <span>{borderStats.bottom ? `${borderStats.bottom.lat.toFixed(2)}°, ${borderStats.bottom.lon.toFixed(2)}°` : 'NO SIGNAL'}</span>
+        </div>
+        {/* LEFT */}
+        <div className="absolute top-1/2 left-0 -translate-y-1/2 bg-slate-900/90 text-white text-[10px] px-1 py-1 rounded-r border border-slate-500/50 flex flex-row items-center z-10 shadow-lg">
+          <div className={`w-2 h-2 rounded-full mr-1 ${borderStats.left ? 'bg-green-500 animate-pulse' : 'bg-red-500'}`} />
+          <div className="flex flex-col">
+            {borderStats.left ? (
+              <>
+                <span>{borderStats.left.lat.toFixed(2)}°</span>
+                <span>{borderStats.left.lon.toFixed(2)}°</span>
+              </>
+            ) : <span>NO SIGNAL</span>}
+          </div>
+        </div>
+        {/* RIGHT */}
+        <div className="absolute top-1/2 right-0 -translate-y-1/2 bg-slate-900/90 text-white text-[10px] px-1 py-1 rounded-l border border-slate-500/50 flex flex-row-reverse items-center z-10 shadow-lg">
+          <div className={`w-2 h-2 rounded-full ml-1 ${borderStats.right ? 'bg-green-500 animate-pulse' : 'bg-red-500'}`} />
+          <div className="flex flex-col text-right">
+            {borderStats.right ? (
+              <>
+                <span>{borderStats.right.lat.toFixed(2)}°</span>
+                <span>{borderStats.right.lon.toFixed(2)}°</span>
+              </>
+            ) : <span>NO SIGNAL</span>}
+          </div>
+        </div>
 
         {/* Overlay UI (Info Box) */}
         <div className="absolute top-2 left-2 bg-black/50 backdrop-blur-sm p-2 rounded border border-white/10 text-xs text-white">

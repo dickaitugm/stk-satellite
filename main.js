@@ -14,9 +14,10 @@ const __dirname = path.dirname(__filename); // Dapatkan direktori dari file saat
 
 function createWindow() {
   win = new BrowserWindow({
-    width: 1450,
-    height: 865,
-    resizable: true,
+    // Ukuran dasar (fallback), tidak terlalu penting karena akan di-maximize
+    width: 1280, 
+    height: 720,
+    show: false, // PENTING: Sembunyikan dulu agar transisi mulus
     webPreferences: {
       preload: path.join(__dirname, "preload.js"),
       contextIsolation: true,
@@ -24,17 +25,22 @@ function createWindow() {
     },
   });
 
+  // LOGIKA MAXIMIZE:
+  // Ini akan menyesuaikan dengan resolusi layar pengguna (1366x768, 1920x1080, 4K, dll)
+  win.maximize(); 
+  win.show();
+
   // Load the correct URL based on environment
   if (process.env.NODE_ENV === "development") {
     win.loadURL("http://localhost:5173"); // Vite dev server
-    win.webContents.openDevTools(); // Optional: Open dev tools in dev mode
+    // win.webContents.openDevTools(); // Optional: Open dev tools in dev mode
   } else {
     // Load the index.html from the dist folder within the asar archive
     win.loadFile(path.join(__dirname, "dist", "index.html")).catch((err) => {
       console.error("Failed to load index.html:", err);
     });
   }
-  win.webContents.openDevTools(); // Optional: Open dev tools in dev mode
+  // win.webContents.openDevTools(); // Optional: Open dev tools in dev mode
 
   // Daftarkan IPC handlers
   registerIpcHandlers();
