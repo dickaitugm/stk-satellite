@@ -99,6 +99,7 @@ const Globe2D = ({ isSimulating, onMouseMove }) => {
   const isStableRef = useRef(false); // Ref for stability status
   const targetLatRef = useRef(0); // Ref for target latitude
   const [dimensions, setDimensions] = useState({ width: 0, height: 0 });
+  const [isLoading, setIsLoading] = useState(true);
   const [range, setRange] = useState(300000); // 20,000 km
   const [borderStats, setBorderStats] = useState({
     top: null,
@@ -195,6 +196,9 @@ const Globe2D = ({ isSimulating, onMouseMove }) => {
       
       wwd.redraw();
       
+      // Simulate initialization delay for smooth transition
+      setTimeout(() => setIsLoading(false), 1500);
+      
     } catch (error) {
       console.error("Failed to initialize WorldWind:", error);
     }
@@ -203,7 +207,11 @@ const Globe2D = ({ isSimulating, onMouseMove }) => {
   // 4. Update Redraw saat dimensi berubah
   useEffect(() => {
     if (wwdRef.current) {
+      setIsLoading(true);
       wwdRef.current.redraw();
+      
+      const timer = setTimeout(() => setIsLoading(false), 1000);
+      return () => clearTimeout(timer);
     }
   }, [dimensions]);
 
@@ -350,6 +358,22 @@ const Globe2D = ({ isSimulating, onMouseMove }) => {
         }}
         className="relative shadow-2xl border border-slate-700 bg-black"
       >
+          {/* Loading Overlay */}
+          <div className={`absolute inset-0 bg-slate-950 z-50 flex flex-col items-center justify-center transition-opacity duration-1000 ease-out ${isLoading ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}>
+            <div className="relative mb-6">
+              <div className="absolute inset-0 bg-blue-500/20 blur-xl rounded-full animate-pulse"></div>
+              <Globe className="w-16 h-16 text-blue-500 animate-spin relative z-10" style={{ animationDuration: '2s' }} />
+            </div>
+            <div className="flex flex-col items-center gap-2">
+              <span className="text-blue-400 font-mono text-sm tracking-[0.3em] font-bold animate-pulse">SYSTEM INITIALIZATION</span>
+              <div className="flex items-center gap-2 text-slate-500 text-[10px] tracking-widest">
+                <span className="w-1 h-1 bg-slate-500 rounded-full animate-bounce" style={{ animationDelay: '0ms' }}></span>
+                <span className="w-1 h-1 bg-slate-500 rounded-full animate-bounce" style={{ animationDelay: '150ms' }}></span>
+                <span className="w-1 h-1 bg-slate-500 rounded-full animate-bounce" style={{ animationDelay: '300ms' }}></span>
+              </div>
+            </div>
+          </div>
+
           <canvas
             ref={canvasRef}
             width={dimensions.width}
