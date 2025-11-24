@@ -97,6 +97,7 @@ const Globe2D = ({ isSimulating, onMouseMove }) => {
   const canvasRef = useRef(null);
   const wwdRef = useRef(null);
   const isStableRef = useRef(false); // Ref for stability status
+  const targetLatRef = useRef(0); // Ref for target latitude
   const [dimensions, setDimensions] = useState({ width: 0, height: 0 });
   const [range, setRange] = useState(300000); // 20,000 km
   const [borderStats, setBorderStats] = useState({
@@ -113,8 +114,8 @@ const Globe2D = ({ isSimulating, onMouseMove }) => {
 
     const preventVerticalPan = () => {
       if (isStableRef.current && wwdRef.current) {
-        // Lock latitude to 0
-        wwdRef.current.navigator.lookAtLocation.latitude = 0;
+        // Lock latitude to target
+        wwdRef.current.navigator.lookAtLocation.latitude = targetLatRef.current;
       }
     };
 
@@ -234,11 +235,34 @@ const Globe2D = ({ isSimulating, onMouseMove }) => {
     
     isStableRef.current = isStable; 
 
+    // --- PAN CORRECTION (Balancing) ---
+    // User Request: If abs(top) > abs(bottom), shift down.
+    if (top && bottom) {
+        const absTop = Math.abs(top.lat);
+        const absBottom = Math.abs(bottom.lat);
+        
+        // Threshold for balancing to avoid jitter
+        if (Math.abs(absTop - absBottom) > 0.05) {
+            if (absTop > absBottom) {
+                // Top is "larger" (more visible), so we are shifted Up. Move Down.
+                wwd.navigator.lookAtLocation.latitude -= 0.1; 
+            } else {
+                // Bottom is "larger", so we are shifted Down. Move Up.
+                wwd.navigator.lookAtLocation.latitude += 0.1;
+            }
+        }
+    } else {
+        // If we lost a sensor, re-center to find it
+        wwd.navigator.lookAtLocation.latitude = 0;
+    }
+    
+    // Always lock Longitude
+    wwd.navigator.lookAtLocation.longitude = 0;
+    
+    // Update Target Lat Ref for the Event Listener
+    targetLatRef.current = wwd.navigator.lookAtLocation.latitude;
+
     if (!isStable) {
-       // Force Center (0,0)
-       wwd.navigator.lookAtLocation.latitude = 0;
-       wwd.navigator.lookAtLocation.longitude = 0;
-       
        if (!top || !bottom) {
           // Case 1: Hit Background (Too far out)
           // Action: Zoom In gently to recover. 
