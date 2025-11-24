@@ -122,6 +122,7 @@ const Globe2D = ({ isSimulating, onMouseMove }) => {
   const canvasRef = useRef(null);
   const wwdRef = useRef(null);
   const [dimensions, setDimensions] = useState({ width: 0, height: 0 });
+  const [range, setRange] = useState(20000000); // 20,000 km
   
   // 1. Load WorldWindJS
   // const isScriptLoaded = useWorldWindScript("https://files.worldwind.arc.nasa.gov/artifactory/web/0.9.0/worldwind.min.js");
@@ -155,7 +156,7 @@ const Globe2D = ({ isSimulating, onMouseMove }) => {
 
   // 3. Initialize WorldWind
   useEffect(() => {
-    if (!canvasRef.current || wwdRef.current) return;
+    if (!canvasRef.current || wwdRef.current || dimensions.width <= 0 || dimensions.height <= 0) return;
 
     try {
       // Create WorldWind instance
@@ -184,14 +185,14 @@ const Globe2D = ({ isSimulating, onMouseMove }) => {
       // Setup view agar pas di tengah (lookAt 0,0)
       wwd.navigator.lookAtLocation.latitude = 0;
       wwd.navigator.lookAtLocation.longitude = 0;
-      wwd.navigator.range = 2e7; // Altitude awal
+      wwd.navigator.range = range; // Altitude awal
       
       wwd.redraw();
       
     } catch (error) {
       console.error("Failed to initialize WorldWind:", error);
     }
-  }, []);
+  }, [dimensions.width, dimensions.height]);
 
   // 4. Update Redraw saat dimensi berubah
   useEffect(() => {
@@ -199,6 +200,14 @@ const Globe2D = ({ isSimulating, onMouseMove }) => {
       wwdRef.current.redraw();
     }
   }, [dimensions]);
+
+  // Handle Range Change
+  useEffect(() => {
+    if (wwdRef.current) {
+      wwdRef.current.navigator.range = range;
+      wwdRef.current.redraw();
+    }
+  }, [range]);
 
   // 5. Mouse Handler (Menggunakan Math 2D sederhana yang lebih cepat dari Picking WorldWind untuk UI status)
   const handleMouseMoveInternal = (e) => {
@@ -238,10 +247,24 @@ const Globe2D = ({ isSimulating, onMouseMove }) => {
           </canvas>
 
         {/* Overlay UI (Info Box) */}
-        <div className="absolute top-2 left-2 bg-black/50 backdrop-blur-sm p-2 rounded border border-white/10 text-xs text-white pointer-events-none">
-          <div className="font-bold text-blue-400">ENGINE STATUS</div>
+        <div className="absolute top-2 left-2 bg-black/50 backdrop-blur-sm p-2 rounded border border-white/10 text-xs text-white">
+          <div className="font-bold text-blue-400 mb-1">ENGINE STATUS</div>
           <div>Mode: Globe2D</div>
           <div>Layer: BMNG (NASA)</div>
+          <div className="mt-2 border-t border-white/10 pt-1">
+            <div>Canvas: {Math.round(dimensions.width)} x {Math.round(dimensions.height)}</div>
+          </div>
+          <div className="mt-2 border-t border-white/10 pt-1 pointer-events-auto">
+             <label className="block mb-1 text-gray-400">Eye Range (km)</label>
+             <input 
+               type="number" 
+               min="1000"
+               step="100"
+               value={range / 1000}
+               onChange={(e) => setRange(Number(e.target.value) * 1000)}
+               className="w-full bg-slate-800 border border-slate-600 rounded px-2 py-1 text-white text-xs focus:border-blue-500 outline-none"
+             />
+          </div>
         </div>
       </div>
     </div>
