@@ -230,34 +230,33 @@ const Globe2D = ({ isSimulating, onMouseMove }) => {
     // We aim for 89 degrees to leave a 1 degree buffer from the void.
     const CALC_TARGET = 89;
 
+    // Calculate absolute latitudes
+    const absTop = top ? Math.abs(top.lat) : 0;
+    const absBottom = bottom ? Math.abs(bottom.lat) : 0;
+    const avgLat = (absTop + absBottom) / 2;
+
     // Check if we are stable
-    const isStable = top && bottom && Math.abs(top.lat) >= STABILITY_THRESHOLD && Math.abs(bottom.lat) >= STABILITY_THRESHOLD;
+    // Use average to prevent zoom-out when just one side is slightly off during balancing
+    const isStable = top && bottom && avgLat >= STABILITY_THRESHOLD;
     
     isStableRef.current = isStable; 
 
     // --- PAN CORRECTION (Balancing) ---
     // User Request: If abs(top) > abs(bottom), shift down.
     if (top && bottom) {
-        const absTop = Math.abs(top.lat);
-        const absBottom = Math.abs(bottom.lat);
+        const diff = absTop - absBottom;
         
-        // Threshold for balancing to avoid jitter
-        if (Math.abs(absTop - absBottom) > 0.05) {
-            if (absTop > absBottom) {
-                // Top is "larger" (more visible), so we are shifted Up. Move Down.
-                wwd.navigator.lookAtLocation.latitude -= 0.1; 
-            } else {
-                // Bottom is "larger", so we are shifted Down. Move Up.
-                wwd.navigator.lookAtLocation.latitude += 0.1;
-            }
+        // Threshold for balancing (increased to 0.1 to reduce jitter)
+        if (Math.abs(diff) > 0.1) {
+            // Proportional correction (10% of difference), capped at 0.5 degree
+            // This prevents oscillation compared to a fixed 0.1 step
+            const correction = Math.sign(diff) * Math.min(Math.abs(diff) * 0.1, 0.5);
+            wwd.navigator.lookAtLocation.latitude -= correction;
         }
     } else {
         // If we lost a sensor, re-center to find it
         wwd.navigator.lookAtLocation.latitude = 0;
     }
-    
-    // Always lock Longitude
-    wwd.navigator.lookAtLocation.longitude = 0;
     
     // Update Target Lat Ref for the Event Listener
     targetLatRef.current = wwd.navigator.lookAtLocation.latitude;
