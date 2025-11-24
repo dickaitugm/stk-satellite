@@ -194,9 +194,14 @@ export default function Globe2DGridSearchExplorer() {
             
             addToLog("✅ Globe2D with Equirectangular projection set");
 
-            // Add Blue Marble layer
+            // Add More layers as needed
+            const layer = []
             const bmngLayer = new WorldWind.BMNGLayer();
             wwd.addLayer(bmngLayer);
+
+            // Add Coordinates Display Layer
+            const coordinatesLayer = new WorldWind.CoordinatesDisplayLayer(wwd);
+            wwd.addLayer(coordinatesLayer);
             
             addToLog("✅ BMNG Layer added");
 
@@ -273,6 +278,14 @@ export default function Globe2DGridSearchExplorer() {
                 wwd.viewport.width = canvasWidth;
                 wwd.viewport.height = canvasHeight;
                 addToLog(`📐 Viewport updated: ${canvasWidth}×${canvasHeight}`);
+            }
+
+            // Reset Navigator to 0,0 and maintain range
+            if (wwd.navigator) {
+                wwd.navigator.lookAtLocation.latitude = 0;
+                wwd.navigator.lookAtLocation.longitude = 0;
+                wwd.navigator.range = range;
+                addToLog(`📍 Navigator reset to 0,0 | Range: ${(range/1000).toFixed(0)}km`);
             }
 
             // Multiple render attempts for reliability
@@ -489,7 +502,11 @@ export default function Globe2DGridSearchExplorer() {
                                 min={400}
                                 max={2000}
                                 value={canvasWidth}
-                                onChange={(e) => setCanvasWidth(+e.target.value)}
+                                onChange={(e) => {
+                                    const w = +e.target.value;
+                                    setCanvasWidth(w);
+                                    setCanvasHeight(Math.round(w / 2));
+                                }}
                                 className="w-full px-2 py-1 bg-gray-700 text-white rounded border border-gray-600 focus:border-blue-500"
                             />
                         </div>
@@ -500,7 +517,11 @@ export default function Globe2DGridSearchExplorer() {
                                 min={300}
                                 max={1500}
                                 value={canvasHeight}
-                                onChange={(e) => setCanvasHeight(+e.target.value)}
+                                onChange={(e) => {
+                                    const h = +e.target.value;
+                                    setCanvasHeight(h);
+                                    setCanvasWidth(Math.round(h * 2));
+                                }}
                                 className="w-full px-2 py-1 bg-gray-700 text-white rounded border border-gray-600 focus:border-blue-500"
                             />
                         </div>
