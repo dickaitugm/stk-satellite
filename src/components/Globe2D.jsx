@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useCallback } from "react";
 import WorldWind from "worldwindjs";
 
 export default function Globe2DGridSearchExplorer() {
@@ -19,233 +19,14 @@ export default function Globe2DGridSearchExplorer() {
     const [sidebarWidth, setSidebarWidth] = useState(400);
     const [isDragging, setIsDragging] = useState(false);
 
-    useEffect(() => {
-        const canvas = canvasRef.current;
-        if (!canvas) {
-            addToLog("❌ Canvas not found during initialization");
-            return;
-        }
-
-        addToLog("🚀 Initializing WorldWind...");
-
-        try {
-            // Create WorldWind instance
-            const wwd = new WorldWind.WorldWindow(canvas);
-            wwdRef.current = wwd;
-            
-            addToLog("✅ WorldWindow created successfully");
-
-            // Create Globe2D with equirectangular projection
-            const flat = new WorldWind.Globe2D();
-            flat.projection = new WorldWind.ProjectionEquirectangular();
-            wwd.globe = flat;
-            
-            addToLog("✅ Globe2D with Equirectangular projection set");
-
-            // Add Blue Marble layer
-            const bmngLayer = new WorldWind.BMNGLayer();
-            wwd.addLayer(bmngLayer);
-            
-            addToLog("✅ BMNG Layer added");
-
-            // Set initial navigator position
-            const nav = wwd.navigator;
-            nav.lookAtLocation.latitude = 0;   // Equator
-            nav.lookAtLocation.longitude = 0;  // Prime Meridian
-            nav.range = range;
-            
-            addToLog("✅ Navigator position set");
-
-            // Initial canvas setup
-            canvas.width = canvasWidth;
-            canvas.height = canvasHeight;
-            canvas.style.width = canvasWidth + 'px';
-            canvas.style.height = canvasHeight + 'px';
-            
-            // Set viewport
-            if (wwd.viewport) {
-                wwd.viewport.width = canvasWidth;
-                wwd.viewport.height = canvasHeight;
-            }
-            
-            addToLog(`✅ Canvas initialized: ${canvasWidth}×${canvasHeight}`);
-
-            // Force initial render
-            setTimeout(() => {
-                try {
-                    wwd.drawFrame();
-                    addToLog("✅ Initial render completed");
-                    
-                    // Analyze coverage after successful render
-                    setTimeout(() => {
-                        analyzeCoverage();
-                    }, 200);
-                } catch (renderError) {
-                    addToLog(`❌ Render error: ${renderError.message}`);
-                }
-            }, 100);
-
-        } catch (error) {
-            addToLog(`❌ WorldWind initialization error: ${error.message}`);
-            console.error("WorldWind initialization failed:", error);
-        }
-    }, []);
-
-    // === Update Canvas Size and Range ===
-    function updateCanvasAndRange() {
-        const canvas = canvasRef.current;
-        const wwd = wwdRef.current;
-        if (!canvas || !wwd) return;
-
-        addToLog("🔄 Updating canvas and range...");
-        
-        // CRITICAL: Update canvas dimensions properly
-        // Set actual canvas resolution (internal buffer size)
-        canvas.width = canvasWidth;
-        canvas.height = canvasHeight;
-        
-        // Set display size (CSS size)
-        canvas.style.width = canvasWidth + 'px';
-        canvas.style.height = canvasHeight + 'px';
-
-        // IMPORTANT: Notify WorldWind about canvas size change
-        // WorldWind needs to recalculate its viewport and projection
-        if (wwd.viewport) {
-            wwd.viewport.width = canvasWidth;
-            wwd.viewport.height = canvasHeight;
-        }
-
-        // Update navigator range
-        const nav = wwd.navigator;
-        nav.range = range;
-
-        // CRITICAL: Force WorldWind to recalculate everything
-        wwd.drawFrame();  // More thorough than redraw()
-        
-        addToLog(`📐 Canvas updated: ${canvasWidth}×${canvasHeight}px`);
-        addToLog(`📏 Range updated: ${(range/1000).toFixed(0)}km`);
-        addToLog(`🖥️ Viewport updated: ${wwd.viewport?.width}×${wwd.viewport?.height}`);
-
-        // Analyze coverage after update
-        setTimeout(() => {
-            // Double redraw to ensure proper update
-            wwd.drawFrame();
-            analyzeCoverage();
-        }, 300);
-    }
-
     // === Add message to console log ===
-    function addToLog(message) {
+    const addToLog = useCallback((message) => {
         const timestamp = new Date().toLocaleTimeString();
         setConsoleLog(prev => [...prev.slice(-20), `[${timestamp}] ${message}`]);
-    }
-
-    // === Handle Canvas Size Changes ===
-    useEffect(() => {
-        const canvas = canvasRef.current;
-        const wwd = wwdRef.current;
-        
-        // Skip if not properly initialized
-        if (!canvas || !wwd) {
-            addToLog("⏳ Skipping canvas update - not initialized yet");
-            return;
-        }
-
-        addToLog(`🔄 Canvas size changed to ${canvasWidth}×${canvasHeight}`);
-        
-        try {
-            // Set canvas buffer size (actual rendering resolution)
-            canvas.width = canvasWidth;
-            canvas.height = canvasHeight;
-            
-            // Set CSS display size
-            canvas.style.width = canvasWidth + 'px';
-            canvas.style.height = canvasHeight + 'px';
-
-            // Update WorldWind's viewport
-            if (wwd.viewport) {
-                wwd.viewport.width = canvasWidth;
-                wwd.viewport.height = canvasHeight;
-                addToLog(`📐 Viewport updated: ${canvasWidth}×${canvasHeight}`);
-            }
-
-            // Multiple render attempts for reliability
-            let renderAttempts = 0;
-            const maxAttempts = 3;
-            
-            const attemptRender = () => {
-                renderAttempts++;
-                try {
-                    wwd.drawFrame();
-                    addToLog(`✅ Canvas redraw completed (attempt ${renderAttempts})`);
-                    
-                    // Verify render success and analyze
-                    setTimeout(() => {
-                        analyzeCoverage();
-                    }, 100);
-                    
-                } catch (renderError) {
-                    addToLog(`❌ Render attempt ${renderAttempts} failed: ${renderError.message}`);
-                    
-                    if (renderAttempts < maxAttempts) {
-                        addToLog(`🔄 Retrying render (${renderAttempts}/${maxAttempts})...`);
-                        setTimeout(attemptRender, 200);
-                    } else {
-                        addToLog(`❌ All render attempts failed`);
-                    }
-                }
-            };
-
-            // Start render attempts
-            requestAnimationFrame(attemptRender);
-
-        } catch (error) {
-            addToLog(`❌ Canvas update error: ${error.message}`);
-        }
-
-    }, [canvasWidth, canvasHeight]);
-
-    // === Handle Range Changes ===
-    useEffect(() => {
-        const wwd = wwdRef.current;
-        if (!wwd) {
-            addToLog("⏳ Skipping range update - WorldWind not initialized");
-            return;
-        }
-
-        addToLog(`📏 Range changed to ${(range/1000).toFixed(0)}km`);
-        
-        try {
-            const nav = wwd.navigator;
-            if (!nav) {
-                addToLog("❌ Navigator not available");
-                return;
-            }
-            
-            nav.range = range;
-            addToLog(`✅ Navigator range updated`);
-            
-            // Reliable redraw with error handling
-            setTimeout(() => {
-                try {
-                    wwd.drawFrame();
-                    addToLog(`✅ Range redraw completed`);
-                    
-                    // Analyze after successful redraw
-                    setTimeout(analyzeCoverage, 100);
-                } catch (error) {
-                    addToLog(`❌ Range redraw failed: ${error.message}`);
-                }
-            }, 50);
-
-        } catch (error) {
-            addToLog(`❌ Range update error: ${error.message}`);
-        }
-
-    }, [range]);
+    }, []);
 
     // === COVERAGE ANALYSIS FUNCTION ===
-    function analyzeCoverage() {
+    const analyzeCoverage = useCallback(() => {
         const canvas = canvasRef.current;
         const wwd = wwdRef.current;
         if (!canvas || !wwd) return;
@@ -388,7 +169,188 @@ export default function Globe2DGridSearchExplorer() {
                 }
             }, 50);
         }
-    }
+    }, [canvasWidth, canvasHeight, range, addToLog]);
+
+    useEffect(() => {
+        const canvas = canvasRef.current;
+        if (!canvas) {
+            addToLog("❌ Canvas not found during initialization");
+            return;
+        }
+
+        addToLog("🚀 Initializing WorldWind...");
+
+        try {
+            // Create WorldWind instance
+            const wwd = new WorldWind.WorldWindow(canvas);
+            wwdRef.current = wwd;
+            
+            addToLog("✅ WorldWindow created successfully");
+
+            // Create Globe2D with equirectangular projection
+            const flat = new WorldWind.Globe2D();
+            flat.projection = new WorldWind.ProjectionEquirectangular();
+            wwd.globe = flat;
+            
+            addToLog("✅ Globe2D with Equirectangular projection set");
+
+            // Add Blue Marble layer
+            const bmngLayer = new WorldWind.BMNGLayer();
+            wwd.addLayer(bmngLayer);
+            
+            addToLog("✅ BMNG Layer added");
+
+            // Set initial navigator position
+            const nav = wwd.navigator;
+            nav.lookAtLocation.latitude = 0;   // Equator
+            nav.lookAtLocation.longitude = 0;  // Prime Meridian
+            nav.range = range;
+            
+            addToLog("✅ Navigator position set");
+
+            // Initial canvas setup
+            canvas.width = canvasWidth;
+            canvas.height = canvasHeight;
+            canvas.style.width = canvasWidth + 'px';
+            canvas.style.height = canvasHeight + 'px';
+            
+            // Set viewport
+            if (wwd.viewport) {
+                wwd.viewport.width = canvasWidth;
+                wwd.viewport.height = canvasHeight;
+            }
+            
+            addToLog(`✅ Canvas initialized: ${canvasWidth}×${canvasHeight}`);
+
+            // Force initial render
+            setTimeout(() => {
+                try {
+                    wwd.drawFrame();
+                    addToLog("✅ Initial render completed");
+                    
+                    // Analyze coverage after successful render
+                    setTimeout(() => {
+                        analyzeCoverage();
+                    }, 200);
+                } catch (renderError) {
+                    addToLog(`❌ Render error: ${renderError.message}`);
+                }
+            }, 100);
+
+        } catch (error) {
+            addToLog(`❌ WorldWind initialization error: ${error.message}`);
+            console.error("WorldWind initialization failed:", error);
+        }
+    }, []);
+
+
+
+
+    // === Handle Canvas Size Changes ===
+    useEffect(() => {
+        const canvas = canvasRef.current;
+        const wwd = wwdRef.current;
+        
+        // Skip if not properly initialized
+        if (!canvas || !wwd) {
+            addToLog("⏳ Skipping canvas update - not initialized yet");
+            return;
+        }
+
+        addToLog(`🔄 Canvas size changed to ${canvasWidth}×${canvasHeight}`);
+        
+        try {
+            // Set canvas buffer size (actual rendering resolution)
+            canvas.width = canvasWidth;
+            canvas.height = canvasHeight;
+            
+            // Set CSS display size
+            canvas.style.width = canvasWidth + 'px';
+            canvas.style.height = canvasHeight + 'px';
+
+            // Update WorldWind's viewport
+            if (wwd.viewport) {
+                wwd.viewport.width = canvasWidth;
+                wwd.viewport.height = canvasHeight;
+                addToLog(`📐 Viewport updated: ${canvasWidth}×${canvasHeight}`);
+            }
+
+            // Multiple render attempts for reliability
+            let renderAttempts = 0;
+            const maxAttempts = 3;
+            
+            const attemptRender = () => {
+                renderAttempts++;
+                try {
+                    wwd.drawFrame();
+                    addToLog(`✅ Canvas redraw completed (attempt ${renderAttempts})`);
+                    
+                    // Verify render success and analyze
+                    setTimeout(() => {
+                        analyzeCoverage();
+                    }, 100);
+                    
+                } catch (renderError) {
+                    addToLog(`❌ Render attempt ${renderAttempts} failed: ${renderError.message}`);
+                    
+                    if (renderAttempts < maxAttempts) {
+                        addToLog(`🔄 Retrying render (${renderAttempts}/${maxAttempts})...`);
+                        setTimeout(attemptRender, 200);
+                    } else {
+                        addToLog(`❌ All render attempts failed`);
+                    }
+                }
+            };
+
+            // Start render attempts
+            requestAnimationFrame(attemptRender);
+
+        } catch (error) {
+            addToLog(`❌ Canvas update error: ${error.message}`);
+        }
+
+    }, [canvasWidth, canvasHeight, analyzeCoverage, addToLog]);
+
+    // === Handle Range Changes ===
+    useEffect(() => {
+        const wwd = wwdRef.current;
+        if (!wwd) {
+            addToLog("⏳ Skipping range update - WorldWind not initialized");
+            return;
+        }
+
+        addToLog(`📏 Range changed to ${(range/1000).toFixed(0)}km`);
+        
+        try {
+            const nav = wwd.navigator;
+            if (!nav) {
+                addToLog("❌ Navigator not available");
+                return;
+            }
+            
+            nav.range = range;
+            addToLog(`✅ Navigator range updated`);
+            
+            // Reliable redraw with error handling
+            setTimeout(() => {
+                try {
+                    wwd.drawFrame();
+                    addToLog(`✅ Range redraw completed`);
+                    
+                    // Analyze after successful redraw
+                    setTimeout(analyzeCoverage, 100);
+                } catch (error) {
+                    addToLog(`❌ Range redraw failed: ${error.message}`);
+                }
+            }, 50);
+
+        } catch (error) {
+            addToLog(`❌ Range update error: ${error.message}`);
+        }
+
+    }, [range, analyzeCoverage, addToLog]);
+
+
 
     // === AUTO-CALCULATE PERFECT RANGE ===
     function calculatePerfectRange() {
