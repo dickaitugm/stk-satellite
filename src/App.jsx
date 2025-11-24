@@ -98,6 +98,7 @@ const Globe2D = ({ isSimulating, onMouseMove }) => {
   const wwdRef = useRef(null);
   const isStableRef = useRef(false); // Ref for stability status
   const targetLatRef = useRef(0); // Ref for target latitude
+  const statsValidRef = useRef(false); // Ref to track if stats correspond to current dimensions
   const [dimensions, setDimensions] = useState({ width: 0, height: 0 });
   const [isLoading, setIsLoading] = useState(true);
   const [range, setRange] = useState(300000); // 20,000 km
@@ -196,8 +197,7 @@ const Globe2D = ({ isSimulating, onMouseMove }) => {
       
       wwd.redraw();
       
-      // Simulate initialization delay for smooth transition
-      setTimeout(() => setIsLoading(false), 1500);
+      // Loading state will be handled by the Auto-Adjust logic once stable
       
     } catch (error) {
       console.error("Failed to initialize WorldWind:", error);
@@ -208,10 +208,8 @@ const Globe2D = ({ isSimulating, onMouseMove }) => {
   useEffect(() => {
     if (wwdRef.current) {
       setIsLoading(true);
+      statsValidRef.current = false; // Invalidate stats
       wwdRef.current.redraw();
-      
-      const timer = setTimeout(() => setIsLoading(false), 1000);
-      return () => clearTimeout(timer);
     }
   }, [dimensions]);
 
@@ -245,9 +243,15 @@ const Globe2D = ({ isSimulating, onMouseMove }) => {
 
     // Check if we are stable
     // Use average to prevent zoom-out when just one side is slightly off during balancing
-    const isStable = top && bottom && avgLat >= STABILITY_THRESHOLD;
+    // Also check if stats are valid (correspond to current dimensions)
+    const isStable = statsValidRef.current && top && bottom && avgLat >= STABILITY_THRESHOLD;
     
     isStableRef.current = isStable; 
+
+    // Turn off loading once the map is stable
+    if (isStable) {
+      setIsLoading(false);
+    } 
 
     // --- PAN CORRECTION (Balancing) ---
     // User Request: If abs(top) > abs(bottom), shift down.
@@ -319,6 +323,8 @@ const Globe2D = ({ isSimulating, onMouseMove }) => {
       const left = getPick(5, height / 2);
       const right = getPick(width - 5, height / 2);
 
+      statsValidRef.current = true; // Mark stats as valid for current dimensions
+
       setBorderStats({
         top: top,
         bottom: bottom,
@@ -359,7 +365,7 @@ const Globe2D = ({ isSimulating, onMouseMove }) => {
         className="relative shadow-2xl border border-slate-700 bg-black"
       >
           {/* Loading Overlay */}
-          <div className={`absolute inset-0 bg-slate-950 z-50 flex flex-col items-center justify-center transition-opacity duration-1000 ease-out ${isLoading ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}>
+          <div className={`absolute inset-0 bg-slate-950 z-50 flex flex-col items-center justify-center transition-opacity ease-out ${isLoading ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}>
             <div className="relative mb-6">
               <div className="absolute inset-0 bg-blue-500/20 blur-xl rounded-full animate-pulse"></div>
               <Globe className="w-16 h-16 text-blue-500 animate-spin relative z-10" style={{ animationDuration: '2s' }} />
