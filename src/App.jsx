@@ -129,6 +129,8 @@ const Globe2D = ({ isSimulating, onMouseMove }) => {
   const satelliteLayerRef = useRef(null); // Ref for satellite position layer
   const animationFrameRef = useRef(null); // Ref for animation frame
   const satrec = useRef(null); // Ref for satellite record (parsed TLE)
+  const coveragePolygonRef = useRef(null); // Ref for coverage polygon (reuse to prevent blinking)
+  const satellitePlacemarkRef = useRef(null); // Ref for satellite placemark (reuse to prevent blinking)
   const [dimensions, setDimensions] = useState({ width: 0, height: 0 });
   const [isLoading, setIsLoading] = useState(true);
   const [range, setRange] = useState(null); // Start with null, will be calculated
@@ -142,11 +144,51 @@ const Globe2D = ({ isSimulating, onMouseMove }) => {
     right: null
   });
 
+  WorldWind.configuration.baseUrl = "./worldwind/";
+
   // Layer options
   const layerOptions = [
     { id: 'bmng', name: 'Blue Marble (NASA)', icon: '🌍' },
     { id: 'osm', name: 'OpenStreetMap', icon: '🗺️' }
   ];
+
+  // Curved function for coverage satellite
+  const curvedFunction = (height) => {
+    const Re = 6371;
+    const cosTheta = Re / (Re + height);
+    const theta = Math.acos(cosTheta);
+    const curvedKm = Re * theta;
+    return curvedKm;
+  }
+
+  const geodesicCircleCoords = (center, radiusKm, nPoints = 361) => {
+      const earthRadius = 6371;
+      const angles = Array.from({ length: nPoints }, (_, i) => (i * 360) / (nPoints - 1));
+      const circleCoords = [];
+
+      const lat1 = (center.latitude * Math.PI) / 180;
+      const lon1 = (center.longitude * Math.PI) / 180;
+      const d = radiusKm / earthRadius;
+
+      angles.forEach((bearing) => {
+          const bearingRad = (bearing * Math.PI) / 180;
+          const lat2 = Math.asin(
+              Math.sin(lat1) * Math.cos(d) +
+                  Math.cos(lat1) * Math.sin(d) * Math.cos(bearingRad)
+          );
+          const lon2 =
+              lon1 +
+              Math.atan2(
+                  Math.sin(bearingRad) * Math.sin(d) * Math.cos(lat1),
+                  Math.cos(d) - Math.sin(lat1) * Math.sin(lat2)
+              );
+          const latDeg = (lat2 * 180) / Math.PI;
+          const lonDeg = (((lon2 * 180) / Math.PI + 540) % 360) - 180;
+          circleCoords.push({ longitude: lonDeg, latitude: latDeg });
+      });
+
+      return circleCoords;
+  }
 
   // Parse TLE and initialize satellite record
   useEffect(() => {
@@ -233,25 +275,6 @@ const Globe2D = ({ isSimulating, onMouseMove }) => {
       
       orbitLayer.addRenderable(path);
       
-      // Add orbit points as small placemarks
-      orbitPoints.forEach((point, index) => {
-        // Only add markers every 10 minutes (every 5 points since interval is 2 min)
-        if (index % 5 === 0) {
-          const placemarkAttributes = new WorldWind.PlacemarkAttributes(null);
-          placemarkAttributes.imageSource = WorldWind.configuration.baseUrl + "images/white-dot.png";
-          placemarkAttributes.imageScale = 0.1;
-          placemarkAttributes.imageColor = new WorldWind.Color(0, 1, 1, 0.6);
-          
-          const placemark = new WorldWind.Placemark(
-            new WorldWind.Position(point.lat, point.lon, 0),
-            false,
-            placemarkAttributes
-          );
-          placemark.altitudeMode = WorldWind.CLAMP_TO_GROUND;
-          
-          orbitLayer.addRenderable(placemark);
-        }
-      });
     }
     
     orbitLayerRef.current = orbitLayer;
@@ -265,6 +288,10 @@ const Globe2D = ({ isSimulating, onMouseMove }) => {
     if (satelliteLayerRef.current) {
       wwd.removeLayer(satelliteLayerRef.current);
     }
+    
+    // Reset refs when creating new layer
+    coveragePolygonRef.current = null;
+    satellitePlacemarkRef.current = null;
     
     const satLayer = new WorldWind.RenderableLayer("Satellite");
     satelliteLayerRef.current = satLayer;
@@ -281,47 +308,61 @@ const Globe2D = ({ isSimulating, onMouseMove }) => {
     if (pos) {
       setSatellitePosition(pos);
       
-      // Clear previous renderables
-      satelliteLayerRef.current.removeAllRenderables();
+      // === COVERAGE CIRCLE ===
+      // Calculate coverage radius using curved function
+      const radiusKm = curvedFunction(pos.alt);
+      const center = { latitude: pos.lat, longitude: pos.lon };
+      const circleCoords = geodesicCircleCoords(center, radiusKm);
       
-      // Create satellite placemark
-      const placemarkAttributes = new WorldWind.PlacemarkAttributes(null);
-      placemarkAttributes.imageSource = WorldWind.configuration.baseUrl + "images/pushpins/castshadow-red.png";
-      placemarkAttributes.imageScale = 0.8;
-      placemarkAttributes.imageOffset = new WorldWind.Offset(
-        WorldWind.OFFSET_FRACTION, 0.5,
-        WorldWind.OFFSET_FRACTION, 0.0
-      );
-      placemarkAttributes.labelAttributes.color = WorldWind.Color.WHITE;
-      placemarkAttributes.labelAttributes.offset = new WorldWind.Offset(
-        WorldWind.OFFSET_FRACTION, 0.5,
-        WorldWind.OFFSET_FRACTION, 1.2
+      // Create boundary locations for the coverage polygon
+      const boundaryLocations = circleCoords.map(
+        (coord) => new WorldWind.Location(coord.latitude, coord.longitude)
       );
       
-      const placemark = new WorldWind.Placemark(
-        new WorldWind.Position(pos.lat, pos.lon, 0),
-        false,
-        placemarkAttributes
-      );
-      placemark.label = `${LAPAN_A2_TLE.name}\n${pos.alt.toFixed(1)} km`;
-      placemark.altitudeMode = WorldWind.CLAMP_TO_GROUND;
+      // Reuse or create coverage polygon (prevents blinking)
+      if (!coveragePolygonRef.current) {
+        const polygonAttributes = new WorldWind.ShapeAttributes(null);
+        polygonAttributes.interiorColor = new WorldWind.Color(0, 1, 0, 0.2); // Green with transparency
+        polygonAttributes.outlineColor = new WorldWind.Color(0, 1, 0, 0.8); // Green outline
+        polygonAttributes.outlineWidth = 1.5;
+        
+        coveragePolygonRef.current = new WorldWind.SurfacePolygon(boundaryLocations, polygonAttributes);
+        satelliteLayerRef.current.addRenderable(coveragePolygonRef.current);
+      } else {
+        // Update existing polygon boundaries
+        coveragePolygonRef.current.boundaries = boundaryLocations;
+      }
       
-      satelliteLayerRef.current.addRenderable(placemark);
+      // === SATELLITE PLACEMARK ===
+      // Reuse or create satellite placemark (prevents blinking)
+      if (!satellitePlacemarkRef.current) {
+        const placemarkAttributes = new WorldWind.PlacemarkAttributes(null);
+        placemarkAttributes.imageSource = `${WorldWind.configuration.baseUrl}images/LAPAN-A3.png`;
+        placemarkAttributes.imageScale = 0.8;
+        placemarkAttributes.imageOffset = new WorldWind.Offset(
+          WorldWind.OFFSET_FRACTION, 0.5,
+          WorldWind.OFFSET_FRACTION, 0.5
+        );
+        placemarkAttributes.labelAttributes.color = WorldWind.Color.WHITE;
+        placemarkAttributes.labelAttributes.offset = new WorldWind.Offset(
+          WorldWind.OFFSET_FRACTION, 0.5,
+          WorldWind.OFFSET_FRACTION, 2.0
+        );
+        
+        satellitePlacemarkRef.current = new WorldWind.Placemark(
+          new WorldWind.Position(pos.lat, pos.lon, 0),
+          false,
+          placemarkAttributes
+        );
+        satellitePlacemarkRef.current.altitudeMode = WorldWind.CLAMP_TO_GROUND;
+        satelliteLayerRef.current.addRenderable(satellitePlacemarkRef.current);
+      } else {
+        // Update existing placemark position
+        satellitePlacemarkRef.current.position = new WorldWind.Position(pos.lat, pos.lon, 0);
+      }
       
-      // Add ground track point (current position indicator)
-      const groundTrackAttr = new WorldWind.PlacemarkAttributes(null);
-      groundTrackAttr.imageSource = WorldWind.configuration.baseUrl + "images/white-dot.png";
-      groundTrackAttr.imageScale = 0.3;
-      groundTrackAttr.imageColor = new WorldWind.Color(1, 0.3, 0.3, 1); // Red
-      
-      const groundTrack = new WorldWind.Placemark(
-        new WorldWind.Position(pos.lat, pos.lon, 0),
-        false,
-        groundTrackAttr
-      );
-      groundTrack.altitudeMode = WorldWind.CLAMP_TO_GROUND;
-      
-      satelliteLayerRef.current.addRenderable(groundTrack);
+      // Update label
+      satellitePlacemarkRef.current.label = `${LAPAN_A2_TLE.name}\n${pos.alt.toFixed(1)} km`;
       
       wwdRef.current.redraw();
     }
@@ -429,7 +470,7 @@ const Globe2D = ({ isSimulating, onMouseMove }) => {
     if (wwdRef.current) {
       wwdRef.current.navigator.range = optimalRange;
       wwdRef.current.navigator.lookAtLocation.latitude = 0;
-      wwdRef.current.navigator.lookAtLocation.longitude = 40;
+      wwdRef.current.navigator.lookAtLocation.longitude = 50;
       setRange(optimalRange);
       setIsLoading(true);
       statsValidRef.current = false; // Invalidate stats
@@ -468,7 +509,7 @@ const Globe2D = ({ isSimulating, onMouseMove }) => {
 
       // Setup view agar pas di tengah (lookAt 0,0) dengan range yang dihitung
       wwd.navigator.lookAtLocation.latitude = 0;
-      wwd.navigator.lookAtLocation.longitude = 40;
+      wwd.navigator.lookAtLocation.longitude = 50;
       wwd.navigator.range = optimalRange;
       setRange(optimalRange);
       
@@ -517,7 +558,7 @@ const Globe2D = ({ isSimulating, onMouseMove }) => {
     const optimalRange = calculateOptimalRange(dimensions.height);
     wwd.navigator.range = optimalRange;
     wwd.navigator.lookAtLocation.latitude = 0;
-    wwd.navigator.lookAtLocation.longitude = 40;
+    wwd.navigator.lookAtLocation.longitude = 50;
     setRange(optimalRange);
     setIsLoading(true);
     statsValidRef.current = false;
@@ -819,6 +860,10 @@ const Globe2D = ({ isSimulating, onMouseMove }) => {
             <div className="flex justify-between gap-4">
               <span className="text-gray-400">Altitude:</span>
               <span className="text-yellow-400">{satellitePosition.alt.toFixed(2)} km</span>
+            </div>
+            <div className="flex justify-between gap-4">
+              <span className="text-gray-400">Coverage:</span>
+              <span className="text-green-300">{curvedFunction(satellitePosition.alt).toFixed(1)} km</span>
             </div>
           </div>
           <div className="mt-2 pt-1 border-t border-white/10 text-[10px] text-gray-500">
