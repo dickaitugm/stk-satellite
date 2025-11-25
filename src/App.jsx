@@ -92,6 +92,21 @@ const BottomNavbar = ({ cursorCoords, activeSatellite }) => {
 /**
  * KOMPONEN: Globe2D (WorldWind Implementation)
  */
+/**
+ * Menghitung range yang diperlukan untuk menampilkan full map (-90 to 90 latitude)
+ * pada proyeksi Equirectangular berdasarkan tinggi canvas.
+ * 
+ * Untuk WorldWind 2D Equirectangular, range ~23,200 km untuk full map.
+ */
+const calculateOptimalRange = (canvasHeight) => {
+  if (canvasHeight <= 0) return 23200000; // Default fallback 23,200 km
+  
+  // Berdasarkan testing empiris, full map tercapai pada ~23,200 km
+  const optimalRange = 23200000; // 23,200 km dalam meter
+  
+  return optimalRange;
+};
+
 const Globe2D = ({ isSimulating, onMouseMove }) => {
   const containerRef = useRef(null);
   const canvasRef = useRef(null);
@@ -101,15 +116,24 @@ const Globe2D = ({ isSimulating, onMouseMove }) => {
   const latDeltaRef = useRef(45); // Ref for visible latitude delta
   const statsValidRef = useRef(false); // Ref to track if stats correspond to current dimensions
   const autoFitEnabledRef = useRef(true); // Ref to track if auto-fit logic should run
+  const baseLayerRef = useRef(null); // Ref for current base layer
   const [dimensions, setDimensions] = useState({ width: 0, height: 0 });
   const [isLoading, setIsLoading] = useState(true);
-  const [range, setRange] = useState(300000); // 20,000 km
+  const [range, setRange] = useState(null); // Start with null, will be calculated
+  const [selectedLayer, setSelectedLayer] = useState('osm'); // 'bmng' or 'osm'
+  const [showLayerDropdown, setShowLayerDropdown] = useState(false);
   const [borderStats, setBorderStats] = useState({
     top: null,
     bottom: null,
     left: null,
     right: null
   });
+
+  // Layer options
+  const layerOptions = [
+    { id: 'bmng', name: 'Blue Marble (NASA)', icon: '🌍' },
+    { id: 'osm', name: 'OpenStreetMap', icon: '🗺️' }
+  ];
 
   // Listener to disable vertical pan when stable
   useEffect(() => {
@@ -181,9 +205,25 @@ const Globe2D = ({ isSimulating, onMouseMove }) => {
     return () => resizeObserver.disconnect();
   }, []);
 
-  // 3. Initialize WorldWind
+  // 3. Initialize WorldWind - Now depends on dimensions being ready
   useEffect(() => {
-    if (!canvasRef.current || wwdRef.current || dimensions.width <= 0 || dimensions.height <= 0) return;
+    if (!canvasRef.current || dimensions.width <= 0 || dimensions.height <= 0) return;
+
+    // Calculate optimal range based on canvas height
+    const optimalRange = calculateOptimalRange(dimensions.height);
+
+    // If WorldWind already exists, just update the range
+    if (wwdRef.current) {
+      wwdRef.current.navigator.range = optimalRange;
+      wwdRef.current.navigator.lookAtLocation.latitude = 0;
+      wwdRef.current.navigator.lookAtLocation.longitude = 0;
+      setRange(optimalRange);
+      setIsLoading(true);
+      statsValidRef.current = false; // Invalidate stats
+      autoFitEnabledRef.current = true; // Re-enable auto-fit on resize
+      wwdRef.current.redraw();
+      return;
+    }
 
     try {
       // Create WorldWind instance
@@ -199,20 +239,27 @@ const Globe2D = ({ isSimulating, onMouseMove }) => {
       
       console.log("✅ Globe2D with Equirectangular projection set");
 
-      // Add Layers
-      const bmngLayer = new WorldWind.BMNGLayer();
-      wwd.addLayer(bmngLayer);
-      
-      console.log("✅ BMNG Layer added");
+      // Add base layer based on selection
+      let baseLayer;
+      if (selectedLayer === 'bmng') {
+        baseLayer = new WorldWind.BMNGLayer();
+      } else {
+        baseLayer = new WorldWind.OpenStreetMapImageLayer("osm");
+      }
+      baseLayerRef.current = baseLayer;
+      wwd.addLayer(baseLayer);
 
-      // Add Coordinates Display Layer (Sesuai request)
+      // Add Coordinates Display Layer
       const coordinatesLayer = new WorldWind.CoordinatesDisplayLayer(wwd);
       wwd.addLayer(coordinatesLayer);
 
-      // Setup view agar pas di tengah (lookAt 0,0)
+      // Setup view agar pas di tengah (lookAt 0,0) dengan range yang dihitung
       wwd.navigator.lookAtLocation.latitude = 0;
       wwd.navigator.lookAtLocation.longitude = 0;
-      wwd.navigator.range = range; // Altitude awal
+      wwd.navigator.range = optimalRange;
+      setRange(optimalRange);
+      
+      console.log(`✅ Initial range set to: ${(optimalRange / 1000).toFixed(0)} km`);
       
       wwd.redraw();
       
@@ -223,23 +270,48 @@ const Globe2D = ({ isSimulating, onMouseMove }) => {
     }
   }, [dimensions.width, dimensions.height]);
 
-  // 4. Update Redraw saat dimensi berubah
+  // 4. Handle manual Range Change from UI input
   useEffect(() => {
-    if (wwdRef.current) {
-      setIsLoading(true);
-      statsValidRef.current = false; // Invalidate stats
-      autoFitEnabledRef.current = true; // Re-enable auto-fit on resize
-      wwdRef.current.redraw();
-    }
-  }, [dimensions]);
-
-  // Handle Range Change
-  useEffect(() => {
-    if (wwdRef.current) {
+    if (wwdRef.current && range !== null) {
       wwdRef.current.navigator.range = range;
       wwdRef.current.redraw();
     }
   }, [range]);
+
+  // 5. Handle Layer Change
+  useEffect(() => {
+    if (!wwdRef.current || !baseLayerRef.current) return;
+    const wwd = wwdRef.current;
+    
+    // Remove current base layer
+    wwd.removeLayer(baseLayerRef.current);
+    
+    // Create new base layer based on selection
+    let newBaseLayer;
+    if (selectedLayer === 'bmng') {
+      newBaseLayer = new WorldWind.BMNGLayer();
+    } else {
+      newBaseLayer = new WorldWind.OpenStreetMapImageLayer("osm");
+    }
+    
+    // Insert at index 0 (bottom of layer stack)
+    wwd.insertLayer(0, newBaseLayer);
+    baseLayerRef.current = newBaseLayer;
+    
+    console.log(`✅ Layer changed to: ${selectedLayer}`);
+    
+    // Trigger auto-fit to readjust full map
+    const optimalRange = calculateOptimalRange(dimensions.height);
+    wwd.navigator.range = optimalRange;
+    wwd.navigator.lookAtLocation.latitude = 0;
+    wwd.navigator.lookAtLocation.longitude = 0;
+    setRange(optimalRange);
+    setIsLoading(true);
+    statsValidRef.current = false;
+    autoFitEnabledRef.current = true;
+    
+    wwd.redraw();
+  }, [selectedLayer]);
 
   // Auto-Adjust Range & Pan to Fit World Vertically (-90 to 90)
   useEffect(() => {
@@ -250,7 +322,7 @@ const Globe2D = ({ isSimulating, onMouseMove }) => {
     // STABILITY THRESHOLD (When to stop)
     // We stop if we see at least 88 degrees. 
     // Going for 90 is risky as it flirts with the background (null).
-    const STABILITY_THRESHOLD = 88; 
+    const STABILITY_THRESHOLD = 89; 
     
     // CALCULATION TARGET (What to aim for)
     // We aim for 89 degrees to leave a 1 degree buffer from the void.
@@ -467,7 +539,7 @@ const Globe2D = ({ isSimulating, onMouseMove }) => {
         <div className={`absolute top-2 left-2 bg-black/50 backdrop-blur-sm p-2 rounded border border-white/10 text-xs text-white transition-opacity duration-1000 ${!isLoading ? 'opacity-100' : 'opacity-0'}`}>
           <div className="font-bold text-blue-400 mb-1">ENGINE STATUS</div>
           <div>Mode: Globe2D</div>
-          <div>Layer: BMNG (NASA)</div>
+          <div>Layer: {layerOptions.find(l => l.id === selectedLayer)?.name}</div>
           <div className="mt-2 border-t border-white/10 pt-1">
             <div>Canvas: {Math.round(dimensions.width)} x {Math.round(dimensions.height)}</div>
           </div>
@@ -481,6 +553,38 @@ const Globe2D = ({ isSimulating, onMouseMove }) => {
                onChange={(e) => setRange(Number(e.target.value) * 1000)}
                className="w-full bg-slate-800 border border-slate-600 rounded px-2 py-1 text-white text-xs focus:border-blue-500 outline-none"
              />
+          </div>
+          {/* Layer Selector */}
+          <div className="mt-2 border-t border-white/10 pt-1 pointer-events-auto relative">
+             <label className="block mb-1 text-gray-400">Base Layer</label>
+             <button 
+               onClick={() => setShowLayerDropdown(!showLayerDropdown)}
+               className="w-full bg-slate-800 border border-slate-600 rounded px-2 py-1.5 text-white text-xs text-left flex items-center justify-between hover:border-blue-500 transition-colors"
+             >
+               <span className="flex items-center gap-2">
+                 <span>{layerOptions.find(l => l.id === selectedLayer)?.icon}</span>
+                 <span>{layerOptions.find(l => l.id === selectedLayer)?.name}</span>
+               </span>
+               <span className={`transition-transform ${showLayerDropdown ? 'rotate-180' : ''}`}>▼</span>
+             </button>
+             {showLayerDropdown && (
+               <div className="absolute left-0 right-0 mt-1 bg-slate-800 border border-slate-600 rounded shadow-lg z-50 overflow-hidden">
+                 {layerOptions.map((layer) => (
+                   <button
+                     key={layer.id}
+                     onClick={() => {
+                       setSelectedLayer(layer.id);
+                       setShowLayerDropdown(false);
+                     }}
+                     className={`w-full px-2 py-1.5 text-left text-xs flex items-center gap-2 hover:bg-slate-700 transition-colors ${selectedLayer === layer.id ? 'bg-blue-600/30 text-blue-300' : 'text-white'}`}
+                   >
+                     <span>{layer.icon}</span>
+                     <span>{layer.name}</span>
+                     {selectedLayer === layer.id && <span className="ml-auto">✓</span>}
+                   </button>
+                 ))}
+               </div>
+             )}
           </div>
         </div>
       </div>
