@@ -98,6 +98,7 @@ const Globe2D = ({ isSimulating, onMouseMove }) => {
   const wwdRef = useRef(null);
   const isStableRef = useRef(false); // Ref for stability status
   const targetLatRef = useRef(0); // Ref for target latitude
+  const latDeltaRef = useRef(45); // Ref for visible latitude delta
   const statsValidRef = useRef(false); // Ref to track if stats correspond to current dimensions
   const autoFitEnabledRef = useRef(true); // Ref to track if auto-fit logic should run
   const [dimensions, setDimensions] = useState({ width: 0, height: 0 });
@@ -116,9 +117,26 @@ const Globe2D = ({ isSimulating, onMouseMove }) => {
     if (!canvas) return;
 
     const preventVerticalPan = () => {
-      if (isStableRef.current && wwdRef.current) {
-        // Lock latitude to target
+      if (!wwdRef.current) return;
+
+      if (isStableRef.current) {
+        // Lock latitude to target when stable (Full View)
         wwdRef.current.navigator.lookAtLocation.latitude = targetLatRef.current;
+      } else {
+        // Clamp latitude when zoomed in (Manual Pan)
+        // Prevent panning beyond STABILITY_THRESHOLD (88 degrees)
+        const STABILITY_THRESHOLD = 89;
+        const currentLat = wwdRef.current.navigator.lookAtLocation.latitude;
+        const delta = latDeltaRef.current;
+        
+        // Calculate safe bounds based on current zoom level (delta)
+        const maxLat = STABILITY_THRESHOLD - delta;
+        const minLat = -STABILITY_THRESHOLD + delta;
+        
+        if (maxLat > minLat) {
+           if (currentLat > maxLat) wwdRef.current.navigator.lookAtLocation.latitude = maxLat;
+           if (currentLat < minLat) wwdRef.current.navigator.lookAtLocation.latitude = minLat;
+        }
       }
     };
 
@@ -250,6 +268,14 @@ const Globe2D = ({ isSimulating, onMouseMove }) => {
     
     isStableRef.current = isStable; 
 
+    // RE-TRIGGER AUTO-FIT IF ZOOMED OUT TOO FAR (User Request)
+    if (!autoFitEnabledRef.current && statsValidRef.current && (!top || !bottom)) {
+        setIsLoading(true);
+        autoFitEnabledRef.current = true;
+        // Sync state with actual range to ensure smooth zoom-in
+        setRange(wwd.navigator.range);
+    }
+
     // Only run Auto-Adjust logic if enabled (Init or Resize) AND stats are valid
     if (autoFitEnabledRef.current && statsValidRef.current) {
         
@@ -331,6 +357,10 @@ const Globe2D = ({ isSimulating, onMouseMove }) => {
       const right = getPick(width - 5, height / 2);
 
       statsValidRef.current = true; // Mark stats as valid for current dimensions
+
+      if (top && bottom) {
+        latDeltaRef.current = Math.abs(top.lat - bottom.lat) / 2;
+      }
 
       setBorderStats({
         top: top,
