@@ -99,6 +99,7 @@ const Globe2D = ({ isSimulating, onMouseMove }) => {
   const isStableRef = useRef(false); // Ref for stability status
   const targetLatRef = useRef(0); // Ref for target latitude
   const statsValidRef = useRef(false); // Ref to track if stats correspond to current dimensions
+  const autoFitEnabledRef = useRef(true); // Ref to track if auto-fit logic should run
   const [dimensions, setDimensions] = useState({ width: 0, height: 0 });
   const [isLoading, setIsLoading] = useState(true);
   const [range, setRange] = useState(300000); // 20,000 km
@@ -209,6 +210,7 @@ const Globe2D = ({ isSimulating, onMouseMove }) => {
     if (wwdRef.current) {
       setIsLoading(true);
       statsValidRef.current = false; // Invalidate stats
+      autoFitEnabledRef.current = true; // Re-enable auto-fit on resize
       wwdRef.current.redraw();
     }
   }, [dimensions]);
@@ -248,51 +250,56 @@ const Globe2D = ({ isSimulating, onMouseMove }) => {
     
     isStableRef.current = isStable; 
 
-    // Turn off loading once the map is stable
-    if (isStable) {
-      setIsLoading(false);
-    } 
-
-    // --- PAN CORRECTION (Balancing) ---
-    // User Request: If abs(top) > abs(bottom), shift down.
-    if (top && bottom) {
-        const diff = absTop - absBottom;
+    // Only run Auto-Adjust logic if enabled (Init or Resize) AND stats are valid
+    if (autoFitEnabledRef.current && statsValidRef.current) {
         
-        // Threshold for balancing (increased to 0.1 to reduce jitter)
-        if (Math.abs(diff) > 0.1) {
-            // Proportional correction (10% of difference), capped at 0.5 degree
-            // This prevents oscillation compared to a fixed 0.1 step
-            const correction = Math.sign(diff) * Math.min(Math.abs(diff) * 0.1, 0.5);
-            wwd.navigator.lookAtLocation.latitude -= correction;
+        // Turn off loading and disable auto-fit once the map is stable
+        if (isStable) {
+          setIsLoading(false);
+          autoFitEnabledRef.current = false;
+        } 
+
+        // --- PAN CORRECTION (Balancing) ---
+        // User Request: If abs(top) > abs(bottom), shift down.
+        if (top && bottom) {
+            const diff = absTop - absBottom;
+            
+            // Threshold for balancing (increased to 0.1 to reduce jitter)
+            if (Math.abs(diff) > 0.1) {
+                // Proportional correction (10% of difference), capped at 0.5 degree
+                // This prevents oscillation compared to a fixed 0.1 step
+                const correction = Math.sign(diff) * Math.min(Math.abs(diff) * 0.1, 0.5);
+                wwd.navigator.lookAtLocation.latitude -= correction;
+            }
+        } else {
+            // If we lost a sensor, re-center to find it
+            wwd.navigator.lookAtLocation.latitude = 0;
         }
-    } else {
-        // If we lost a sensor, re-center to find it
-        wwd.navigator.lookAtLocation.latitude = 0;
+        
+        if (!isStable) {
+           if (!top || !bottom) {
+              // Case 1: Hit Background (Too far out)
+              // Action: Zoom In gently to recover. 
+              // 0.95 is safe. 0.6 was too aggressive and caused looping.
+              setRange(prev => prev * 0.95);
+           } else {
+              // Case 2: Map Visible but cropped (Too close)
+              const currentLat = Math.abs(top.lat);
+              
+              // Only adjust if we are significantly off
+              if (currentLat < STABILITY_THRESHOLD && currentLat > 0.1) {
+                 // Calculate ratio to reach CALC_TARGET
+                 let ratio = CALC_TARGET / currentLat;
+                 // Clamp ratio to avoid wild jumps
+                 ratio = Math.min(ratio, 2.0); 
+                 setRange(prev => prev * ratio);
+              }
+           }
+        }
     }
     
     // Update Target Lat Ref for the Event Listener
     targetLatRef.current = wwd.navigator.lookAtLocation.latitude;
-
-    if (!isStable) {
-       if (!top || !bottom) {
-          // Case 1: Hit Background (Too far out)
-          // Action: Zoom In gently to recover. 
-          // 0.95 is safe. 0.6 was too aggressive and caused looping.
-          setRange(prev => prev * 0.95);
-       } else {
-          // Case 2: Map Visible but cropped (Too close)
-          const currentLat = Math.abs(top.lat);
-          
-          // Only adjust if we are significantly off
-          if (currentLat < STABILITY_THRESHOLD && currentLat > 0.1) {
-             // Calculate ratio to reach CALC_TARGET
-             let ratio = CALC_TARGET / currentLat;
-             // Clamp ratio to avoid wild jumps
-             ratio = Math.min(ratio, 2.0); 
-             setRange(prev => prev * ratio);
-          }
-       }
-    }
   }, [borderStats, dimensions.height]);
 
   // Border Sensors (Detect Lat/Lon at canvas edges)
