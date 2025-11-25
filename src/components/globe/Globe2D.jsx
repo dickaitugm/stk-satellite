@@ -3,15 +3,22 @@
  * Main WorldWind 2D globe with satellite tracking
  */
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import WorldWind from "worldwindjs";
 
 // Hooks
-import { useResizeObserver, useSatellite } from '../../hooks';
+import { useResizeObserver } from '../../hooks';
+
+// Stores
+import { 
+  useSatelliteStore, 
+  useGroundStationStore, 
+  useTimeStore,
+  useScenarioStore 
+} from '../../stores';
 
 // Utils
 import { 
-  LAPAN_A2_TLE, 
   LAYER_OPTIONS, 
   STABILITY_THRESHOLD, 
   CALC_TARGET,
@@ -29,16 +36,26 @@ import LoadingOverlay from './LoadingOverlay';
 // Configure WorldWind base URL
 WorldWind.configuration.baseUrl = "./worldwind/";
 
-const Globe2D = ({ isSimulating, onMouseMove }) => {
+const Globe2D = ({ onMouseMove }) => {
   // Custom hooks
   const { containerRef, dimensions } = useResizeObserver();
-  const { 
-    satrec, 
-    position: satellitePosition, 
-    isReady: isSatelliteReady,
-    getSatellitePosition,
-    generateOrbitPath 
-  } = useSatellite(LAPAN_A2_TLE);
+  
+  // Zustand stores
+  const satellites = useSatelliteStore(state => state.satellites);
+  const selectedSatelliteId = useSatelliteStore(state => state.selectedSatelliteId);
+  const getSelectedSatellite = useSatelliteStore(state => state.getSelectedSatellite);
+  const calculatePosition = useSatelliteStore(state => state.calculatePosition);
+  const updatePosition = useSatelliteStore(state => state.updatePosition);
+  const getSatrec = useSatelliteStore(state => state.getSatrec);
+  
+  const groundStations = useGroundStationStore(state => state.groundStations);
+  const getVisibleStations = useGroundStationStore(state => state.getVisibleStations);
+  
+  const currentTime = useTimeStore(state => state.currentTime);
+  const isPlaying = useTimeStore(state => state.isPlaying);
+  const tick = useTimeStore(state => state.tick);
+  
+  const scenarioLayers = useScenarioStore(state => state.layers);
 
   // Refs for WorldWind
   const canvasRef = useRef(null);
@@ -54,6 +71,8 @@ const Globe2D = ({ isSimulating, onMouseMove }) => {
   const animationFrameRef = useRef(null);
   const coveragePolygonRef = useRef(null);
   const satellitePlacemarkRef = useRef(null);
+  const groundStationLayerRef = useRef(null);
+  const satelliteRenderablesRef = useRef({}); // Store renderables per satellite
 
   // State
   const [isLoading, setIsLoading] = useState(true);
@@ -67,123 +86,255 @@ const Globe2D = ({ isSimulating, onMouseMove }) => {
     right: null
   });
 
+  // Generate orbit path for a satellite
+  const generateOrbitPath = useCallback((satelliteId) => {
+    const satrec = getSatrec(satelliteId);
+    if (!satrec) return [];
+    
+    const points = [];
+    const now = currentTime;
+    const periodMinutes = 100; // Approximate orbital period
+    const step = 1; // minutes
+    
+    for (let i = 0; i < periodMinutes; i += step) {
+      const time = new Date(now.getTime() + i * 60 * 1000);
+      const pos = calculatePosition(satelliteId, time);
+      if (pos) {
+        points.push(pos);
+      }
+    }
+    
+    return points;
+  }, [getSatrec, calculatePosition, currentTime]);
+
   // Create orbit path layer
-  const createOrbitLayer = (wwd) => {
+  const createOrbitLayer = useCallback((wwd) => {
     if (orbitLayerRef.current) {
       wwd.removeLayer(orbitLayerRef.current);
     }
     
     const orbitLayer = new WorldWind.RenderableLayer("Orbit Path");
-    const orbitPoints = generateOrbitPath();
     
-    if (orbitPoints.length > 1) {
-      const pathPositions = orbitPoints.map(point => 
-        new WorldWind.Position(point.lat, point.lon, point.alt * 1000)
-      );
+    // Create orbit paths for all visible satellites
+    satellites.filter(s => s.isVisible).forEach(sat => {
+      const orbitPoints = generateOrbitPath(sat.id);
       
-      const pathAttributes = new WorldWind.ShapeAttributes(null);
-      pathAttributes.outlineColor = new WorldWind.Color(0, 1, 1, 0.8);
-      pathAttributes.outlineWidth = 2;
-      pathAttributes.drawInterior = false;
-      
-      const path = new WorldWind.Path(pathPositions, pathAttributes);
-      path.altitudeMode = WorldWind.ABSOLUTE;
-      path.extrude = false;
-      path.useSurfaceShapeFor2D = true;
-      
-      orbitLayer.addRenderable(path);
-    }
+      if (orbitPoints.length > 1) {
+        const pathPositions = orbitPoints.map(point => 
+          new WorldWind.Position(point.lat, point.lon, point.alt * 1000)
+        );
+        
+        const pathAttributes = new WorldWind.ShapeAttributes(null);
+        pathAttributes.outlineColor = new WorldWind.Color(
+          sat.color?.r || 0, 
+          sat.color?.g || 1, 
+          sat.color?.b || 1, 
+          sat.color?.a || 0.8
+        );
+        pathAttributes.outlineWidth = 2;
+        pathAttributes.drawInterior = false;
+        
+        const path = new WorldWind.Path(pathPositions, pathAttributes);
+        path.altitudeMode = WorldWind.ABSOLUTE;
+        path.extrude = false;
+        path.useSurfaceShapeFor2D = true;
+        
+        orbitLayer.addRenderable(path);
+      }
+    });
     
     orbitLayerRef.current = orbitLayer;
     wwd.addLayer(orbitLayer);
     
-    console.log(`✅ Orbit path created with ${orbitPoints.length} points`);
-  };
+    console.log(`✅ Orbit paths created for ${satellites.filter(s => s.isVisible).length} satellites`);
+  }, [satellites, generateOrbitPath]);
 
   // Create satellite marker layer
-  const createSatelliteLayer = (wwd) => {
+  const createSatelliteLayer = useCallback((wwd) => {
     if (satelliteLayerRef.current) {
       wwd.removeLayer(satelliteLayerRef.current);
     }
     
     coveragePolygonRef.current = null;
     satellitePlacemarkRef.current = null;
+    satelliteRenderablesRef.current = {};
     
-    const satLayer = new WorldWind.RenderableLayer("Satellite");
+    const satLayer = new WorldWind.RenderableLayer("Satellites");
     satelliteLayerRef.current = satLayer;
     wwd.addLayer(satLayer);
-  };
+  }, []);
 
-  // Update satellite position with animation
-  const updateSatelliteMarker = () => {
-    if (!wwdRef.current || !satelliteLayerRef.current || !satrec) return;
-    
-    const now = new Date();
-    const pos = getSatellitePosition(now);
-    
-    if (pos) {
-      setCurrentSatellitePosition(pos);
-      
-      // Coverage circle
-      const radiusKm = calculateCoverageRadius(pos.alt);
-      const center = { latitude: pos.lat, longitude: pos.lon };
-      const circleCoords = geodesicCircleCoords(center, radiusKm);
-      
-      const boundaryLocations = circleCoords.map(
-        (coord) => new WorldWind.Location(coord.latitude, coord.longitude)
-      );
-      
-      if (!coveragePolygonRef.current) {
-        const polygonAttributes = new WorldWind.ShapeAttributes(null);
-        polygonAttributes.interiorColor = new WorldWind.Color(0, 1, 0, 0.2);
-        polygonAttributes.outlineColor = new WorldWind.Color(0, 1, 0, 0.8);
-        polygonAttributes.outlineWidth = 1.5;
-        
-        coveragePolygonRef.current = new WorldWind.SurfacePolygon(boundaryLocations, polygonAttributes);
-        satelliteLayerRef.current.addRenderable(coveragePolygonRef.current);
-      } else {
-        coveragePolygonRef.current.boundaries = boundaryLocations;
-      }
-      
-      // Satellite placemark
-      if (!satellitePlacemarkRef.current) {
-        const placemarkAttributes = new WorldWind.PlacemarkAttributes(null);
-        placemarkAttributes.imageSource = `${WorldWind.configuration.baseUrl}images/LAPAN-A3.png`;
-        placemarkAttributes.imageScale = 0.8;
-        placemarkAttributes.imageOffset = new WorldWind.Offset(
-          WorldWind.OFFSET_FRACTION, 0.5,
-          WorldWind.OFFSET_FRACTION, 0.5
-        );
-        placemarkAttributes.labelAttributes.color = WorldWind.Color.WHITE;
-        placemarkAttributes.labelAttributes.offset = new WorldWind.Offset(
-          WorldWind.OFFSET_FRACTION, 0.5,
-          WorldWind.OFFSET_FRACTION, 2.0
-        );
-        
-        satellitePlacemarkRef.current = new WorldWind.Placemark(
-          new WorldWind.Position(pos.lat, pos.lon, 0),
-          false,
-          placemarkAttributes
-        );
-        satellitePlacemarkRef.current.altitudeMode = WorldWind.CLAMP_TO_GROUND;
-        satelliteLayerRef.current.addRenderable(satellitePlacemarkRef.current);
-      } else {
-        satellitePlacemarkRef.current.position = new WorldWind.Position(pos.lat, pos.lon, 0);
-      }
-      
-      satellitePlacemarkRef.current.label = `${LAPAN_A2_TLE.name}\n${pos.alt.toFixed(1)} km`;
-      
-      wwdRef.current.redraw();
+  // Create ground station layer
+  const createGroundStationLayer = useCallback((wwd) => {
+    if (groundStationLayerRef.current) {
+      wwd.removeLayer(groundStationLayerRef.current);
     }
     
+    const gsLayer = new WorldWind.RenderableLayer("Ground Stations");
+    
+    getVisibleStations().forEach(gs => {
+      // Ground station placemark
+      const placemarkAttributes = new WorldWind.PlacemarkAttributes(null);
+      placemarkAttributes.imageSource = WorldWind.configuration.baseUrl + "images/pushpins/plain-red.png";
+      placemarkAttributes.imageScale = 0.8;
+      placemarkAttributes.imageOffset = new WorldWind.Offset(
+        WorldWind.OFFSET_FRACTION, 0.3,
+        WorldWind.OFFSET_FRACTION, 0.0
+      );
+      placemarkAttributes.labelAttributes.color = WorldWind.Color.YELLOW;
+      placemarkAttributes.labelAttributes.offset = new WorldWind.Offset(
+        WorldWind.OFFSET_FRACTION, 0.5,
+        WorldWind.OFFSET_FRACTION, 1.5
+      );
+      
+      const placemark = new WorldWind.Placemark(
+        new WorldWind.Position(gs.location.lat, gs.location.lon, 0),
+        false,
+        placemarkAttributes
+      );
+      placemark.label = gs.name;
+      placemark.altitudeMode = WorldWind.CLAMP_TO_GROUND;
+      
+      gsLayer.addRenderable(placemark);
+      
+      // Optional: Ground station coverage circle
+      if (gs.antenna?.maxRange) {
+        const coverageCoords = geodesicCircleCoords(
+          { latitude: gs.location.lat, longitude: gs.location.lon },
+          gs.antenna.maxRange
+        );
+        
+        const boundaryLocations = coverageCoords.map(
+          (coord) => new WorldWind.Location(coord.latitude, coord.longitude)
+        );
+        
+        const polygonAttributes = new WorldWind.ShapeAttributes(null);
+        polygonAttributes.interiorColor = new WorldWind.Color(
+          gs.color?.r || 1, 
+          gs.color?.g || 0.5, 
+          gs.color?.b || 0, 
+          0.1
+        );
+        polygonAttributes.outlineColor = new WorldWind.Color(
+          gs.color?.r || 1, 
+          gs.color?.g || 0.5, 
+          gs.color?.b || 0, 
+          0.6
+        );
+        polygonAttributes.outlineWidth = 1;
+        
+        const coveragePolygon = new WorldWind.SurfacePolygon(boundaryLocations, polygonAttributes);
+        gsLayer.addRenderable(coveragePolygon);
+      }
+    });
+    
+    groundStationLayerRef.current = gsLayer;
+    wwd.addLayer(gsLayer);
+    
+    console.log(`✅ Ground stations layer created with ${getVisibleStations().length} stations`);
+  }, [groundStations, getVisibleStations]);
+
+  // Update satellite position with animation
+  const updateSatelliteMarker = useCallback(() => {
+    if (!wwdRef.current || !satelliteLayerRef.current) return;
+    
+    const time = currentTime;
+    
+    // Update all visible satellites
+    satellites.filter(s => s.isVisible).forEach(sat => {
+      const pos = calculatePosition(sat.id, time);
+      
+      if (pos) {
+        // Update position in store
+        updatePosition(sat.id, pos);
+        
+        // Update current satellite position for info panel (selected satellite)
+        if (sat.id === selectedSatelliteId) {
+          setCurrentSatellitePosition(pos);
+        }
+        
+        // Coverage circle
+        const radiusKm = calculateCoverageRadius(pos.alt);
+        const center = { latitude: pos.lat, longitude: pos.lon };
+        const circleCoords = geodesicCircleCoords(center, radiusKm);
+        
+        const boundaryLocations = circleCoords.map(
+          (coord) => new WorldWind.Location(coord.latitude, coord.longitude)
+        );
+        
+        // Get or create renderables for this satellite
+        if (!satelliteRenderablesRef.current[sat.id]) {
+          // Create coverage polygon
+          const polygonAttributes = new WorldWind.ShapeAttributes(null);
+          polygonAttributes.interiorColor = new WorldWind.Color(
+            sat.color?.r || 0, 
+            sat.color?.g || 1, 
+            sat.color?.b || 0, 
+            0.2
+          );
+          polygonAttributes.outlineColor = new WorldWind.Color(
+            sat.color?.r || 0, 
+            sat.color?.g || 1, 
+            sat.color?.b || 0, 
+            0.8
+          );
+          polygonAttributes.outlineWidth = 1.5;
+          
+          const coveragePolygon = new WorldWind.SurfacePolygon(boundaryLocations, polygonAttributes);
+          satelliteLayerRef.current.addRenderable(coveragePolygon);
+          
+          // Create placemark
+          const placemarkAttributes = new WorldWind.PlacemarkAttributes(null);
+          placemarkAttributes.imageSource = `${WorldWind.configuration.baseUrl}images/LAPAN-A3.png`;
+          placemarkAttributes.imageScale = 0.8;
+          placemarkAttributes.imageOffset = new WorldWind.Offset(
+            WorldWind.OFFSET_FRACTION, 0.5,
+            WorldWind.OFFSET_FRACTION, 0.5
+          );
+          placemarkAttributes.labelAttributes.color = WorldWind.Color.WHITE;
+          placemarkAttributes.labelAttributes.offset = new WorldWind.Offset(
+            WorldWind.OFFSET_FRACTION, 0.5,
+            WorldWind.OFFSET_FRACTION, 2.0
+          );
+          
+          const placemark = new WorldWind.Placemark(
+            new WorldWind.Position(pos.lat, pos.lon, 0),
+            false,
+            placemarkAttributes
+          );
+          placemark.altitudeMode = WorldWind.CLAMP_TO_GROUND;
+          satelliteLayerRef.current.addRenderable(placemark);
+          
+          satelliteRenderablesRef.current[sat.id] = {
+            coveragePolygon,
+            placemark
+          };
+        } else {
+          // Update existing renderables
+          satelliteRenderablesRef.current[sat.id].coveragePolygon.boundaries = boundaryLocations;
+          satelliteRenderablesRef.current[sat.id].placemark.position = new WorldWind.Position(pos.lat, pos.lon, 0);
+        }
+        
+        // Update label
+        satelliteRenderablesRef.current[sat.id].placemark.label = `${sat.name}\n${pos.alt.toFixed(1)} km`;
+      }
+    });
+    
+    wwdRef.current.redraw();
+    
+    // Continue animation
+    if (isPlaying) {
+      tick();
+    }
     animationFrameRef.current = requestAnimationFrame(updateSatelliteMarker);
-  };
+  }, [satellites, selectedSatelliteId, currentTime, isPlaying, calculatePosition, updatePosition, tick]);
 
   // Start satellite animation when WorldWind is ready
   useEffect(() => {
-    if (wwdRef.current && isSatelliteReady && !isLoading) {
+    if (wwdRef.current && satellites.length > 0 && !isLoading) {
       createOrbitLayer(wwdRef.current);
       createSatelliteLayer(wwdRef.current);
+      createGroundStationLayer(wwdRef.current);
       updateSatelliteMarker();
       
       return () => {
@@ -192,7 +343,14 @@ const Globe2D = ({ isSimulating, onMouseMove }) => {
         }
       };
     }
-  }, [isLoading, isSatelliteReady]);
+  }, [isLoading, satellites.length, createOrbitLayer, createSatelliteLayer, createGroundStationLayer]);
+
+  // Update ground stations when they change
+  useEffect(() => {
+    if (wwdRef.current && !isLoading) {
+      createGroundStationLayer(wwdRef.current);
+    }
+  }, [groundStations, createGroundStationLayer, isLoading]);
 
   // Listener to disable vertical pan when stable
   useEffect(() => {
@@ -467,9 +625,9 @@ const Globe2D = ({ isSimulating, onMouseMove }) => {
         />
 
         <SatelliteInfoPanel 
-          satelliteName={LAPAN_A2_TLE.name}
+          satelliteName={getSelectedSatellite()?.name || 'No Satellite'}
           satellitePosition={currentSatellitePosition}
-          noradId="40931"
+          noradId={getSelectedSatellite()?.noradId || '-'}
           period="~97.4 min"
           isLoading={isLoading}
         />

@@ -6,45 +6,134 @@
 import React from 'react';
 import { 
   Play, Pause, FastForward, Rewind, 
-  Settings, Globe 
+  Settings, Globe, SkipBack, SkipForward,
+  Clock
 } from 'lucide-react';
+import { useTimeStore, useScenarioStore } from '../../stores';
 
-const TopNavbar = ({ isSimulating, toggleSimulation, simSpeed, setSimSpeed }) => {
+const TopNavbar = () => {
+  // Time store
+  const currentTime = useTimeStore(state => state.currentTime);
+  const isPlaying = useTimeStore(state => state.isPlaying);
+  const playbackSpeed = useTimeStore(state => state.playbackSpeed);
+  const availableSpeeds = useTimeStore(state => state.availableSpeeds);
+  const play = useTimeStore(state => state.play);
+  const pause = useTimeStore(state => state.pause);
+  const togglePlayback = useTimeStore(state => state.togglePlayback);
+  const increaseSpeed = useTimeStore(state => state.increaseSpeed);
+  const decreaseSpeed = useTimeStore(state => state.decreaseSpeed);
+  const stepForward = useTimeStore(state => state.stepForward);
+  const stepBackward = useTimeStore(state => state.stepBackward);
+  const goToNow = useTimeStore(state => state.goToNow);
+  const getFormattedTime = useTimeStore(state => state.getFormattedTime);
+  const getElapsedTime = useTimeStore(state => state.getElapsedTime);
+  
+  // Scenario store
+  const scenarioName = useScenarioStore(state => state.name);
+  const isDirty = useScenarioStore(state => state.isDirty);
+
+  // Format speed display
+  const formatSpeed = (speed) => {
+    if (speed >= 1) return `${speed}x`;
+    return `${speed}x`;
+  };
+
   return (
     <div className="h-14 bg-slate-900 border-b border-slate-700 flex items-center justify-between px-4 select-none flex-shrink-0 z-50">
+      {/* Left section - Logo & Menu */}
       <div className="flex items-center gap-4">
         <div className="flex items-center gap-2 text-blue-400 font-bold tracking-wider">
           <Globe className="w-6 h-6" />
-          <span>ORBIT<span className="text-white">SIM</span> v2.0 (WW)</span>
+          <span>ORBIT<span className="text-white">SIM</span></span>
         </div>
+        
         <div className="h-6 w-px bg-slate-700 mx-2" />
+        
+        <div className="text-sm text-slate-300">
+          <span className="font-medium">{scenarioName}</span>
+          {isDirty && <span className="text-yellow-400 ml-1">*</span>}
+        </div>
+        
+        <div className="h-6 w-px bg-slate-700 mx-2" />
+        
         <div className="hidden md:flex gap-4 text-sm text-slate-300 font-medium">
           <button className="hover:text-white transition-colors">File</button>
           <button className="hover:text-white transition-colors">Edit</button>
           <button className="hover:text-white transition-colors">View</button>
+          <button className="hover:text-white transition-colors">Insert</button>
           <button className="hover:text-white transition-colors">Analysis</button>
         </div>
       </div>
 
-      <div className="flex items-center bg-slate-800 rounded-md p-1 border border-slate-700">
-        <button className="p-1.5 hover:bg-slate-700 rounded text-slate-300 hover:text-white">
-          <Rewind className="w-4 h-4" />
-        </button>
+      {/* Center section - Time Controls */}
+      <div className="flex items-center gap-2">
+        {/* Speed control */}
+        <div className="flex items-center bg-slate-800 rounded-md border border-slate-700 mr-2">
+          <button 
+            onClick={decreaseSpeed}
+            disabled={playbackSpeed === availableSpeeds[0]}
+            className="px-2 py-1 hover:bg-slate-700 rounded-l text-slate-300 hover:text-white disabled:opacity-50 disabled:cursor-not-allowed"
+            title="Decrease speed"
+          >
+            <Rewind className="w-3 h-3" />
+          </button>
+          <span className="px-2 text-xs font-mono text-emerald-400 min-w-[40px] text-center">
+            {formatSpeed(playbackSpeed)}
+          </span>
+          <button 
+            onClick={increaseSpeed}
+            disabled={playbackSpeed === availableSpeeds[availableSpeeds.length - 1]}
+            className="px-2 py-1 hover:bg-slate-700 rounded-r text-slate-300 hover:text-white disabled:opacity-50 disabled:cursor-not-allowed"
+            title="Increase speed"
+          >
+            <FastForward className="w-3 h-3" />
+          </button>
+        </div>
+
+        {/* Playback controls */}
+        <div className="flex items-center bg-slate-800 rounded-md p-1 border border-slate-700">
+          <button 
+            onClick={() => stepBackward(60)}
+            className="p-1.5 hover:bg-slate-700 rounded text-slate-300 hover:text-white"
+            title="Step backward 1 min"
+          >
+            <SkipBack className="w-4 h-4" />
+          </button>
+          <button 
+            onClick={togglePlayback}
+            className={`p-1.5 mx-1 rounded text-white ${isPlaying ? 'bg-red-600 hover:bg-red-700' : 'bg-emerald-600 hover:bg-emerald-700'}`}
+            title={isPlaying ? 'Pause' : 'Play'}
+          >
+            {isPlaying ? <Pause className="w-4 h-4" /> : <Play className="w-4 h-4" />}
+          </button>
+          <button 
+            onClick={() => stepForward(60)}
+            className="p-1.5 hover:bg-slate-700 rounded text-slate-300 hover:text-white"
+            title="Step forward 1 min"
+          >
+            <SkipForward className="w-4 h-4" />
+          </button>
+        </div>
+
+        {/* Reset to now button */}
         <button 
-          onClick={toggleSimulation}
-          className={`p-1.5 mx-1 rounded text-white ${isSimulating ? 'bg-red-600 hover:bg-red-700' : 'bg-emerald-600 hover:bg-emerald-700'}`}
+          onClick={goToNow}
+          className="p-1.5 hover:bg-slate-700 rounded text-slate-400 hover:text-white border border-slate-700"
+          title="Go to current time"
         >
-          {isSimulating ? <Pause className="w-4 h-4" /> : <Play className="w-4 h-4" />}
-        </button>
-        <button className="p-1.5 hover:bg-slate-700 rounded text-slate-300 hover:text-white">
-          <FastForward className="w-4 h-4" />
+          <Clock className="w-4 h-4" />
         </button>
       </div>
 
+      {/* Right section - Time Display & Settings */}
       <div className="flex items-center gap-3">
-        <div className="text-xs text-right hidden sm:block">
-          <div className="text-slate-400">UTC Time</div>
-          <div className="font-mono text-emerald-400">{new Date().toISOString().split('T')[1].split('.')[0]}</div>
+        <div className="text-xs text-right hidden sm:block bg-slate-800 px-3 py-1.5 rounded border border-slate-700">
+          <div className="text-slate-400 text-[10px]">Simulation Time (UTC)</div>
+          <div className="font-mono text-emerald-400">{getFormattedTime()}</div>
+        </div>
+        <div className="text-xs text-right hidden lg:block">
+          <div className="text-slate-400 text-[10px]">Elapsed</div>
+          <div className="font-mono text-cyan-400">{getElapsedTime()}</div>
         </div>
         <button className="p-2 hover:bg-slate-800 rounded-full text-slate-400 hover:text-white">
           <Settings className="w-5 h-5" />
