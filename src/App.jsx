@@ -2,9 +2,17 @@ import React, { useState, useEffect, useRef } from 'react';
 import { 
   Play, Pause, FastForward, Rewind, 
   Settings, Globe, Map as MapIcon, 
-  Monitor, Info, Crosshair
+  Monitor, Info, Crosshair, Satellite
 } from 'lucide-react';
 import WorldWind from "worldwindjs";
+import * as satellite from 'satellite.js';
+
+// TLE Data untuk LAPAN-A2
+const LAPAN_A2_TLE = {
+  name: 'LAPAN-A2',
+  line1: '1 40931U 00000    25329.16366898  .00000000  00000-0 -12415-2 0    04',
+  line2: '2 40931   5.9967 190.3873 0012662 345.8950  58.4170 14.79004108  3470'
+};
 
 
 /**
@@ -117,11 +125,16 @@ const Globe2D = ({ isSimulating, onMouseMove }) => {
   const statsValidRef = useRef(false); // Ref to track if stats correspond to current dimensions
   const autoFitEnabledRef = useRef(true); // Ref to track if auto-fit logic should run
   const baseLayerRef = useRef(null); // Ref for current base layer
+  const orbitLayerRef = useRef(null); // Ref for orbit path layer
+  const satelliteLayerRef = useRef(null); // Ref for satellite position layer
+  const animationFrameRef = useRef(null); // Ref for animation frame
+  const satrec = useRef(null); // Ref for satellite record (parsed TLE)
   const [dimensions, setDimensions] = useState({ width: 0, height: 0 });
   const [isLoading, setIsLoading] = useState(true);
   const [range, setRange] = useState(null); // Start with null, will be calculated
   const [selectedLayer, setSelectedLayer] = useState('osm'); // 'bmng' or 'osm'
   const [showLayerDropdown, setShowLayerDropdown] = useState(false);
+  const [satellitePosition, setSatellitePosition] = useState({ lat: 0, lon: 0, alt: 0 });
   const [borderStats, setBorderStats] = useState({
     top: null,
     bottom: null,
@@ -134,6 +147,206 @@ const Globe2D = ({ isSimulating, onMouseMove }) => {
     { id: 'bmng', name: 'Blue Marble (NASA)', icon: '🌍' },
     { id: 'osm', name: 'OpenStreetMap', icon: '🗺️' }
   ];
+
+  // Parse TLE and initialize satellite record
+  useEffect(() => {
+    try {
+      satrec.current = satellite.twoline2satrec(LAPAN_A2_TLE.line1, LAPAN_A2_TLE.line2);
+      console.log('✅ TLE parsed successfully for', LAPAN_A2_TLE.name);
+    } catch (error) {
+      console.error('Failed to parse TLE:', error);
+    }
+  }, []);
+
+  // Function to get satellite position at a given time
+  const getSatellitePosition = (date) => {
+    if (!satrec.current) return null;
+    
+    const positionAndVelocity = satellite.propagate(satrec.current, date);
+    if (!positionAndVelocity.position) return null;
+    
+    const gmst = satellite.gstime(date);
+    const positionGd = satellite.eciToGeodetic(positionAndVelocity.position, gmst);
+    
+    return {
+      lat: satellite.degreesLat(positionGd.latitude),
+      lon: satellite.degreesLong(positionGd.longitude),
+      alt: positionGd.height // in km
+    };
+  };
+
+  // Function to generate orbit path points for 1 pass
+  const generateOrbitPath = () => {
+    if (!satrec.current) return [];
+    
+    const points = [];
+    const now = new Date();
+    
+    // Mean motion dari TLE adalah 14.79004108 rev/day
+    // Periode orbit = 1440 / 14.79004108 = ~97.36 menit
+    const orbitPeriodMinutes = 1440 / 14.79004108;
+    
+    // Generate points setiap 2 menit untuk 1 orbit penuh
+    const intervalMinutes = 2;
+    const totalPoints = Math.ceil(orbitPeriodMinutes / intervalMinutes);
+    
+    for (let i = 0; i <= totalPoints; i++) {
+      const time = new Date(now.getTime() + i * intervalMinutes * 60 * 1000);
+      const pos = getSatellitePosition(time);
+      if (pos) {
+        points.push({
+          ...pos,
+          time: time
+        });
+      }
+    }
+    
+    return points;
+  };
+
+  // Create orbit path layer
+  const createOrbitLayer = (wwd) => {
+    if (orbitLayerRef.current) {
+      wwd.removeLayer(orbitLayerRef.current);
+    }
+    
+    const orbitLayer = new WorldWind.RenderableLayer("Orbit Path");
+    const orbitPoints = generateOrbitPath();
+    
+    if (orbitPoints.length > 1) {
+      // Create path positions
+      const pathPositions = orbitPoints.map(point => 
+        new WorldWind.Position(point.lat, point.lon, point.alt * 1000) // Convert km to meters
+      );
+      
+      // Create path with styling
+      const pathAttributes = new WorldWind.ShapeAttributes(null);
+      pathAttributes.outlineColor = new WorldWind.Color(0, 1, 1, 0.8); // Cyan
+      pathAttributes.outlineWidth = 2;
+      pathAttributes.drawInterior = false;
+      
+      const path = new WorldWind.Path(pathPositions, pathAttributes);
+      path.altitudeMode = WorldWind.ABSOLUTE;
+      // path.followTerrain = false;
+      path.extrude = false;
+      path.useSurfaceShapeFor2D = true;
+      
+      orbitLayer.addRenderable(path);
+      
+      // Add orbit points as small placemarks
+      orbitPoints.forEach((point, index) => {
+        // Only add markers every 10 minutes (every 5 points since interval is 2 min)
+        if (index % 5 === 0) {
+          const placemarkAttributes = new WorldWind.PlacemarkAttributes(null);
+          placemarkAttributes.imageSource = WorldWind.configuration.baseUrl + "images/white-dot.png";
+          placemarkAttributes.imageScale = 0.1;
+          placemarkAttributes.imageColor = new WorldWind.Color(0, 1, 1, 0.6);
+          
+          const placemark = new WorldWind.Placemark(
+            new WorldWind.Position(point.lat, point.lon, 0),
+            false,
+            placemarkAttributes
+          );
+          placemark.altitudeMode = WorldWind.CLAMP_TO_GROUND;
+          
+          orbitLayer.addRenderable(placemark);
+        }
+      });
+    }
+    
+    orbitLayerRef.current = orbitLayer;
+    wwd.addLayer(orbitLayer);
+    
+    console.log(`✅ Orbit path created with ${orbitPoints.length} points`);
+  };
+
+  // Create satellite marker layer
+  const createSatelliteLayer = (wwd) => {
+    if (satelliteLayerRef.current) {
+      wwd.removeLayer(satelliteLayerRef.current);
+    }
+    
+    const satLayer = new WorldWind.RenderableLayer("Satellite");
+    satelliteLayerRef.current = satLayer;
+    wwd.addLayer(satLayer);
+  };
+
+  // Update satellite position with animation
+  const updateSatelliteMarker = () => {
+    if (!wwdRef.current || !satelliteLayerRef.current || !satrec.current) return;
+    
+    const now = new Date();
+    const pos = getSatellitePosition(now);
+    
+    if (pos) {
+      setSatellitePosition(pos);
+      
+      // Clear previous renderables
+      satelliteLayerRef.current.removeAllRenderables();
+      
+      // Create satellite placemark
+      const placemarkAttributes = new WorldWind.PlacemarkAttributes(null);
+      placemarkAttributes.imageSource = WorldWind.configuration.baseUrl + "images/pushpins/castshadow-red.png";
+      placemarkAttributes.imageScale = 0.8;
+      placemarkAttributes.imageOffset = new WorldWind.Offset(
+        WorldWind.OFFSET_FRACTION, 0.5,
+        WorldWind.OFFSET_FRACTION, 0.0
+      );
+      placemarkAttributes.labelAttributes.color = WorldWind.Color.WHITE;
+      placemarkAttributes.labelAttributes.offset = new WorldWind.Offset(
+        WorldWind.OFFSET_FRACTION, 0.5,
+        WorldWind.OFFSET_FRACTION, 1.2
+      );
+      
+      const placemark = new WorldWind.Placemark(
+        new WorldWind.Position(pos.lat, pos.lon, 0),
+        false,
+        placemarkAttributes
+      );
+      placemark.label = `${LAPAN_A2_TLE.name}\n${pos.alt.toFixed(1)} km`;
+      placemark.altitudeMode = WorldWind.CLAMP_TO_GROUND;
+      
+      satelliteLayerRef.current.addRenderable(placemark);
+      
+      // Add ground track point (current position indicator)
+      const groundTrackAttr = new WorldWind.PlacemarkAttributes(null);
+      groundTrackAttr.imageSource = WorldWind.configuration.baseUrl + "images/white-dot.png";
+      groundTrackAttr.imageScale = 0.3;
+      groundTrackAttr.imageColor = new WorldWind.Color(1, 0.3, 0.3, 1); // Red
+      
+      const groundTrack = new WorldWind.Placemark(
+        new WorldWind.Position(pos.lat, pos.lon, 0),
+        false,
+        groundTrackAttr
+      );
+      groundTrack.altitudeMode = WorldWind.CLAMP_TO_GROUND;
+      
+      satelliteLayerRef.current.addRenderable(groundTrack);
+      
+      wwdRef.current.redraw();
+    }
+    
+    // Continue animation
+    animationFrameRef.current = requestAnimationFrame(updateSatelliteMarker);
+  };
+
+  // Start satellite animation when WorldWind is ready
+  useEffect(() => {
+    if (wwdRef.current && satrec.current && !isLoading) {
+      // Create layers
+      createOrbitLayer(wwdRef.current);
+      createSatelliteLayer(wwdRef.current);
+      
+      // Start animation
+      updateSatelliteMarker();
+      
+      return () => {
+        if (animationFrameRef.current) {
+          cancelAnimationFrame(animationFrameRef.current);
+        }
+      };
+    }
+  }, [isLoading]);
 
   // Listener to disable vertical pan when stable
   useEffect(() => {
@@ -216,7 +429,7 @@ const Globe2D = ({ isSimulating, onMouseMove }) => {
     if (wwdRef.current) {
       wwdRef.current.navigator.range = optimalRange;
       wwdRef.current.navigator.lookAtLocation.latitude = 0;
-      wwdRef.current.navigator.lookAtLocation.longitude = 20;
+      wwdRef.current.navigator.lookAtLocation.longitude = 40;
       setRange(optimalRange);
       setIsLoading(true);
       statsValidRef.current = false; // Invalidate stats
@@ -255,7 +468,7 @@ const Globe2D = ({ isSimulating, onMouseMove }) => {
 
       // Setup view agar pas di tengah (lookAt 0,0) dengan range yang dihitung
       wwd.navigator.lookAtLocation.latitude = 0;
-      wwd.navigator.lookAtLocation.longitude = 20;
+      wwd.navigator.lookAtLocation.longitude = 40;
       wwd.navigator.range = optimalRange;
       setRange(optimalRange);
       
@@ -304,7 +517,7 @@ const Globe2D = ({ isSimulating, onMouseMove }) => {
     const optimalRange = calculateOptimalRange(dimensions.height);
     wwd.navigator.range = optimalRange;
     wwd.navigator.lookAtLocation.latitude = 0;
-    wwd.navigator.lookAtLocation.longitude = 20;
+    wwd.navigator.lookAtLocation.longitude = 40;
     setRange(optimalRange);
     setIsLoading(true);
     statsValidRef.current = false;
@@ -585,6 +798,32 @@ const Globe2D = ({ isSimulating, onMouseMove }) => {
                  ))}
                </div>
              )}
+          </div>
+        </div>
+
+        {/* Satellite Info Panel */}
+        <div className={`absolute top-2 right-2 bg-black/50 backdrop-blur-sm p-2 rounded border border-white/10 text-xs text-white transition-opacity duration-1000 ${!isLoading ? 'opacity-100' : 'opacity-0'}`}>
+          <div className="font-bold text-cyan-400 mb-1 flex items-center gap-2">
+            <Satellite className="w-4 h-4" />
+            {LAPAN_A2_TLE.name}
+          </div>
+          <div className="space-y-1 font-mono">
+            <div className="flex justify-between gap-4">
+              <span className="text-gray-400">Latitude:</span>
+              <span className="text-green-400">{satellitePosition.lat.toFixed(4)}°</span>
+            </div>
+            <div className="flex justify-between gap-4">
+              <span className="text-gray-400">Longitude:</span>
+              <span className="text-green-400">{satellitePosition.lon.toFixed(4)}°</span>
+            </div>
+            <div className="flex justify-between gap-4">
+              <span className="text-gray-400">Altitude:</span>
+              <span className="text-yellow-400">{satellitePosition.alt.toFixed(2)} km</span>
+            </div>
+          </div>
+          <div className="mt-2 pt-1 border-t border-white/10 text-[10px] text-gray-500">
+            <div>NORAD ID: 40931</div>
+            <div>Period: ~97.4 min</div>
           </div>
         </div>
       </div>
