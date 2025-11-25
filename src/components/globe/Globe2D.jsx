@@ -38,7 +38,7 @@ WorldWind.configuration.baseUrl = "./worldwind/";
 
 const Globe2D = ({ onMouseMove }) => {
   // Custom hooks
-  const { containerRef, dimensions } = useResizeObserver();
+  const { containerRef, dimensions, isReady } = useResizeObserver();
   
   // Zustand stores
   const satellites = useSatelliteStore(state => state.satellites);
@@ -387,61 +387,106 @@ const Globe2D = ({ onMouseMove }) => {
     };
   }, []);
 
-  // Initialize WorldWind
+  // Initialize WorldWind - ONLY when canvas is ready with valid dimensions
   useEffect(() => {
-    if (!canvasRef.current || dimensions.width <= 0 || dimensions.height <= 0) return;
-
-    const optimalRange = calculateOptimalRange(dimensions.height);
-
-    if (wwdRef.current) {
-      wwdRef.current.navigator.range = optimalRange;
-      wwdRef.current.navigator.lookAtLocation.latitude = 0;
-      wwdRef.current.navigator.lookAtLocation.longitude = 50;
-      setRange(optimalRange);
-      setIsLoading(true);
-      statsValidRef.current = false;
-      autoFitEnabledRef.current = true;
-      wwdRef.current.redraw();
+    // Guard: Don't initialize until ResizeObserver says we're ready
+    if (!isReady) {
+      console.log("⏳ Waiting for canvas to be ready...");
+      return;
+    }
+    
+    if (!canvasRef.current) {
+      console.log("⏳ Canvas ref not available yet...");
+      return;
+    }
+    
+    const canvas = canvasRef.current;
+    
+    // Ensure canvas attributes match container dimensions
+    canvas.width = dimensions.width;
+    canvas.height = dimensions.height;
+    
+    // Double-check canvas has real dimensions
+    if (dimensions.width < 200 || dimensions.height < 200) {
+      console.log(`⚠️ Dimensions too small: ${dimensions.width} x ${dimensions.height}`);
       return;
     }
 
-    try {
-      const wwd = new WorldWind.WorldWindow(canvasRef.current);
-      wwdRef.current = wwd;
-      
-      console.log("✅ WorldWindow created successfully");
+    const optimalRange = calculateOptimalRange(dimensions.height);
+    
+    console.log(`🚀 Initializing WorldWind with dimensions: ${dimensions.width} x ${dimensions.height}`);
 
-      const flat = new WorldWind.Globe2D();
-      flat.projection = new WorldWind.ProjectionEquirectangular();
-      wwd.globe = flat;
-      
-      console.log("✅ Globe2D with Equirectangular projection set");
-
-      let baseLayer;
-      if (selectedLayer === 'bmng') {
-        baseLayer = new WorldWind.BMNGLayer();
-      } else {
-        baseLayer = new WorldWind.OpenStreetMapImageLayer("osm");
-      }
-      baseLayerRef.current = baseLayer;
-      wwd.addLayer(baseLayer);
-
-      const coordinatesLayer = new WorldWind.CoordinatesDisplayLayer(wwd);
-      wwd.addLayer(coordinatesLayer);
-
-      wwd.navigator.lookAtLocation.latitude = 0;
-      wwd.navigator.lookAtLocation.longitude = 50;
-      wwd.navigator.range = optimalRange;
-      setRange(optimalRange);
-      
-      console.log(`✅ Initial range set to: ${(optimalRange / 1000).toFixed(0)} km`);
-      
-      wwd.redraw();
-      
-    } catch (error) {
-      console.error("Failed to initialize WorldWind:", error);
+    // If WorldWind already exists, recreate it for resize
+    // WorldWind doesn't handle resize well, so we need to recreate
+    if (wwdRef.current) {
+      console.log(`🔄 Recreating WorldWind for new dimensions...`);
+      // Clear existing layers and reset
+      wwdRef.current = null;
+      orbitLayerRef.current = null;
+      satelliteLayerRef.current = null;
+      groundStationLayerRef.current = null;
+      baseLayerRef.current = null;
+      coveragePolygonRef.current = null;
+      satellitePlacemarkRef.current = null;
+      satelliteRenderablesRef.current = {};
     }
-  }, [dimensions.width, dimensions.height]);
+
+    // Initialize WorldWind with a small delay to ensure canvas is rendered
+    const initTimeout = setTimeout(() => {
+      try {
+        // Verify canvas dimensions one more time
+        console.log(`📏 Canvas actual size: ${canvas.width} x ${canvas.height}`);
+        console.log(`📏 Canvas client size: ${canvas.clientWidth} x ${canvas.clientHeight}`);
+        
+        const wwd = new WorldWind.WorldWindow(canvas);
+        wwdRef.current = wwd;
+        
+        console.log("✅ WorldWindow created successfully");
+
+        const flat = new WorldWind.Globe2D();
+        flat.projection = new WorldWind.ProjectionEquirectangular();
+        wwd.globe = flat;
+        
+        console.log("✅ Globe2D with Equirectangular projection set");
+
+        let baseLayer;
+        if (selectedLayer === 'bmng') {
+          baseLayer = new WorldWind.BMNGLayer();
+        } else {
+          baseLayer = new WorldWind.OpenStreetMapImageLayer("osm");
+        }
+        baseLayerRef.current = baseLayer;
+        wwd.addLayer(baseLayer);
+
+        const coordinatesLayer = new WorldWind.CoordinatesDisplayLayer(wwd);
+        wwd.addLayer(coordinatesLayer);
+
+        // Set navigator
+        wwd.navigator.lookAtLocation.latitude = 0;
+        wwd.navigator.lookAtLocation.longitude = 117;
+        wwd.navigator.range = optimalRange;
+        setRange(optimalRange);
+        
+        console.log(`✅ Initial range: ${(optimalRange / 1000).toFixed(0)} km`);
+        console.log(`✅ Canvas dimensions: ${canvas.width} x ${canvas.height}`);
+        
+        // Force redraw
+        wwd.redraw();
+        
+        // Reset loading state after WorldWind has time to render
+        setTimeout(() => {
+          setIsLoading(true); // Will be set to false by auto-fit logic
+          statsValidRef.current = false;
+          autoFitEnabledRef.current = true;
+        }, 100);
+        
+      } catch (error) {
+        console.error("❌ Failed to initialize WorldWind:", error);
+      }
+    }, 50);
+    
+    return () => clearTimeout(initTimeout);
+  }, [isReady, dimensions.width, dimensions.height]);
 
   // Handle manual Range Change from UI input
   useEffect(() => {
