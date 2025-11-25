@@ -216,7 +216,7 @@ const Globe2D = ({ isSimulating, onMouseMove }) => {
     if (wwdRef.current) {
       wwdRef.current.navigator.range = optimalRange;
       wwdRef.current.navigator.lookAtLocation.latitude = 0;
-      wwdRef.current.navigator.lookAtLocation.longitude = 0;
+      wwdRef.current.navigator.lookAtLocation.longitude = 20;
       setRange(optimalRange);
       setIsLoading(true);
       statsValidRef.current = false; // Invalidate stats
@@ -255,7 +255,7 @@ const Globe2D = ({ isSimulating, onMouseMove }) => {
 
       // Setup view agar pas di tengah (lookAt 0,0) dengan range yang dihitung
       wwd.navigator.lookAtLocation.latitude = 0;
-      wwd.navigator.lookAtLocation.longitude = 0;
+      wwd.navigator.lookAtLocation.longitude = 20;
       wwd.navigator.range = optimalRange;
       setRange(optimalRange);
       
@@ -304,7 +304,7 @@ const Globe2D = ({ isSimulating, onMouseMove }) => {
     const optimalRange = calculateOptimalRange(dimensions.height);
     wwd.navigator.range = optimalRange;
     wwd.navigator.lookAtLocation.latitude = 0;
-    wwd.navigator.lookAtLocation.longitude = 0;
+    wwd.navigator.lookAtLocation.longitude = 20;
     setRange(optimalRange);
     setIsLoading(true);
     statsValidRef.current = false;
