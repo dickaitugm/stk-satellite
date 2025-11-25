@@ -202,7 +202,7 @@ const ObjectTree = () => {
       {/* Satellites */}
       <div className="mb-2">
         <div 
-          className="flex items-center gap-2 py-1.5 px-2 bg-base-300 rounded cursor-pointer hover:bg-base-200"
+          className="flex items-center gap-2 py-1.5 px-2 bg-slate-800/50 rounded cursor-pointer hover:bg-slate-800 border border-slate-700/50"
           onClick={() => toggleCategory('satellites')}
         >
           {expandedCategories.satellites ? (
@@ -210,10 +210,10 @@ const ObjectTree = () => {
           ) : (
             <Folder className="w-4 h-4 text-cyan-400" />
           )}
-          <span className="font-medium flex-1">Satellites</span>
+          <span className="font-medium flex-1 text-slate-200">Satellites</span>
           <span className="text-xs text-slate-500">{satellites.length}</span>
           <button 
-            className="p-0.5 hover:bg-base-100 rounded"
+            className="p-0.5 hover:bg-slate-700 rounded text-slate-400 hover:text-white"
             onClick={(e) => {
               e.stopPropagation();
               // TODO: Open add satellite dialog
@@ -267,7 +267,7 @@ const ObjectTree = () => {
       {/* Ground Stations */}
       <div className="mb-2">
         <div 
-          className="flex items-center gap-2 py-1.5 px-2 bg-base-300 rounded cursor-pointer hover:bg-base-200"
+          className="flex items-center gap-2 py-1.5 px-2 bg-slate-800/50 rounded cursor-pointer hover:bg-slate-800 border border-slate-700/50"
           onClick={() => toggleCategory('groundStations')}
         >
           {expandedCategories.groundStations ? (
@@ -275,10 +275,10 @@ const ObjectTree = () => {
           ) : (
             <Folder className="w-4 h-4 text-orange-400" />
           )}
-          <span className="font-medium flex-1">Ground Stations</span>
+          <span className="font-medium flex-1 text-slate-200">Ground Stations</span>
           <span className="text-xs text-slate-500">{groundStations.length}</span>
           <button 
-            className="p-0.5 hover:bg-base-100 rounded"
+            className="p-0.5 hover:bg-slate-700 rounded text-slate-400 hover:text-white"
             onClick={(e) => {
               e.stopPropagation();
               // TODO: Open add ground station dialog
@@ -310,7 +310,7 @@ const ObjectTree = () => {
       {/* Target Areas */}
       <div className="mb-2">
         <div 
-          className="flex items-center gap-2 py-1.5 px-2 bg-base-300 rounded cursor-pointer hover:bg-base-200"
+          className="flex items-center gap-2 py-1.5 px-2 bg-slate-800/50 rounded cursor-pointer hover:bg-slate-800 border border-slate-700/50"
           onClick={() => toggleCategory('targetAreas')}
         >
           {expandedCategories.targetAreas ? (
@@ -318,10 +318,10 @@ const ObjectTree = () => {
           ) : (
             <Folder className="w-4 h-4 text-green-400" />
           )}
-          <span className="font-medium flex-1">Target Areas</span>
+          <span className="font-medium flex-1 text-slate-200">Target Areas</span>
           <span className="text-xs text-slate-500">{targetAreas.length}</span>
           <button 
-            className="p-0.5 hover:bg-base-100 rounded"
+            className="p-0.5 hover:bg-slate-700 rounded text-slate-400 hover:text-white"
             onClick={(e) => {
               e.stopPropagation();
               // TODO: Open add target area dialog

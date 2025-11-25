@@ -51,7 +51,7 @@ const TreeNode = ({
     <div className="select-none">
       <div 
         className={`flex items-center gap-1 py-1 px-1 rounded cursor-pointer transition-colors
-          ${isSelected ? 'bg-primary/20 text-primary' : 'hover:bg-base-300'}
+          ${isSelected ? 'bg-blue-500/20 text-blue-400' : 'text-slate-300 hover:bg-slate-800'}
         `}
         style={{ paddingLeft: `${level * 16 + 4}px` }}
         onClick={handleClick}
@@ -61,7 +61,7 @@ const TreeNode = ({
         {hasChildren ? (
           <button 
             onClick={handleExpandClick}
-            className="p-0.5 hover:bg-base-100 rounded"
+            className="p-0.5 hover:bg-slate-700 rounded"
           >
             {isExpanded ? (
               <ChevronDown className="w-3 h-3" />
@@ -94,13 +94,13 @@ const TreeNode = ({
         {item.isVisible !== undefined && (
           <button
             onClick={handleVisibilityClick}
-            className="p-0.5 hover:bg-base-100 rounded opacity-60 hover:opacity-100"
+            className="p-0.5 hover:bg-slate-700 rounded opacity-60 hover:opacity-100"
             title={item.isVisible ? 'Hide' : 'Show'}
           >
             {item.isVisible ? (
-              <Eye className="w-3 h-3" />
+              <Eye className="w-3 h-3 text-slate-400" />
             ) : (
-              <EyeOff className="w-3 h-3 text-slate-500" />
+              <EyeOff className="w-3 h-3 text-slate-600" />
             )}
           </button>
         )}

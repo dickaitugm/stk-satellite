@@ -34,13 +34,15 @@ export default function App() {
       <TopNavbar />
 
       {/* MAIN CONTENT AREA */}
-      <div className="flex-1 overflow-hidden flex">
+      <div className="flex-1 overflow-hidden relative">
         
-        {/* LEFT SIDEBAR */}
-        <Sidebar />
+        {/* LEFT SIDEBAR - Floating over canvas */}
+        <div className="absolute left-0 top-0 bottom-0 z-20">
+          <Sidebar />
+        </div>
 
-        {/* MAP AREA */}
-        <div className="flex-1 overflow-hidden relative">
+        {/* MAP AREA - Full width */}
+        <div className="w-full h-full">
           {/* WorldWind Component */}
           <Globe2D onMouseMove={setCursorCoords} />
         </div>

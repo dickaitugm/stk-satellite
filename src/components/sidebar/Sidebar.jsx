@@ -9,7 +9,9 @@ import {
   ChevronRight, 
   Layers,
   FileText,
-  Settings
+  Settings,
+  PanelLeftClose,
+  PanelLeft
 } from 'lucide-react';
 
 import ObjectTree from './ObjectTree';
@@ -30,35 +32,35 @@ const Sidebar = () => {
 
   return (
     <div 
-      className={`flex flex-col bg-base-200 border-r border-base-300 transition-all duration-300 ${
-        isCollapsed ? 'w-12' : 'w-72'
+      className={`h-full flex flex-col bg-slate-900/95 backdrop-blur-sm border-r border-slate-700 transition-all duration-300 shadow-xl ${
+        isCollapsed ? 'w-10' : 'w-72'
       }`}
     >
       {/* Header */}
-      <div className="flex items-center justify-between p-2 border-b border-base-300 bg-base-300">
+      <div className="flex items-center justify-between px-3 py-2 border-b border-slate-700 bg-slate-800/50 min-h-[40px]">
         {!isCollapsed && (
-          <div className="flex-1 min-w-0">
-            <h2 className="text-sm font-bold truncate">{scenarioName}</h2>
+          <div className="flex-1 min-w-0 mr-2">
+            <h2 className="text-sm font-semibold text-slate-200 truncate">{scenarioName}</h2>
             {scenarioDescription && (
-              <p className="text-xs text-slate-500 truncate">{scenarioDescription}</p>
+              <p className="text-[10px] text-slate-500 truncate">{scenarioDescription}</p>
             )}
           </div>
         )}
         <button
           onClick={() => setIsCollapsed(!isCollapsed)}
-          className="p-1.5 hover:bg-base-100 rounded transition-colors"
+          className="p-1 hover:bg-slate-700 rounded transition-colors text-slate-400 hover:text-white"
           title={isCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
         >
           {isCollapsed ? (
-            <ChevronRight className="w-4 h-4" />
+            <PanelLeft className="w-4 h-4" />
           ) : (
-            <ChevronLeft className="w-4 h-4" />
+            <PanelLeftClose className="w-4 h-4" />
           )}
         </button>
       </div>
 
       {/* Tabs */}
-      <div className={`flex ${isCollapsed ? 'flex-col' : ''} border-b border-base-300`}>
+      <div className={`flex ${isCollapsed ? 'flex-col' : ''} border-b border-slate-700 bg-slate-800/30`}>
         {tabs.map(tab => (
           <button
             key={tab.id}
@@ -67,24 +69,25 @@ const Sidebar = () => {
               isCollapsed ? 'justify-center' : 'flex-1 justify-center'
             } ${
               activeTab === tab.id 
-                ? 'bg-primary/20 text-primary border-b-2 border-primary' 
-                : 'hover:bg-base-300'
+                ? 'bg-slate-700/50 text-blue-400 border-b-2 border-blue-400' 
+                : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800'
             }`}
             title={tab.label}
           >
             <tab.icon className="w-4 h-4" />
-            {!isCollapsed && <span className="text-xs">{tab.label}</span>}
+            {!isCollapsed && <span className="text-xs font-medium">{tab.label}</span>}
           </button>
         ))}
       </div>
 
       {/* Content */}
       {!isCollapsed && (
-        <div className="flex-1 overflow-auto p-2">
+        <div className="flex-1 overflow-auto p-2 scrollbar-thin scrollbar-thumb-slate-700 scrollbar-track-transparent">
           {activeTab === 'objects' && <ObjectTree />}
           
           {activeTab === 'properties' && (
             <div className="text-sm text-slate-500 text-center py-8">
+              <FileText className="w-8 h-8 mx-auto mb-2 opacity-50" />
               <p>Select an object to view properties</p>
             </div>
           )}
@@ -92,18 +95,18 @@ const Sidebar = () => {
           {activeTab === 'settings' && (
             <div className="text-sm space-y-4">
               <div>
-                <label className="block text-xs text-slate-500 mb-1">Scenario Name</label>
+                <label className="block text-xs text-slate-400 mb-1">Scenario Name</label>
                 <input 
                   type="text" 
-                  className="input input-sm input-bordered w-full"
+                  className="w-full px-2 py-1.5 text-sm bg-slate-800 border border-slate-600 rounded text-slate-200 focus:border-blue-500 focus:outline-none"
                   value={scenarioName}
                   onChange={(e) => useScenarioStore.getState().setName(e.target.value)}
                 />
               </div>
               <div>
-                <label className="block text-xs text-slate-500 mb-1">Description</label>
+                <label className="block text-xs text-slate-400 mb-1">Description</label>
                 <textarea 
-                  className="textarea textarea-bordered textarea-sm w-full"
+                  className="w-full px-2 py-1.5 text-sm bg-slate-800 border border-slate-600 rounded text-slate-200 focus:border-blue-500 focus:outline-none resize-none"
                   rows={3}
                   value={scenarioDescription}
                   onChange={(e) => useScenarioStore.getState().setDescription(e.target.value)}
@@ -114,12 +117,12 @@ const Sidebar = () => {
         </div>
       )}
 
-      {/* Collapsed state icons */}
+      {/* Collapsed state - show active tab icon */}
       {isCollapsed && (
-        <div className="flex-1 flex flex-col items-center pt-4 gap-2">
-          {activeTab === 'objects' && <Layers className="w-5 h-5 text-primary" />}
-          {activeTab === 'properties' && <FileText className="w-5 h-5 text-primary" />}
-          {activeTab === 'settings' && <Settings className="w-5 h-5 text-primary" />}
+        <div className="flex-1 flex flex-col items-center pt-4">
+          {activeTab === 'objects' && <Layers className="w-4 h-4 text-blue-400" />}
+          {activeTab === 'properties' && <FileText className="w-4 h-4 text-blue-400" />}
+          {activeTab === 'settings' && <Settings className="w-4 h-4 text-blue-400" />}
         </div>
       )}
     </div>

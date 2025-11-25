@@ -51,16 +51,16 @@ const ContextMenu = ({ x, y, items, onClose }) => {
   return (
     <div
       ref={menuRef}
-      className="fixed z-50 bg-base-200 border border-base-300 rounded-lg shadow-xl py-1 min-w-[180px]"
+      className="fixed z-50 bg-slate-800 border border-slate-600 rounded-lg shadow-xl py-1 min-w-[180px]"
       style={{ left: pos.left, top: pos.top }}
     >
       {items.map((item, index) => (
         item.separator ? (
-          <div key={index} className="border-t border-base-300 my-1" />
+          <div key={index} className="border-t border-slate-700 my-1" />
         ) : (
           <button
             key={index}
-            className={`w-full px-3 py-2 text-left text-sm flex items-center gap-2 hover:bg-primary hover:text-primary-content transition-colors ${item.danger ? 'text-error hover:bg-error hover:text-error-content' : ''} ${item.disabled ? 'opacity-50 cursor-not-allowed' : ''}`}
+            className={`w-full px-3 py-2 text-left text-sm flex items-center gap-2 transition-colors ${item.danger ? 'text-red-400 hover:bg-red-500/20' : 'text-slate-300 hover:bg-slate-700 hover:text-white'} ${item.disabled ? 'opacity-50 cursor-not-allowed' : ''}`}
             onClick={() => {
               if (!item.disabled) {
                 item.onClick();
