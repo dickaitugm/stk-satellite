@@ -3,7 +3,7 @@
  * Manages simulation time and playback controls
  *
  * Modes:
- * - realtime: Time follows real clock, updates every second automatically
+ * - realtime: Time follows real clock smoothly (updates every frame)
  * - simulation: Time is paused, only advances when Play is pressed with playback speed
  */
 
@@ -21,10 +21,9 @@ export const useTimeStore = create((set, get) => ({
     // Playback controls (only used in simulation mode)
     isPlaying: false,
     playbackSpeed: 1, // 1x, 2x, 4x, 10x, 60x, etc.
-    timeStep: 1000, // ms per update (1 second)
 
-    // For realtime mode - track last update time
-    lastRealtimeUpdate: Date.now(),
+    // For smooth animation - track last frame time
+    lastFrameTime: Date.now(),
 
     // Available playback speeds
     availableSpeeds: [0.1, 0.5, 1, 2, 5, 10, 30, 60, 300, 600],
@@ -38,7 +37,7 @@ export const useTimeStore = create((set, get) => ({
                 mode,
                 currentTime: now,
                 isPlaying: false,
-                lastRealtimeUpdate: Date.now(),
+                lastFrameTime: Date.now(),
             });
         } else {
             // Switch to simulation - pause at current time
@@ -47,6 +46,7 @@ export const useTimeStore = create((set, get) => ({
                 isPlaying: false,
                 startTime: now,
                 currentTime: now,
+                lastFrameTime: Date.now(),
             });
         }
     },
@@ -74,9 +74,13 @@ export const useTimeStore = create((set, get) => ({
         }),
 
     // Playback controls
-    play: () => set({ isPlaying: true }),
+    play: () => set({ isPlaying: true, lastFrameTime: Date.now() }),
     pause: () => set({ isPlaying: false }),
-    togglePlayback: () => set((state) => ({ isPlaying: !state.isPlaying })),
+    togglePlayback: () =>
+        set((state) => ({
+            isPlaying: !state.isPlaying,
+            lastFrameTime: Date.now(),
+        })),
 
     setPlaybackSpeed: (speed) => set({ playbackSpeed: speed }),
 
@@ -120,38 +124,52 @@ export const useTimeStore = create((set, get) => ({
     goToNow: () =>
         set({
             currentTime: new Date(),
+            lastFrameTime: Date.now(),
         }),
 
-    // Tick function for animation loop
-    tick: () =>
-        set((state) => {
-            const now = Date.now();
+    // Smooth tick function for animation loop - called every frame
+    // Returns deltaTime in ms for the frame
+    tick: () => {
+        const state = get();
+        const now = Date.now();
+        const deltaTime = now - state.lastFrameTime;
 
-            if (state.mode === "realtime") {
-                // Realtime mode: sync to actual clock
-                return {
-                    currentTime: new Date(),
-                    lastRealtimeUpdate: now,
-                };
-            }
+        if (state.mode === "realtime") {
+            // Realtime mode: always sync to actual clock (smooth)
+            set({
+                currentTime: new Date(),
+                lastFrameTime: now,
+            });
+            return deltaTime;
+        }
 
-            // Simulation mode: only advance if playing
-            if (!state.isPlaying) return state;
+        // Simulation mode: only advance if playing
+        if (!state.isPlaying) {
+            set({ lastFrameTime: now });
+            return 0;
+        }
 
-            const newTime = new Date(
-                state.currentTime.getTime() + state.timeStep * state.playbackSpeed
-            );
+        // Calculate new time based on delta and playback speed
+        // deltaTime is real ms elapsed, multiply by playbackSpeed for simulation time
+        const simDeltaMs = deltaTime * state.playbackSpeed;
+        const newTime = new Date(state.currentTime.getTime() + simDeltaMs);
 
-            // Stop at end time
-            if (newTime >= state.endTime) {
-                return {
-                    currentTime: state.endTime,
-                    isPlaying: false,
-                };
-            }
+        // Stop at end time
+        if (newTime >= state.endTime) {
+            set({
+                currentTime: state.endTime,
+                isPlaying: false,
+                lastFrameTime: now,
+            });
+            return deltaTime;
+        }
 
-            return { currentTime: newTime };
-        }),
+        set({
+            currentTime: newTime,
+            lastFrameTime: now,
+        });
+        return deltaTime;
+    },
 
     // Reset to current real time
     reset: () => {
@@ -163,12 +181,20 @@ export const useTimeStore = create((set, get) => ({
             isPlaying: false,
             playbackSpeed: 1,
             mode: "realtime",
-            lastRealtimeUpdate: Date.now(),
+            lastFrameTime: Date.now(),
         });
     },
 
-    // Formatted time strings
+    // Formatted time strings - includes milliseconds for smooth display
     getFormattedTime: () => {
+        const time = get().currentTime;
+        const iso = time.toISOString();
+        // Format: YYYY-MM-DD HH:MM:SS.mmm UTC
+        return iso.replace("T", " ").substring(0, 23) + " UTC";
+    },
+
+    // Short format without milliseconds
+    getFormattedTimeShort: () => {
         const time = get().currentTime;
         return time.toISOString().replace("T", " ").substring(0, 19) + " UTC";
     },

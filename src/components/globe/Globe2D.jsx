@@ -5,6 +5,7 @@
 
 import React, { useState, useEffect, useRef, useCallback } from "react";
 import WorldWind from "worldwindjs";
+import { Plus, Minus, Home } from "lucide-react";
 
 // Hooks
 import { useResizeObserver } from "../../hooks";
@@ -73,6 +74,7 @@ const Globe2D = ({ onMouseMove }) => {
     const satellitePlacemarkRef = useRef(null);
     const groundStationLayerRef = useRef(null);
     const satelliteRenderablesRef = useRef({}); // Store renderables per satellite
+    const orbitPathDataRef = useRef({}); // Store orbit path data per satellite {points, endTime, pathRenderable}
 
     // State
     const [isLoading, setIsLoading] = useState(true);
@@ -90,31 +92,106 @@ const Globe2D = ({ onMouseMove }) => {
         right: null,
     });
 
-    // Generate orbit path for a satellite
+    // Generate orbit path for a satellite - returns array of {time, lat, lon, alt}
     const generateOrbitPath = useCallback(
-        (satelliteId) => {
+        (satelliteId, startTime) => {
             const satrec = getSatrec(satelliteId);
             if (!satrec) return [];
 
             const points = [];
-            const now = currentTime;
             const periodMinutes = 100; // Approximate orbital period
             const step = 1; // minutes
 
             for (let i = 0; i < periodMinutes; i += step) {
-                const time = new Date(now.getTime() + i * 60 * 1000);
+                const time = new Date(startTime.getTime() + i * 60 * 1000);
                 const pos = calculatePosition(satelliteId, time);
                 if (pos) {
-                    points.push(pos);
+                    points.push({
+                        time: time,
+                        lat: pos.lat,
+                        lon: pos.lon,
+                        alt: pos.alt,
+                    });
                 }
             }
 
             return points;
         },
-        [getSatrec, calculatePosition, currentTime]
+        [getSatrec, calculatePosition]
     );
 
-    // Create orbit path layer
+    // Check if orbit path needs update (satellite is 5 points before end)
+    const checkOrbitPathUpdate = useCallback((satelliteId, currentTime) => {
+        const orbitData = orbitPathDataRef.current[satelliteId];
+        if (!orbitData || !orbitData.points || orbitData.points.length === 0) {
+            return true; // Need to create initial path
+        }
+
+        const points = orbitData.points;
+        // Find current position in orbit path
+        const currentTimeMs = currentTime.getTime();
+
+        // Check if we're within 5 minutes of the end
+        const endTime = points[points.length - 1].time.getTime();
+        const thresholdMs = 5 * 60 * 1000; // 5 minutes before end
+
+        return currentTimeMs >= endTime - thresholdMs;
+    }, []);
+
+    // Update orbit path for a satellite
+    const updateOrbitPath = useCallback(
+        (wwd, satelliteId, satellite, startTime) => {
+            const points = generateOrbitPath(satelliteId, startTime);
+
+            if (points.length > 1) {
+                // Remove old path renderable if exists
+                if (
+                    orbitPathDataRef.current[satelliteId]?.pathRenderable &&
+                    orbitLayerRef.current
+                ) {
+                    orbitLayerRef.current.removeRenderable(
+                        orbitPathDataRef.current[satelliteId].pathRenderable
+                    );
+                }
+
+                const pathPositions = points.map(
+                    (point) => new WorldWind.Position(point.lat, point.lon, point.alt * 1000)
+                );
+
+                const pathAttributes = new WorldWind.ShapeAttributes(null);
+                pathAttributes.outlineColor = new WorldWind.Color(
+                    satellite.color?.r || 0,
+                    satellite.color?.g || 1,
+                    satellite.color?.b || 1,
+                    satellite.color?.a || 0.8
+                );
+                pathAttributes.outlineWidth = 2;
+                pathAttributes.drawInterior = false;
+
+                const path = new WorldWind.Path(pathPositions, pathAttributes);
+                path.altitudeMode = WorldWind.ABSOLUTE;
+                path.extrude = false;
+                path.useSurfaceShapeFor2D = true;
+
+                if (!orbitLayerRef.current) {
+                    orbitLayerRef.current = new WorldWind.RenderableLayer("Orbit Path");
+                    wwd.addLayer(orbitLayerRef.current);
+                }
+
+                orbitLayerRef.current.addRenderable(path);
+
+                // Store orbit data
+                orbitPathDataRef.current[satelliteId] = {
+                    points: points,
+                    endTime: points[points.length - 1].time,
+                    pathRenderable: path,
+                };
+            }
+        },
+        [generateOrbitPath]
+    );
+
+    // Create orbit path layer (initial setup)
     const createOrbitLayer = useCallback(
         (wwd) => {
             if (orbitLayerRef.current) {
@@ -122,40 +199,19 @@ const Globe2D = ({ onMouseMove }) => {
             }
 
             const orbitLayer = new WorldWind.RenderableLayer("Orbit Path");
+            orbitLayerRef.current = orbitLayer;
+            wwd.addLayer(orbitLayer);
 
-            // Create orbit paths for all visible satellites
+            // Clear existing orbit data
+            orbitPathDataRef.current = {};
+
+            // Create initial orbit paths for all visible satellites
+            const currentTime = useTimeStore.getState().currentTime;
             satellites
                 .filter((s) => s.isVisible)
                 .forEach((sat) => {
-                    const orbitPoints = generateOrbitPath(sat.id);
-
-                    if (orbitPoints.length > 1) {
-                        const pathPositions = orbitPoints.map(
-                            (point) =>
-                                new WorldWind.Position(point.lat, point.lon, point.alt * 1000)
-                        );
-
-                        const pathAttributes = new WorldWind.ShapeAttributes(null);
-                        pathAttributes.outlineColor = new WorldWind.Color(
-                            sat.color?.r || 0,
-                            sat.color?.g || 1,
-                            sat.color?.b || 1,
-                            sat.color?.a || 0.8
-                        );
-                        pathAttributes.outlineWidth = 2;
-                        pathAttributes.drawInterior = false;
-
-                        const path = new WorldWind.Path(pathPositions, pathAttributes);
-                        path.altitudeMode = WorldWind.ABSOLUTE;
-                        path.extrude = false;
-                        path.useSurfaceShapeFor2D = true;
-
-                        orbitLayer.addRenderable(path);
-                    }
+                    updateOrbitPath(wwd, sat.id, sat, currentTime);
                 });
-
-            orbitLayerRef.current = orbitLayer;
-            wwd.addLayer(orbitLayer);
 
             console.log(
                 `✅ Orbit paths created for ${
@@ -163,7 +219,7 @@ const Globe2D = ({ onMouseMove }) => {
                 } satellites`
             );
         },
-        [satellites, generateOrbitPath]
+        [satellites, updateOrbitPath]
     );
 
     // Create satellite marker layer
@@ -264,50 +320,24 @@ const Globe2D = ({ onMouseMove }) => {
         [groundStations, getVisibleStations]
     );
 
-    // Update satellite position with animation
-    // Using direct store access via getState() to avoid stale closure issues
-    const lastTickRef = useRef(Date.now());
-
+    // Update satellite position with smooth animation
+    // Called every frame via requestAnimationFrame
     const updateSatelliteMarker = useCallback(() => {
         if (!wwdRef.current || !satelliteLayerRef.current) return;
 
+        // Tick time every frame for smooth animation
+        // tick() updates currentTime based on mode and playback speed
+        useTimeStore.getState().tick();
+
         // Read current state directly from stores to avoid stale closures
-        const { currentTime, isPlaying, tick, mode, timeStep } = useTimeStore.getState();
+        const { currentTime } = useTimeStore.getState();
         const { satellites, selectedSatelliteId, calculatePosition, updatePosition } =
             useSatelliteStore.getState();
 
-        const now = Date.now();
-        const elapsed = now - lastTickRef.current;
+        // Get the current time for position calculation
+        const time = currentTime;
 
-        // Tick interval: 1 second for realtime, timeStep for simulation
-        const tickInterval = mode === "realtime" ? 1000 : timeStep;
-
-        // For realtime mode: update time every ~1000ms (1 second)
-        // For simulation mode: update at timeStep intervals when playing
-        let shouldTick = false;
-
-        if (mode === "realtime") {
-            // Realtime: tick every second to sync with real clock
-            if (elapsed >= tickInterval) {
-                shouldTick = true;
-                lastTickRef.current = now;
-            }
-        } else {
-            // Simulation: tick at timeStep intervals if playing
-            if (isPlaying && elapsed >= tickInterval) {
-                shouldTick = true;
-                lastTickRef.current = now;
-            }
-        }
-
-        if (shouldTick) {
-            tick();
-        }
-
-        // Get the updated time after potential tick
-        const time = useTimeStore.getState().currentTime;
-
-        // Update all visible satellites
+        // Update all visible satellites - EVERY FRAME for smooth animation
         satellites
             .filter((s) => s.isVisible)
             .forEach((sat) => {
@@ -320,6 +350,12 @@ const Globe2D = ({ onMouseMove }) => {
                     // Update current satellite position for info panel (selected satellite)
                     if (sat.id === selectedSatelliteId) {
                         setCurrentSatellitePosition(pos);
+                    }
+
+                    // Check if orbit path needs update (5 points before end)
+                    if (checkOrbitPathUpdate(sat.id, time) && wwdRef.current) {
+                        updateOrbitPath(wwdRef.current, sat.id, sat, time);
+                        console.log(`🔄 Orbit path updated for ${sat.name}`);
                     }
 
                     // Coverage circle
@@ -404,7 +440,7 @@ const Globe2D = ({ onMouseMove }) => {
 
         // Continue animation loop
         animationFrameRef.current = requestAnimationFrame(updateSatelliteMarker);
-    }, []); // No dependencies - reads directly from stores
+    }, [checkOrbitPathUpdate, updateOrbitPath]); // Add orbit path functions as dependencies
 
     // Setup layers when satellites are loaded
     useEffect(() => {
@@ -726,6 +762,33 @@ const Globe2D = ({ onMouseMove }) => {
         onMouseMove({ lat, lon });
     };
 
+    // Zoom controls
+    const handleZoomIn = useCallback(() => {
+        if (!wwdRef.current) return;
+        const newRange = wwdRef.current.navigator.range * 0.7;
+        wwdRef.current.navigator.range = Math.max(newRange, 1000000); // Min 1000km
+        setRange(wwdRef.current.navigator.range);
+        wwdRef.current.redraw();
+    }, []);
+
+    const handleZoomOut = useCallback(() => {
+        if (!wwdRef.current) return;
+        const newRange = wwdRef.current.navigator.range * 1.4;
+        wwdRef.current.navigator.range = Math.min(newRange, 100000000); // Max 100,000km
+        setRange(wwdRef.current.navigator.range);
+        wwdRef.current.redraw();
+    }, []);
+
+    const handleZoomReset = useCallback(() => {
+        if (!wwdRef.current) return;
+        const optimalRange = calculateOptimalRange(dimensions.height);
+        wwdRef.current.navigator.range = optimalRange;
+        wwdRef.current.navigator.lookAtLocation.latitude = 0;
+        wwdRef.current.navigator.lookAtLocation.longitude = 117;
+        setRange(optimalRange);
+        wwdRef.current.redraw();
+    }, [dimensions.height]);
+
     return (
         <div
             ref={containerRef}
@@ -770,6 +833,33 @@ const Globe2D = ({ onMouseMove }) => {
                     period="~97.4 min"
                     isLoading={isLoading}
                 />
+
+                {/* Floating Zoom Controls */}
+                {!isLoading && (
+                    <div className="absolute bottom-4 right-4 flex flex-col gap-1 z-30">
+                        <button
+                            onClick={handleZoomIn}
+                            className="w-9 h-9 bg-slate-800/90 hover:bg-slate-700 border border-slate-600 rounded-lg flex items-center justify-center text-slate-200 hover:text-white transition-colors shadow-lg backdrop-blur-sm"
+                            title="Zoom In"
+                        >
+                            <Plus className="w-5 h-5" />
+                        </button>
+                        <button
+                            onClick={handleZoomReset}
+                            className="w-9 h-9 bg-slate-800/90 hover:bg-slate-700 border border-slate-600 rounded-lg flex items-center justify-center text-slate-200 hover:text-white transition-colors shadow-lg backdrop-blur-sm"
+                            title="Reset View"
+                        >
+                            <Home className="w-4 h-4" />
+                        </button>
+                        <button
+                            onClick={handleZoomOut}
+                            className="w-9 h-9 bg-slate-800/90 hover:bg-slate-700 border border-slate-600 rounded-lg flex items-center justify-center text-slate-200 hover:text-white transition-colors shadow-lg backdrop-blur-sm"
+                            title="Zoom Out"
+                        >
+                            <Minus className="w-5 h-5" />
+                        </button>
+                    </div>
+                )}
             </div>
         </div>
     );
