@@ -587,7 +587,10 @@ const SatelliteDialog = ({
     const addPayload = (type) => {
         const newPayload = {
             id: `payload-${Date.now()}`,
-            name: type === "camera" ? `Camera ${formData.payloads.length + 1}` : `AIS ${formData.payloads.length + 1}`,
+            name:
+                type === "camera"
+                    ? `Camera ${formData.payloads.length + 1}`
+                    : `AIS ${formData.payloads.length + 1}`,
             type,
             // Camera specific
             cameraType: type === "camera" ? "rgb" : undefined,
@@ -608,9 +611,7 @@ const SatelliteDialog = ({
     const updatePayload = (payloadId, field, value) => {
         setFormData((prev) => ({
             ...prev,
-            payloads: prev.payloads.map((p) =>
-                p.id === payloadId ? { ...p, [field]: value } : p
-            ),
+            payloads: prev.payloads.map((p) => (p.id === payloadId ? { ...p, [field]: value } : p)),
         }));
     };
 
@@ -872,7 +873,9 @@ const SatelliteDialog = ({
                         {/* Left: Component Tree */}
                         <div className="w-48 flex-shrink-0 bg-slate-800/50 rounded-lg border border-slate-700 overflow-hidden">
                             <div className="p-2 border-b border-slate-700 bg-slate-800">
-                                <h4 className="text-xs font-medium text-slate-400 uppercase">Components</h4>
+                                <h4 className="text-xs font-medium text-slate-400 uppercase">
+                                    Components
+                                </h4>
                             </div>
                             <div className="p-2 space-y-1">
                                 {/* Orbit Elements */}
@@ -891,7 +894,9 @@ const SatelliteDialog = ({
                                 {/* Payloads Header */}
                                 <div className="pt-2 mt-2 border-t border-slate-700">
                                     <div className="flex items-center justify-between px-2 py-1">
-                                        <span className="text-xs font-medium text-slate-400 uppercase">Payloads</span>
+                                        <span className="text-xs font-medium text-slate-400 uppercase">
+                                            Payloads
+                                        </span>
                                         <div className="flex gap-1">
                                             <button
                                                 onClick={() => addPayload("camera")}
@@ -918,7 +923,8 @@ const SatelliteDialog = ({
                                     </div>
                                 ) : (
                                     formData.payloads.map((payload) => {
-                                        const PayloadIcon = payload.type === "camera" ? Camera : Radio;
+                                        const PayloadIcon =
+                                            payload.type === "camera" ? Camera : Radio;
                                         return (
                                             <button
                                                 key={payload.id}
@@ -930,7 +936,9 @@ const SatelliteDialog = ({
                                                 }`}
                                             >
                                                 <PayloadIcon className="w-4 h-4 flex-shrink-0" />
-                                                <span className="truncate flex-1">{payload.name}</span>
+                                                <span className="truncate flex-1">
+                                                    {payload.name}
+                                                </span>
                                                 <Trash2
                                                     className="w-3.5 h-3.5 text-slate-500 hover:text-red-400 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0"
                                                     onClick={(e) => {
@@ -974,14 +982,21 @@ const SatelliteDialog = ({
                                     <>
                                         {/* Orbit Source Selection */}
                                         <div className="space-y-3">
-                                            <h5 className="text-xs font-medium text-slate-400 uppercase">Source Type</h5>
+                                            <h5 className="text-xs font-medium text-slate-400 uppercase">
+                                                Source Type
+                                            </h5>
                                             <div className="grid grid-cols-2 gap-2">
                                                 {ORBIT_SOURCE_TYPES.map((source) => {
                                                     const Icon = source.icon;
                                                     return (
                                                         <button
                                                             key={source.id}
-                                                            onClick={() => handleChange("orbitSource", source.id)}
+                                                            onClick={() =>
+                                                                handleChange(
+                                                                    "orbitSource",
+                                                                    source.id
+                                                                )
+                                                            }
                                                             className={`flex items-start gap-2 p-2 rounded-lg border transition-all text-left ${
                                                                 formData.orbitSource === source.id
                                                                     ? "border-cyan-500 bg-cyan-500/10"
@@ -990,14 +1005,19 @@ const SatelliteDialog = ({
                                                         >
                                                             <Icon
                                                                 className={`w-4 h-4 mt-0.5 flex-shrink-0 ${
-                                                                    formData.orbitSource === source.id
+                                                                    formData.orbitSource ===
+                                                                    source.id
                                                                         ? "text-cyan-400"
                                                                         : "text-slate-400"
                                                                 }`}
                                                             />
                                                             <div className="min-w-0">
-                                                                <div className="text-xs text-white truncate">{source.name}</div>
-                                                                <div className="text-xs text-slate-500 truncate">{source.description}</div>
+                                                                <div className="text-xs text-white truncate">
+                                                                    {source.name}
+                                                                </div>
+                                                                <div className="text-xs text-slate-500 truncate">
+                                                                    {source.description}
+                                                                </div>
                                                             </div>
                                                         </button>
                                                     );
@@ -1009,14 +1029,18 @@ const SatelliteDialog = ({
                                         {(formData.orbitSource === "tle-url" ||
                                             formData.orbitSource === "tle-url-history") && (
                                             <div className="space-y-3 p-3 bg-slate-800/50 rounded-lg border border-slate-700">
-                                                <h5 className="text-xs font-medium text-slate-400 uppercase">TLE Source</h5>
+                                                <h5 className="text-xs font-medium text-slate-400 uppercase">
+                                                    TLE Source
+                                                </h5>
 
                                                 {/* Source selection */}
                                                 <div className="grid grid-cols-2 gap-2">
                                                     {TLE_SOURCES.map((source) => (
                                                         <button
                                                             key={source.id}
-                                                            onClick={() => handleChange("tleSource", source.id)}
+                                                            onClick={() =>
+                                                                handleChange("tleSource", source.id)
+                                                            }
                                                             className={`px-2 py-1.5 rounded-lg border text-xs transition-all ${
                                                                 formData.tleSource === source.id
                                                                     ? "border-cyan-500 bg-cyan-500/10 text-cyan-400"
@@ -1031,11 +1055,18 @@ const SatelliteDialog = ({
                                                 {/* Custom URL input */}
                                                 {formData.tleSource === "custom" && (
                                                     <div>
-                                                        <label className="block text-xs text-slate-400 mb-1">TLE URL</label>
+                                                        <label className="block text-xs text-slate-400 mb-1">
+                                                            TLE URL
+                                                        </label>
                                                         <input
                                                             type="text"
                                                             value={formData.tleUrl}
-                                                            onChange={(e) => handleChange("tleUrl", e.target.value)}
+                                                            onChange={(e) =>
+                                                                handleChange(
+                                                                    "tleUrl",
+                                                                    e.target.value
+                                                                )
+                                                            }
                                                             placeholder="https://..."
                                                             className="w-full px-3 py-2 bg-slate-800 border border-slate-600 rounded-lg text-white text-sm focus:outline-none focus:border-cyan-500"
                                                         />
@@ -1043,16 +1074,21 @@ const SatelliteDialog = ({
                                                 )}
 
                                                 {/* Preview URL */}
-                                                {formData.tleSource !== "custom" && formData.name && (
-                                                    <div className="text-xs text-slate-500 break-all">
-                                                        URL: {buildTleUrl()}
-                                                    </div>
-                                                )}
+                                                {formData.tleSource !== "custom" &&
+                                                    formData.name && (
+                                                        <div className="text-xs text-slate-500 break-all">
+                                                            URL: {buildTleUrl()}
+                                                        </div>
+                                                    )}
 
                                                 {/* Fetch button */}
                                                 <button
                                                     onClick={fetchTLE}
-                                                    disabled={loading || (!formData.name && formData.tleSource !== "custom")}
+                                                    disabled={
+                                                        loading ||
+                                                        (!formData.name &&
+                                                            formData.tleSource !== "custom")
+                                                    }
                                                     className="flex items-center gap-2 px-3 py-1.5 bg-cyan-600 hover:bg-cyan-500 disabled:bg-slate-600 disabled:cursor-not-allowed text-white rounded-lg text-sm transition-colors"
                                                 >
                                                     {loading ? (
@@ -1067,7 +1103,9 @@ const SatelliteDialog = ({
                                                 {fetchStatus && (
                                                     <div
                                                         className={`flex items-center gap-2 text-xs ${
-                                                            fetchStatus === "success" ? "text-green-400" : "text-red-400"
+                                                            fetchStatus === "success"
+                                                                ? "text-green-400"
+                                                                : "text-red-400"
                                                         }`}
                                                     >
                                                         {fetchStatus === "success" ? (
@@ -1084,7 +1122,9 @@ const SatelliteDialog = ({
                                                     formData.tleHistory.length > 0 && (
                                                         <TleHistoryPicker
                                                             tleHistory={formData.tleHistory}
-                                                            selectedIndex={formData.selectedTleIndex}
+                                                            selectedIndex={
+                                                                formData.selectedTleIndex
+                                                            }
                                                             onSelect={selectTleFromHistory}
                                                         />
                                                     )}
@@ -1092,40 +1132,69 @@ const SatelliteDialog = ({
                                         )}
 
                                         {/* Manual TLE Input */}
-                                        {(formData.orbitSource === "tle-manual" || formData.tleLine1) &&
+                                        {(formData.orbitSource === "tle-manual" ||
+                                            formData.tleLine1) &&
                                             formData.orbitSource !== "keplerian" && (
                                                 <div className="space-y-3 p-3 bg-slate-800/50 rounded-lg border border-slate-700">
-                                                    <h5 className="text-xs font-medium text-slate-400 uppercase">TLE Data</h5>
+                                                    <h5 className="text-xs font-medium text-slate-400 uppercase">
+                                                        TLE Data
+                                                    </h5>
 
                                                     <div>
-                                                        <label className="block text-xs text-slate-400 mb-1">Line 1 *</label>
+                                                        <label className="block text-xs text-slate-400 mb-1">
+                                                            Line 1 *
+                                                        </label>
                                                         <input
                                                             type="text"
                                                             value={formData.tleLine1}
-                                                            onChange={(e) => handleChange("tleLine1", e.target.value)}
+                                                            onChange={(e) =>
+                                                                handleChange(
+                                                                    "tleLine1",
+                                                                    e.target.value
+                                                                )
+                                                            }
                                                             placeholder="1 NNNNNC NNNNNAAA NNNNN.NNNNNNNN +.NNNNNNNN +NNNNN-N +NNNNN-N N NNNNN"
                                                             className={`w-full px-3 py-2 bg-slate-800 border rounded-lg text-white text-xs font-mono
-                                                            ${errors.tleLine1 ? "border-red-500" : "border-slate-600"}
+                                                            ${
+                                                                errors.tleLine1
+                                                                    ? "border-red-500"
+                                                                    : "border-slate-600"
+                                                            }
                                                             focus:outline-none focus:border-cyan-500`}
                                                         />
                                                         {errors.tleLine1 && (
-                                                            <p className="text-xs text-red-400 mt-1">{errors.tleLine1}</p>
+                                                            <p className="text-xs text-red-400 mt-1">
+                                                                {errors.tleLine1}
+                                                            </p>
                                                         )}
                                                     </div>
 
                                                     <div>
-                                                        <label className="block text-xs text-slate-400 mb-1">Line 2 *</label>
+                                                        <label className="block text-xs text-slate-400 mb-1">
+                                                            Line 2 *
+                                                        </label>
                                                         <input
                                                             type="text"
                                                             value={formData.tleLine2}
-                                                            onChange={(e) => handleChange("tleLine2", e.target.value)}
+                                                            onChange={(e) =>
+                                                                handleChange(
+                                                                    "tleLine2",
+                                                                    e.target.value
+                                                                )
+                                                            }
                                                             placeholder="2 NNNNN NNN.NNNN NNN.NNNN NNNNNNN NNN.NNNN NNN.NNNN NN.NNNNNNNNNNNNNN"
                                                             className={`w-full px-3 py-2 bg-slate-800 border rounded-lg text-white text-xs font-mono
-                                                            ${errors.tleLine2 ? "border-red-500" : "border-slate-600"}
+                                                            ${
+                                                                errors.tleLine2
+                                                                    ? "border-red-500"
+                                                                    : "border-slate-600"
+                                                            }
                                                             focus:outline-none focus:border-cyan-500`}
                                                         />
                                                         {errors.tleLine2 && (
-                                                            <p className="text-xs text-red-400 mt-1">{errors.tleLine2}</p>
+                                                            <p className="text-xs text-red-400 mt-1">
+                                                                {errors.tleLine2}
+                                                            </p>
                                                         )}
                                                     </div>
                                                 </div>
@@ -1134,119 +1203,200 @@ const SatelliteDialog = ({
                                         {/* Keplerian Elements */}
                                         {formData.orbitSource === "keplerian" && (
                                             <div className="space-y-3 p-3 bg-slate-800/50 rounded-lg border border-slate-700">
-                                                <h5 className="text-xs font-medium text-slate-400 uppercase">Keplerian Elements</h5>
+                                                <h5 className="text-xs font-medium text-slate-400 uppercase">
+                                                    Keplerian Elements
+                                                </h5>
 
                                                 <div className="grid grid-cols-2 gap-3">
                                                     {/* Semi-major axis */}
                                                     <div>
-                                                        <label className="block text-xs text-slate-400 mb-1">Semi-major Axis (km) *</label>
+                                                        <label className="block text-xs text-slate-400 mb-1">
+                                                            Semi-major Axis (km) *
+                                                        </label>
                                                         <input
                                                             type="number"
                                                             step="0.001"
                                                             value={formData.semiMajorAxis}
-                                                            onChange={(e) => handleChange("semiMajorAxis", e.target.value)}
+                                                            onChange={(e) =>
+                                                                handleChange(
+                                                                    "semiMajorAxis",
+                                                                    e.target.value
+                                                                )
+                                                            }
                                                             className={`w-full px-3 py-2 bg-slate-800 border rounded-lg text-white text-sm
-                                                                ${errors.semiMajorAxis ? "border-red-500" : "border-slate-600"}
+                                                                ${
+                                                                    errors.semiMajorAxis
+                                                                        ? "border-red-500"
+                                                                        : "border-slate-600"
+                                                                }
                                                                 focus:outline-none focus:border-cyan-500`}
                                                         />
                                                         {errors.semiMajorAxis && (
-                                                            <p className="text-xs text-red-400 mt-1">{errors.semiMajorAxis}</p>
+                                                            <p className="text-xs text-red-400 mt-1">
+                                                                {errors.semiMajorAxis}
+                                                            </p>
                                                         )}
                                                     </div>
 
                                                     {/* Eccentricity */}
                                                     <div>
-                                                        <label className="block text-xs text-slate-400 mb-1">Eccentricity *</label>
+                                                        <label className="block text-xs text-slate-400 mb-1">
+                                                            Eccentricity *
+                                                        </label>
                                                         <input
                                                             type="number"
                                                             step="0.0001"
                                                             value={formData.eccentricity}
-                                                            onChange={(e) => handleChange("eccentricity", e.target.value)}
+                                                            onChange={(e) =>
+                                                                handleChange(
+                                                                    "eccentricity",
+                                                                    e.target.value
+                                                                )
+                                                            }
                                                             className={`w-full px-3 py-2 bg-slate-800 border rounded-lg text-white text-sm
-                                                                ${errors.eccentricity ? "border-red-500" : "border-slate-600"}
+                                                                ${
+                                                                    errors.eccentricity
+                                                                        ? "border-red-500"
+                                                                        : "border-slate-600"
+                                                                }
                                                                 focus:outline-none focus:border-cyan-500`}
                                                         />
                                                         {errors.eccentricity && (
-                                                            <p className="text-xs text-red-400 mt-1">{errors.eccentricity}</p>
+                                                            <p className="text-xs text-red-400 mt-1">
+                                                                {errors.eccentricity}
+                                                            </p>
                                                         )}
                                                     </div>
 
                                                     {/* Inclination */}
                                                     <div>
-                                                        <label className="block text-xs text-slate-400 mb-1">Inclination (°) *</label>
+                                                        <label className="block text-xs text-slate-400 mb-1">
+                                                            Inclination (°) *
+                                                        </label>
                                                         <input
                                                             type="number"
                                                             step="0.01"
                                                             value={formData.inclination}
-                                                            onChange={(e) => handleChange("inclination", e.target.value)}
+                                                            onChange={(e) =>
+                                                                handleChange(
+                                                                    "inclination",
+                                                                    e.target.value
+                                                                )
+                                                            }
                                                             className={`w-full px-3 py-2 bg-slate-800 border rounded-lg text-white text-sm
-                                                                ${errors.inclination ? "border-red-500" : "border-slate-600"}
+                                                                ${
+                                                                    errors.inclination
+                                                                        ? "border-red-500"
+                                                                        : "border-slate-600"
+                                                                }
                                                                 focus:outline-none focus:border-cyan-500`}
                                                         />
                                                         {errors.inclination && (
-                                                            <p className="text-xs text-red-400 mt-1">{errors.inclination}</p>
+                                                            <p className="text-xs text-red-400 mt-1">
+                                                                {errors.inclination}
+                                                            </p>
                                                         )}
                                                     </div>
 
                                                     {/* RAAN */}
                                                     <div>
-                                                        <label className="block text-xs text-slate-400 mb-1">RAAN (°) *</label>
+                                                        <label className="block text-xs text-slate-400 mb-1">
+                                                            RAAN (°) *
+                                                        </label>
                                                         <input
                                                             type="number"
                                                             step="0.01"
                                                             value={formData.raan}
-                                                            onChange={(e) => handleChange("raan", e.target.value)}
+                                                            onChange={(e) =>
+                                                                handleChange("raan", e.target.value)
+                                                            }
                                                             className={`w-full px-3 py-2 bg-slate-800 border rounded-lg text-white text-sm
-                                                                ${errors.raan ? "border-red-500" : "border-slate-600"}
+                                                                ${
+                                                                    errors.raan
+                                                                        ? "border-red-500"
+                                                                        : "border-slate-600"
+                                                                }
                                                                 focus:outline-none focus:border-cyan-500`}
                                                         />
                                                         {errors.raan && (
-                                                            <p className="text-xs text-red-400 mt-1">{errors.raan}</p>
+                                                            <p className="text-xs text-red-400 mt-1">
+                                                                {errors.raan}
+                                                            </p>
                                                         )}
                                                     </div>
 
                                                     {/* Argument of Perigee */}
                                                     <div>
-                                                        <label className="block text-xs text-slate-400 mb-1">Arg. of Perigee (°) *</label>
+                                                        <label className="block text-xs text-slate-400 mb-1">
+                                                            Arg. of Perigee (°) *
+                                                        </label>
                                                         <input
                                                             type="number"
                                                             step="0.01"
                                                             value={formData.argOfPerigee}
-                                                            onChange={(e) => handleChange("argOfPerigee", e.target.value)}
+                                                            onChange={(e) =>
+                                                                handleChange(
+                                                                    "argOfPerigee",
+                                                                    e.target.value
+                                                                )
+                                                            }
                                                             className={`w-full px-3 py-2 bg-slate-800 border rounded-lg text-white text-sm
-                                                                ${errors.argOfPerigee ? "border-red-500" : "border-slate-600"}
+                                                                ${
+                                                                    errors.argOfPerigee
+                                                                        ? "border-red-500"
+                                                                        : "border-slate-600"
+                                                                }
                                                                 focus:outline-none focus:border-cyan-500`}
                                                         />
                                                         {errors.argOfPerigee && (
-                                                            <p className="text-xs text-red-400 mt-1">{errors.argOfPerigee}</p>
+                                                            <p className="text-xs text-red-400 mt-1">
+                                                                {errors.argOfPerigee}
+                                                            </p>
                                                         )}
                                                     </div>
 
                                                     {/* Mean Anomaly */}
                                                     <div>
-                                                        <label className="block text-xs text-slate-400 mb-1">Mean Anomaly (°) *</label>
+                                                        <label className="block text-xs text-slate-400 mb-1">
+                                                            Mean Anomaly (°) *
+                                                        </label>
                                                         <input
                                                             type="number"
                                                             step="0.01"
                                                             value={formData.meanAnomaly}
-                                                            onChange={(e) => handleChange("meanAnomaly", e.target.value)}
+                                                            onChange={(e) =>
+                                                                handleChange(
+                                                                    "meanAnomaly",
+                                                                    e.target.value
+                                                                )
+                                                            }
                                                             className={`w-full px-3 py-2 bg-slate-800 border rounded-lg text-white text-sm
-                                                                ${errors.meanAnomaly ? "border-red-500" : "border-slate-600"}
+                                                                ${
+                                                                    errors.meanAnomaly
+                                                                        ? "border-red-500"
+                                                                        : "border-slate-600"
+                                                                }
                                                                 focus:outline-none focus:border-cyan-500`}
                                                         />
                                                         {errors.meanAnomaly && (
-                                                            <p className="text-xs text-red-400 mt-1">{errors.meanAnomaly}</p>
+                                                            <p className="text-xs text-red-400 mt-1">
+                                                                {errors.meanAnomaly}
+                                                            </p>
                                                         )}
                                                     </div>
                                                 </div>
 
                                                 {/* Epoch */}
                                                 <div>
-                                                    <label className="block text-xs text-slate-400 mb-1">Epoch *</label>
+                                                    <label className="block text-xs text-slate-400 mb-1">
+                                                        Epoch *
+                                                    </label>
                                                     <input
                                                         type="datetime-local"
                                                         value={formData.epoch}
-                                                        onChange={(e) => handleChange("epoch", e.target.value)}
+                                                        onChange={(e) =>
+                                                            handleChange("epoch", e.target.value)
+                                                        }
                                                         className="w-full px-3 py-2 bg-slate-800 border border-slate-600 rounded-lg text-white text-sm focus:outline-none focus:border-cyan-500"
                                                     />
                                                 </div>
@@ -1260,23 +1410,39 @@ const SatelliteDialog = ({
                                     <div className="space-y-4">
                                         {/* Payload Name */}
                                         <div>
-                                            <label className="block text-xs text-slate-400 mb-1">Payload Name</label>
+                                            <label className="block text-xs text-slate-400 mb-1">
+                                                Payload Name
+                                            </label>
                                             <input
                                                 type="text"
                                                 value={selectedPayload.name}
-                                                onChange={(e) => updatePayload(selectedPayload.id, "name", e.target.value)}
+                                                onChange={(e) =>
+                                                    updatePayload(
+                                                        selectedPayload.id,
+                                                        "name",
+                                                        e.target.value
+                                                    )
+                                                }
                                                 className="w-full px-3 py-2 bg-slate-800 border border-slate-600 rounded-lg text-white text-sm focus:outline-none focus:border-cyan-500"
                                             />
                                         </div>
 
                                         {/* Camera Type */}
                                         <div>
-                                            <label className="block text-xs text-slate-400 mb-1">Camera Type</label>
+                                            <label className="block text-xs text-slate-400 mb-1">
+                                                Camera Type
+                                            </label>
                                             <div className="grid grid-cols-3 gap-2">
                                                 {CAMERA_TYPES.map((type) => (
                                                     <button
                                                         key={type.id}
-                                                        onClick={() => updatePayload(selectedPayload.id, "cameraType", type.id)}
+                                                        onClick={() =>
+                                                            updatePayload(
+                                                                selectedPayload.id,
+                                                                "cameraType",
+                                                                type.id
+                                                            )
+                                                        }
                                                         className={`px-3 py-2 rounded-lg border text-sm transition-all ${
                                                             selectedPayload.cameraType === type.id
                                                                 ? "border-cyan-500 bg-cyan-500/10 text-cyan-400"
@@ -1291,12 +1457,20 @@ const SatelliteDialog = ({
 
                                         {/* Mounting Axis */}
                                         <div>
-                                            <label className="block text-xs text-slate-400 mb-1">Mounting Axis (Boresight)</label>
+                                            <label className="block text-xs text-slate-400 mb-1">
+                                                Mounting Axis (Boresight)
+                                            </label>
                                             <div className="grid grid-cols-3 gap-2">
                                                 {AXIS_OPTIONS.map((axis) => (
                                                     <button
                                                         key={axis.id}
-                                                        onClick={() => updatePayload(selectedPayload.id, "axis", axis.id)}
+                                                        onClick={() =>
+                                                            updatePayload(
+                                                                selectedPayload.id,
+                                                                "axis",
+                                                                axis.id
+                                                            )
+                                                        }
                                                         className={`px-3 py-2 rounded-lg border text-sm transition-all ${
                                                             selectedPayload.axis === axis.id
                                                                 ? "border-cyan-500 bg-cyan-500/10 text-cyan-400"
@@ -1311,14 +1485,22 @@ const SatelliteDialog = ({
 
                                         {/* Field of View */}
                                         <div>
-                                            <label className="block text-xs text-slate-400 mb-1">Field of View (°)</label>
+                                            <label className="block text-xs text-slate-400 mb-1">
+                                                Field of View (°)
+                                            </label>
                                             <input
                                                 type="number"
                                                 step="0.1"
                                                 min="0.1"
                                                 max="180"
                                                 value={selectedPayload.fov || 30}
-                                                onChange={(e) => updatePayload(selectedPayload.id, "fov", parseFloat(e.target.value))}
+                                                onChange={(e) =>
+                                                    updatePayload(
+                                                        selectedPayload.id,
+                                                        "fov",
+                                                        parseFloat(e.target.value)
+                                                    )
+                                                }
                                                 className="w-full px-3 py-2 bg-slate-800 border border-slate-600 rounded-lg text-white text-sm focus:outline-none focus:border-cyan-500"
                                             />
                                         </div>
@@ -1330,21 +1512,37 @@ const SatelliteDialog = ({
                                     <div className="space-y-4">
                                         {/* Payload Name */}
                                         <div>
-                                            <label className="block text-xs text-slate-400 mb-1">Payload Name</label>
+                                            <label className="block text-xs text-slate-400 mb-1">
+                                                Payload Name
+                                            </label>
                                             <input
                                                 type="text"
                                                 value={selectedPayload.name}
-                                                onChange={(e) => updatePayload(selectedPayload.id, "name", e.target.value)}
+                                                onChange={(e) =>
+                                                    updatePayload(
+                                                        selectedPayload.id,
+                                                        "name",
+                                                        e.target.value
+                                                    )
+                                                }
                                                 className="w-full px-3 py-2 bg-slate-800 border border-slate-600 rounded-lg text-white text-sm focus:outline-none focus:border-cyan-500"
                                             />
                                         </div>
 
                                         {/* AIS Frequency */}
                                         <div>
-                                            <label className="block text-xs text-slate-400 mb-1">AIS Frequency (MHz)</label>
+                                            <label className="block text-xs text-slate-400 mb-1">
+                                                AIS Frequency (MHz)
+                                            </label>
                                             <div className="grid grid-cols-2 gap-2 mb-2">
                                                 <button
-                                                    onClick={() => updatePayload(selectedPayload.id, "frequency", 161.975)}
+                                                    onClick={() =>
+                                                        updatePayload(
+                                                            selectedPayload.id,
+                                                            "frequency",
+                                                            161.975
+                                                        )
+                                                    }
                                                     className={`px-3 py-2 rounded-lg border text-sm transition-all ${
                                                         selectedPayload.frequency === 161.975
                                                             ? "border-cyan-500 bg-cyan-500/10 text-cyan-400"
@@ -1354,7 +1552,13 @@ const SatelliteDialog = ({
                                                     AIS 1 (161.975)
                                                 </button>
                                                 <button
-                                                    onClick={() => updatePayload(selectedPayload.id, "frequency", 162.025)}
+                                                    onClick={() =>
+                                                        updatePayload(
+                                                            selectedPayload.id,
+                                                            "frequency",
+                                                            162.025
+                                                        )
+                                                    }
                                                     className={`px-3 py-2 rounded-lg border text-sm transition-all ${
                                                         selectedPayload.frequency === 162.025
                                                             ? "border-cyan-500 bg-cyan-500/10 text-cyan-400"
@@ -1370,7 +1574,13 @@ const SatelliteDialog = ({
                                                 min="150"
                                                 max="170"
                                                 value={selectedPayload.frequency || 162.0}
-                                                onChange={(e) => updatePayload(selectedPayload.id, "frequency", parseFloat(e.target.value))}
+                                                onChange={(e) =>
+                                                    updatePayload(
+                                                        selectedPayload.id,
+                                                        "frequency",
+                                                        parseFloat(e.target.value)
+                                                    )
+                                                }
                                                 className="w-full px-3 py-2 bg-slate-800 border border-slate-600 rounded-lg text-white text-sm focus:outline-none focus:border-cyan-500"
                                                 placeholder="Custom frequency"
                                             />
@@ -1378,12 +1588,20 @@ const SatelliteDialog = ({
 
                                         {/* Antenna Axis */}
                                         <div>
-                                            <label className="block text-xs text-slate-400 mb-1">Antenna Axis</label>
+                                            <label className="block text-xs text-slate-400 mb-1">
+                                                Antenna Axis
+                                            </label>
                                             <div className="grid grid-cols-3 gap-2">
                                                 {AXIS_OPTIONS.map((axis) => (
                                                     <button
                                                         key={axis.id}
-                                                        onClick={() => updatePayload(selectedPayload.id, "antennaAxis", axis.id)}
+                                                        onClick={() =>
+                                                            updatePayload(
+                                                                selectedPayload.id,
+                                                                "antennaAxis",
+                                                                axis.id
+                                                            )
+                                                        }
                                                         className={`px-3 py-2 rounded-lg border text-sm transition-all ${
                                                             selectedPayload.antennaAxis === axis.id
                                                                 ? "border-cyan-500 bg-cyan-500/10 text-cyan-400"
