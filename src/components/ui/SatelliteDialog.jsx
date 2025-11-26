@@ -21,6 +21,13 @@ import {
     Loader2,
     Search,
     Calendar,
+    Orbit,
+    Camera,
+    Radio,
+    Plus,
+    Trash2,
+    Settings,
+    ChevronRight,
 } from "lucide-react";
 
 // Preset colors for satellites
@@ -91,6 +98,29 @@ const TLE_SOURCES = [
         urlTemplate: "",
         description: "Enter custom URL",
     },
+];
+
+// Camera types
+const CAMERA_TYPES = [
+    { id: "rgb", name: "Digital RGB", description: "Standard RGB camera" },
+    { id: "multispectral", name: "Multispectral", description: "Multi-band imaging" },
+    { id: "sar", name: "SAR", description: "Synthetic Aperture Radar" },
+];
+
+// Axis options for payload mounting
+const AXIS_OPTIONS = [
+    { id: "+x", name: "+X", description: "Positive X axis" },
+    { id: "-x", name: "-X", description: "Negative X axis" },
+    { id: "+y", name: "+Y", description: "Positive Y axis" },
+    { id: "-y", name: "-Y", description: "Negative Y axis" },
+    { id: "+z", name: "+Z (Nadir)", description: "Positive Z axis (Nadir)" },
+    { id: "-z", name: "-Z (Zenith)", description: "Negative Z axis (Zenith)" },
+];
+
+// Payload types
+const PAYLOAD_TYPES = [
+    { id: "camera", name: "Camera", icon: Camera, description: "Imaging payload" },
+    { id: "ais", name: "AIS Receiver", icon: Radio, description: "Ship tracking" },
 ];
 
 // Virtualized TLE History Picker Component
@@ -267,7 +297,12 @@ const SatelliteDialog = ({
         epoch: new Date().toISOString().slice(0, 16),
         // Visual
         color: PRESET_COLORS[0],
+        // Payloads
+        payloads: [],
     });
+
+    // Component tree state
+    const [selectedComponent, setSelectedComponent] = useState("orbit"); // 'orbit' | 'payload' | payload-id
 
     const [errors, setErrors] = useState({});
     const [loading, setLoading] = useState(false);
@@ -296,7 +331,9 @@ const SatelliteDialog = ({
                 meanAnomaly: editSatellite.keplerian?.meanAnomaly?.toString() || "0",
                 epoch: editSatellite.keplerian?.epoch || new Date().toISOString().slice(0, 16),
                 color: editSatellite.color || PRESET_COLORS[0],
+                payloads: editSatellite.payloads || [],
             });
+            setSelectedComponent("orbit");
         } else {
             // Reset form for new satellite
             setFormData({
@@ -317,7 +354,9 @@ const SatelliteDialog = ({
                 meanAnomaly: "0",
                 epoch: new Date().toISOString().slice(0, 16),
                 color: PRESET_COLORS[0],
+                payloads: [],
             });
+            setSelectedComponent("orbit");
         }
         setErrors({});
         setFetchStatus(null);
@@ -544,6 +583,54 @@ const SatelliteDialog = ({
         }
     };
 
+    // Add new payload
+    const addPayload = (type) => {
+        const newPayload = {
+            id: `payload-${Date.now()}`,
+            name: type === "camera" ? `Camera ${formData.payloads.length + 1}` : `AIS ${formData.payloads.length + 1}`,
+            type,
+            // Camera specific
+            cameraType: type === "camera" ? "rgb" : undefined,
+            axis: "+z",
+            fov: type === "camera" ? 30 : undefined,
+            // AIS specific
+            frequency: type === "ais" ? 162.0 : undefined,
+            antennaAxis: type === "ais" ? "+z" : undefined,
+        };
+        setFormData((prev) => ({
+            ...prev,
+            payloads: [...prev.payloads, newPayload],
+        }));
+        setSelectedComponent(newPayload.id);
+    };
+
+    // Update payload
+    const updatePayload = (payloadId, field, value) => {
+        setFormData((prev) => ({
+            ...prev,
+            payloads: prev.payloads.map((p) =>
+                p.id === payloadId ? { ...p, [field]: value } : p
+            ),
+        }));
+    };
+
+    // Remove payload
+    const removePayload = (payloadId) => {
+        setFormData((prev) => ({
+            ...prev,
+            payloads: prev.payloads.filter((p) => p.id !== payloadId),
+        }));
+        setSelectedComponent("orbit");
+    };
+
+    // Get selected payload
+    const getSelectedPayload = () => {
+        if (selectedComponent.startsWith("payload-")) {
+            return formData.payloads.find((p) => p.id === selectedComponent);
+        }
+        return null;
+    };
+
     // Validate form
     const validateForm = () => {
         const newErrors = {};
@@ -618,6 +705,7 @@ const SatelliteDialog = ({
             color: formData.color,
             isActive: true,
             isVisible: true,
+            payloads: formData.payloads,
         };
 
         // Add TLE or Keplerian based on source
@@ -683,13 +771,16 @@ const SatelliteDialog = ({
 
     if (!isOpen) return null;
 
+    // Get selected payload for editing
+    const selectedPayload = getSelectedPayload();
+
     const dialogContent = (
         <div className="fixed inset-0 z-[9999] flex items-center justify-center">
             {/* Backdrop */}
             <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={onClose} />
 
             {/* Dialog */}
-            <div className="relative bg-slate-900 border border-slate-700 rounded-lg shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-hidden">
+            <div className="relative bg-slate-900 border border-slate-700 rounded-lg shadow-2xl w-full max-w-4xl max-h-[90vh] overflow-hidden">
                 {/* Header */}
                 <div className="flex items-center justify-between px-4 py-3 border-b border-slate-700 bg-slate-800/50">
                     <div className="flex items-center gap-2">
@@ -706,7 +797,7 @@ const SatelliteDialog = ({
 
                 {/* Content */}
                 <div className="p-4 overflow-y-auto max-h-[calc(90vh-120px)] space-y-4">
-                    {/* Basic Info */}
+                    {/* Basic Info Section */}
                     <div className="space-y-3">
                         <h3 className="text-sm font-medium text-slate-300 flex items-center gap-2">
                             <Satellite className="w-4 h-4" />
@@ -776,360 +867,539 @@ const SatelliteDialog = ({
                         </div>
                     </div>
 
-                    {/* Orbit Source Selection */}
-                    <div className="space-y-3">
-                        <h3 className="text-sm font-medium text-slate-300 flex items-center gap-2">
-                            <Globe className="w-4 h-4" />
-                            Orbit Elements Source
-                        </h3>
-
-                        <div className="grid grid-cols-2 gap-2">
-                            {ORBIT_SOURCE_TYPES.map((source) => {
-                                const Icon = source.icon;
-                                return (
-                                    <button
-                                        key={source.id}
-                                        onClick={() => handleChange("orbitSource", source.id)}
-                                        className={`flex items-start gap-2 p-3 rounded-lg border transition-all text-left ${
-                                            formData.orbitSource === source.id
-                                                ? "border-cyan-500 bg-cyan-500/10"
-                                                : "border-slate-600 hover:border-slate-500"
-                                        }`}
-                                    >
-                                        <Icon
-                                            className={`w-4 h-4 mt-0.5 ${
-                                                formData.orbitSource === source.id
-                                                    ? "text-cyan-400"
-                                                    : "text-slate-400"
-                                            }`}
-                                        />
-                                        <div>
-                                            <div className="text-sm text-white">{source.name}</div>
-                                            <div className="text-xs text-slate-500">
-                                                {source.description}
-                                            </div>
-                                        </div>
-                                    </button>
-                                );
-                            })}
-                        </div>
-                    </div>
-
-                    {/* TLE from URL */}
-                    {(formData.orbitSource === "tle-url" ||
-                        formData.orbitSource === "tle-url-history") && (
-                        <div className="space-y-3 p-3 bg-slate-800/50 rounded-lg border border-slate-700">
-                            <h4 className="text-sm font-medium text-slate-300">TLE Source</h4>
-
-                            {/* Source selection */}
-                            <div className="grid grid-cols-2 gap-2">
-                                {TLE_SOURCES.map((source) => (
-                                    <button
-                                        key={source.id}
-                                        onClick={() => handleChange("tleSource", source.id)}
-                                        className={`px-3 py-2 rounded-lg border text-sm transition-all ${
-                                            formData.tleSource === source.id
-                                                ? "border-cyan-500 bg-cyan-500/10 text-cyan-400"
-                                                : "border-slate-600 text-slate-300 hover:border-slate-500"
-                                        }`}
-                                    >
-                                        {source.name}
-                                    </button>
-                                ))}
+                    {/* Component Tree + Form Section (2-column layout) */}
+                    <div className="flex gap-4 min-h-[400px]">
+                        {/* Left: Component Tree */}
+                        <div className="w-48 flex-shrink-0 bg-slate-800/50 rounded-lg border border-slate-700 overflow-hidden">
+                            <div className="p-2 border-b border-slate-700 bg-slate-800">
+                                <h4 className="text-xs font-medium text-slate-400 uppercase">Components</h4>
                             </div>
-
-                            {/* Custom URL input */}
-                            {formData.tleSource === "custom" && (
-                                <div>
-                                    <label className="block text-xs text-slate-400 mb-1">
-                                        TLE URL
-                                    </label>
-                                    <input
-                                        type="text"
-                                        value={formData.tleUrl}
-                                        onChange={(e) => handleChange("tleUrl", e.target.value)}
-                                        placeholder="https://..."
-                                        className="w-full px-3 py-2 bg-slate-800 border border-slate-600 rounded-lg text-white text-sm focus:outline-none focus:border-cyan-500"
-                                    />
-                                </div>
-                            )}
-
-                            {/* Preview URL */}
-                            {formData.tleSource !== "custom" && formData.name && (
-                                <div className="text-xs text-slate-500 break-all">
-                                    URL: {buildTleUrl()}
-                                </div>
-                            )}
-
-                            {/* Fetch button */}
-                            <button
-                                onClick={fetchTLE}
-                                disabled={
-                                    loading || (!formData.name && formData.tleSource !== "custom")
-                                }
-                                className="flex items-center gap-2 px-4 py-2 bg-cyan-600 hover:bg-cyan-500 disabled:bg-slate-600 disabled:cursor-not-allowed text-white rounded-lg text-sm transition-colors"
-                            >
-                                {loading ? (
-                                    <Loader2 className="w-4 h-4 animate-spin" />
-                                ) : (
-                                    <Download className="w-4 h-4" />
-                                )}
-                                {loading ? "Fetching..." : "Fetch TLE"}
-                            </button>
-
-                            {/* Status message */}
-                            {fetchStatus && (
-                                <div
-                                    className={`flex items-center gap-2 text-sm ${
-                                        fetchStatus === "success"
-                                            ? "text-green-400"
-                                            : "text-red-400"
+                            <div className="p-2 space-y-1">
+                                {/* Orbit Elements */}
+                                <button
+                                    onClick={() => setSelectedComponent("orbit")}
+                                    className={`w-full flex items-center gap-2 px-2 py-1.5 rounded text-sm text-left transition-colors ${
+                                        selectedComponent === "orbit"
+                                            ? "bg-cyan-500/20 text-cyan-400"
+                                            : "text-slate-300 hover:bg-slate-700"
                                     }`}
                                 >
-                                    {fetchStatus === "success" ? (
-                                        <CheckCircle className="w-4 h-4" />
-                                    ) : (
-                                        <AlertCircle className="w-4 h-4" />
-                                    )}
-                                    {fetchMessage}
-                                </div>
-                            )}
+                                    <Orbit className="w-4 h-4" />
+                                    <span>Orbit Elements</span>
+                                </button>
 
-                            {/* TLE History selection */}
-                            {formData.orbitSource === "tle-url-history" &&
-                                formData.tleHistory.length > 0 && (
-                                    <TleHistoryPicker
-                                        tleHistory={formData.tleHistory}
-                                        selectedIndex={formData.selectedTleIndex}
-                                        onSelect={selectTleFromHistory}
-                                    />
+                                {/* Payloads Header */}
+                                <div className="pt-2 mt-2 border-t border-slate-700">
+                                    <div className="flex items-center justify-between px-2 py-1">
+                                        <span className="text-xs font-medium text-slate-400 uppercase">Payloads</span>
+                                        <div className="flex gap-1">
+                                            <button
+                                                onClick={() => addPayload("camera")}
+                                                className="p-0.5 hover:bg-slate-600 rounded text-slate-400 hover:text-cyan-400"
+                                                title="Add Camera"
+                                            >
+                                                <Camera className="w-3.5 h-3.5" />
+                                            </button>
+                                            <button
+                                                onClick={() => addPayload("ais")}
+                                                className="p-0.5 hover:bg-slate-600 rounded text-slate-400 hover:text-cyan-400"
+                                                title="Add AIS"
+                                            >
+                                                <Radio className="w-3.5 h-3.5" />
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {/* Payload List */}
+                                {formData.payloads.length === 0 ? (
+                                    <div className="px-2 py-2 text-xs text-slate-500 italic">
+                                        No payloads added
+                                    </div>
+                                ) : (
+                                    formData.payloads.map((payload) => {
+                                        const PayloadIcon = payload.type === "camera" ? Camera : Radio;
+                                        return (
+                                            <button
+                                                key={payload.id}
+                                                onClick={() => setSelectedComponent(payload.id)}
+                                                className={`w-full flex items-center gap-2 px-2 py-1.5 rounded text-sm text-left transition-colors group ${
+                                                    selectedComponent === payload.id
+                                                        ? "bg-cyan-500/20 text-cyan-400"
+                                                        : "text-slate-300 hover:bg-slate-700"
+                                                }`}
+                                            >
+                                                <PayloadIcon className="w-4 h-4 flex-shrink-0" />
+                                                <span className="truncate flex-1">{payload.name}</span>
+                                                <Trash2
+                                                    className="w-3.5 h-3.5 text-slate-500 hover:text-red-400 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0"
+                                                    onClick={(e) => {
+                                                        e.stopPropagation();
+                                                        removePayload(payload.id);
+                                                    }}
+                                                />
+                                            </button>
+                                        );
+                                    })
                                 )}
-                        </div>
-                    )}
-
-                    {/* Manual TLE Input */}
-                    {(formData.orbitSource === "tle-manual" || formData.tleLine1) &&
-                        formData.orbitSource !== "keplerian" && (
-                            <div className="space-y-3 p-3 bg-slate-800/50 rounded-lg border border-slate-700">
-                                <h4 className="text-sm font-medium text-slate-300">TLE Data</h4>
-
-                                <div>
-                                    <label className="block text-xs text-slate-400 mb-1">
-                                        Line 1 *
-                                    </label>
-                                    <input
-                                        type="text"
-                                        value={formData.tleLine1}
-                                        onChange={(e) => handleChange("tleLine1", e.target.value)}
-                                        placeholder="1 NNNNNC NNNNNAAA NNNNN.NNNNNNNN +.NNNNNNNN +NNNNN-N +NNNNN-N N NNNNN"
-                                        className={`w-full px-3 py-2 bg-slate-800 border rounded-lg text-white text-sm font-mono
-                                        ${errors.tleLine1 ? "border-red-500" : "border-slate-600"}
-                                        focus:outline-none focus:border-cyan-500`}
-                                    />
-                                    {errors.tleLine1 && (
-                                        <p className="text-xs text-red-400 mt-1">
-                                            {errors.tleLine1}
-                                        </p>
-                                    )}
-                                </div>
-
-                                <div>
-                                    <label className="block text-xs text-slate-400 mb-1">
-                                        Line 2 *
-                                    </label>
-                                    <input
-                                        type="text"
-                                        value={formData.tleLine2}
-                                        onChange={(e) => handleChange("tleLine2", e.target.value)}
-                                        placeholder="2 NNNNN NNN.NNNN NNN.NNNN NNNNNNN NNN.NNNN NNN.NNNN NN.NNNNNNNNNNNNNN"
-                                        className={`w-full px-3 py-2 bg-slate-800 border rounded-lg text-white text-sm font-mono
-                                        ${errors.tleLine2 ? "border-red-500" : "border-slate-600"}
-                                        focus:outline-none focus:border-cyan-500`}
-                                    />
-                                    {errors.tleLine2 && (
-                                        <p className="text-xs text-red-400 mt-1">
-                                            {errors.tleLine2}
-                                        </p>
-                                    )}
-                                </div>
-                            </div>
-                        )}
-
-                    {/* Keplerian Elements */}
-                    {formData.orbitSource === "keplerian" && (
-                        <div className="space-y-3 p-3 bg-slate-800/50 rounded-lg border border-slate-700">
-                            <h4 className="text-sm font-medium text-slate-300">
-                                Keplerian Elements
-                            </h4>
-
-                            <div className="grid grid-cols-2 gap-3">
-                                {/* Semi-major axis */}
-                                <div>
-                                    <label className="block text-xs text-slate-400 mb-1">
-                                        Semi-major Axis (km) *
-                                    </label>
-                                    <input
-                                        type="number"
-                                        step="0.001"
-                                        value={formData.semiMajorAxis}
-                                        onChange={(e) =>
-                                            handleChange("semiMajorAxis", e.target.value)
-                                        }
-                                        className={`w-full px-3 py-2 bg-slate-800 border rounded-lg text-white text-sm
-                                            ${
-                                                errors.semiMajorAxis
-                                                    ? "border-red-500"
-                                                    : "border-slate-600"
-                                            }
-                                            focus:outline-none focus:border-cyan-500`}
-                                    />
-                                    {errors.semiMajorAxis && (
-                                        <p className="text-xs text-red-400 mt-1">
-                                            {errors.semiMajorAxis}
-                                        </p>
-                                    )}
-                                </div>
-
-                                {/* Eccentricity */}
-                                <div>
-                                    <label className="block text-xs text-slate-400 mb-1">
-                                        Eccentricity *
-                                    </label>
-                                    <input
-                                        type="number"
-                                        step="0.0001"
-                                        value={formData.eccentricity}
-                                        onChange={(e) =>
-                                            handleChange("eccentricity", e.target.value)
-                                        }
-                                        className={`w-full px-3 py-2 bg-slate-800 border rounded-lg text-white text-sm
-                                            ${
-                                                errors.eccentricity
-                                                    ? "border-red-500"
-                                                    : "border-slate-600"
-                                            }
-                                            focus:outline-none focus:border-cyan-500`}
-                                    />
-                                    {errors.eccentricity && (
-                                        <p className="text-xs text-red-400 mt-1">
-                                            {errors.eccentricity}
-                                        </p>
-                                    )}
-                                </div>
-
-                                {/* Inclination */}
-                                <div>
-                                    <label className="block text-xs text-slate-400 mb-1">
-                                        Inclination (°) *
-                                    </label>
-                                    <input
-                                        type="number"
-                                        step="0.01"
-                                        value={formData.inclination}
-                                        onChange={(e) =>
-                                            handleChange("inclination", e.target.value)
-                                        }
-                                        className={`w-full px-3 py-2 bg-slate-800 border rounded-lg text-white text-sm
-                                            ${
-                                                errors.inclination
-                                                    ? "border-red-500"
-                                                    : "border-slate-600"
-                                            }
-                                            focus:outline-none focus:border-cyan-500`}
-                                    />
-                                    {errors.inclination && (
-                                        <p className="text-xs text-red-400 mt-1">
-                                            {errors.inclination}
-                                        </p>
-                                    )}
-                                </div>
-
-                                {/* RAAN */}
-                                <div>
-                                    <label className="block text-xs text-slate-400 mb-1">
-                                        RAAN (°) *
-                                    </label>
-                                    <input
-                                        type="number"
-                                        step="0.01"
-                                        value={formData.raan}
-                                        onChange={(e) => handleChange("raan", e.target.value)}
-                                        className={`w-full px-3 py-2 bg-slate-800 border rounded-lg text-white text-sm
-                                            ${errors.raan ? "border-red-500" : "border-slate-600"}
-                                            focus:outline-none focus:border-cyan-500`}
-                                    />
-                                    {errors.raan && (
-                                        <p className="text-xs text-red-400 mt-1">{errors.raan}</p>
-                                    )}
-                                </div>
-
-                                {/* Argument of Perigee */}
-                                <div>
-                                    <label className="block text-xs text-slate-400 mb-1">
-                                        Arg. of Perigee (°) *
-                                    </label>
-                                    <input
-                                        type="number"
-                                        step="0.01"
-                                        value={formData.argOfPerigee}
-                                        onChange={(e) =>
-                                            handleChange("argOfPerigee", e.target.value)
-                                        }
-                                        className={`w-full px-3 py-2 bg-slate-800 border rounded-lg text-white text-sm
-                                            ${
-                                                errors.argOfPerigee
-                                                    ? "border-red-500"
-                                                    : "border-slate-600"
-                                            }
-                                            focus:outline-none focus:border-cyan-500`}
-                                    />
-                                    {errors.argOfPerigee && (
-                                        <p className="text-xs text-red-400 mt-1">
-                                            {errors.argOfPerigee}
-                                        </p>
-                                    )}
-                                </div>
-
-                                {/* Mean Anomaly */}
-                                <div>
-                                    <label className="block text-xs text-slate-400 mb-1">
-                                        Mean Anomaly (°) *
-                                    </label>
-                                    <input
-                                        type="number"
-                                        step="0.01"
-                                        value={formData.meanAnomaly}
-                                        onChange={(e) =>
-                                            handleChange("meanAnomaly", e.target.value)
-                                        }
-                                        className={`w-full px-3 py-2 bg-slate-800 border rounded-lg text-white text-sm
-                                            ${
-                                                errors.meanAnomaly
-                                                    ? "border-red-500"
-                                                    : "border-slate-600"
-                                            }
-                                            focus:outline-none focus:border-cyan-500`}
-                                    />
-                                    {errors.meanAnomaly && (
-                                        <p className="text-xs text-red-400 mt-1">
-                                            {errors.meanAnomaly}
-                                        </p>
-                                    )}
-                                </div>
-                            </div>
-
-                            {/* Epoch */}
-                            <div>
-                                <label className="block text-xs text-slate-400 mb-1">Epoch *</label>
-                                <input
-                                    type="datetime-local"
-                                    value={formData.epoch}
-                                    onChange={(e) => handleChange("epoch", e.target.value)}
-                                    className="w-full px-3 py-2 bg-slate-800 border border-slate-600 rounded-lg text-white text-sm focus:outline-none focus:border-cyan-500"
-                                />
                             </div>
                         </div>
-                    )}
+
+                        {/* Right: Form Panel */}
+                        <div className="flex-1 bg-slate-800/30 rounded-lg border border-slate-700 overflow-hidden">
+                            <div className="p-3 border-b border-slate-700 bg-slate-800/50">
+                                <h4 className="text-sm font-medium text-slate-300 flex items-center gap-2">
+                                    {selectedComponent === "orbit" && (
+                                        <>
+                                            <Orbit className="w-4 h-4 text-cyan-400" />
+                                            Orbit Elements
+                                        </>
+                                    )}
+                                    {selectedPayload && (
+                                        <>
+                                            {selectedPayload.type === "camera" ? (
+                                                <Camera className="w-4 h-4 text-cyan-400" />
+                                            ) : (
+                                                <Radio className="w-4 h-4 text-cyan-400" />
+                                            )}
+                                            {selectedPayload.name}
+                                        </>
+                                    )}
+                                </h4>
+                            </div>
+
+                            <div className="p-4 overflow-y-auto max-h-[340px] space-y-4">
+                                {/* Orbit Elements Panel */}
+                                {selectedComponent === "orbit" && (
+                                    <>
+                                        {/* Orbit Source Selection */}
+                                        <div className="space-y-3">
+                                            <h5 className="text-xs font-medium text-slate-400 uppercase">Source Type</h5>
+                                            <div className="grid grid-cols-2 gap-2">
+                                                {ORBIT_SOURCE_TYPES.map((source) => {
+                                                    const Icon = source.icon;
+                                                    return (
+                                                        <button
+                                                            key={source.id}
+                                                            onClick={() => handleChange("orbitSource", source.id)}
+                                                            className={`flex items-start gap-2 p-2 rounded-lg border transition-all text-left ${
+                                                                formData.orbitSource === source.id
+                                                                    ? "border-cyan-500 bg-cyan-500/10"
+                                                                    : "border-slate-600 hover:border-slate-500"
+                                                            }`}
+                                                        >
+                                                            <Icon
+                                                                className={`w-4 h-4 mt-0.5 flex-shrink-0 ${
+                                                                    formData.orbitSource === source.id
+                                                                        ? "text-cyan-400"
+                                                                        : "text-slate-400"
+                                                                }`}
+                                                            />
+                                                            <div className="min-w-0">
+                                                                <div className="text-xs text-white truncate">{source.name}</div>
+                                                                <div className="text-xs text-slate-500 truncate">{source.description}</div>
+                                                            </div>
+                                                        </button>
+                                                    );
+                                                })}
+                                            </div>
+                                        </div>
+
+                                        {/* TLE from URL */}
+                                        {(formData.orbitSource === "tle-url" ||
+                                            formData.orbitSource === "tle-url-history") && (
+                                            <div className="space-y-3 p-3 bg-slate-800/50 rounded-lg border border-slate-700">
+                                                <h5 className="text-xs font-medium text-slate-400 uppercase">TLE Source</h5>
+
+                                                {/* Source selection */}
+                                                <div className="grid grid-cols-2 gap-2">
+                                                    {TLE_SOURCES.map((source) => (
+                                                        <button
+                                                            key={source.id}
+                                                            onClick={() => handleChange("tleSource", source.id)}
+                                                            className={`px-2 py-1.5 rounded-lg border text-xs transition-all ${
+                                                                formData.tleSource === source.id
+                                                                    ? "border-cyan-500 bg-cyan-500/10 text-cyan-400"
+                                                                    : "border-slate-600 text-slate-300 hover:border-slate-500"
+                                                            }`}
+                                                        >
+                                                            {source.name}
+                                                        </button>
+                                                    ))}
+                                                </div>
+
+                                                {/* Custom URL input */}
+                                                {formData.tleSource === "custom" && (
+                                                    <div>
+                                                        <label className="block text-xs text-slate-400 mb-1">TLE URL</label>
+                                                        <input
+                                                            type="text"
+                                                            value={formData.tleUrl}
+                                                            onChange={(e) => handleChange("tleUrl", e.target.value)}
+                                                            placeholder="https://..."
+                                                            className="w-full px-3 py-2 bg-slate-800 border border-slate-600 rounded-lg text-white text-sm focus:outline-none focus:border-cyan-500"
+                                                        />
+                                                    </div>
+                                                )}
+
+                                                {/* Preview URL */}
+                                                {formData.tleSource !== "custom" && formData.name && (
+                                                    <div className="text-xs text-slate-500 break-all">
+                                                        URL: {buildTleUrl()}
+                                                    </div>
+                                                )}
+
+                                                {/* Fetch button */}
+                                                <button
+                                                    onClick={fetchTLE}
+                                                    disabled={loading || (!formData.name && formData.tleSource !== "custom")}
+                                                    className="flex items-center gap-2 px-3 py-1.5 bg-cyan-600 hover:bg-cyan-500 disabled:bg-slate-600 disabled:cursor-not-allowed text-white rounded-lg text-sm transition-colors"
+                                                >
+                                                    {loading ? (
+                                                        <Loader2 className="w-4 h-4 animate-spin" />
+                                                    ) : (
+                                                        <Download className="w-4 h-4" />
+                                                    )}
+                                                    {loading ? "Fetching..." : "Fetch TLE"}
+                                                </button>
+
+                                                {/* Status message */}
+                                                {fetchStatus && (
+                                                    <div
+                                                        className={`flex items-center gap-2 text-xs ${
+                                                            fetchStatus === "success" ? "text-green-400" : "text-red-400"
+                                                        }`}
+                                                    >
+                                                        {fetchStatus === "success" ? (
+                                                            <CheckCircle className="w-4 h-4" />
+                                                        ) : (
+                                                            <AlertCircle className="w-4 h-4" />
+                                                        )}
+                                                        {fetchMessage}
+                                                    </div>
+                                                )}
+
+                                                {/* TLE History selection */}
+                                                {formData.orbitSource === "tle-url-history" &&
+                                                    formData.tleHistory.length > 0 && (
+                                                        <TleHistoryPicker
+                                                            tleHistory={formData.tleHistory}
+                                                            selectedIndex={formData.selectedTleIndex}
+                                                            onSelect={selectTleFromHistory}
+                                                        />
+                                                    )}
+                                            </div>
+                                        )}
+
+                                        {/* Manual TLE Input */}
+                                        {(formData.orbitSource === "tle-manual" || formData.tleLine1) &&
+                                            formData.orbitSource !== "keplerian" && (
+                                                <div className="space-y-3 p-3 bg-slate-800/50 rounded-lg border border-slate-700">
+                                                    <h5 className="text-xs font-medium text-slate-400 uppercase">TLE Data</h5>
+
+                                                    <div>
+                                                        <label className="block text-xs text-slate-400 mb-1">Line 1 *</label>
+                                                        <input
+                                                            type="text"
+                                                            value={formData.tleLine1}
+                                                            onChange={(e) => handleChange("tleLine1", e.target.value)}
+                                                            placeholder="1 NNNNNC NNNNNAAA NNNNN.NNNNNNNN +.NNNNNNNN +NNNNN-N +NNNNN-N N NNNNN"
+                                                            className={`w-full px-3 py-2 bg-slate-800 border rounded-lg text-white text-xs font-mono
+                                                            ${errors.tleLine1 ? "border-red-500" : "border-slate-600"}
+                                                            focus:outline-none focus:border-cyan-500`}
+                                                        />
+                                                        {errors.tleLine1 && (
+                                                            <p className="text-xs text-red-400 mt-1">{errors.tleLine1}</p>
+                                                        )}
+                                                    </div>
+
+                                                    <div>
+                                                        <label className="block text-xs text-slate-400 mb-1">Line 2 *</label>
+                                                        <input
+                                                            type="text"
+                                                            value={formData.tleLine2}
+                                                            onChange={(e) => handleChange("tleLine2", e.target.value)}
+                                                            placeholder="2 NNNNN NNN.NNNN NNN.NNNN NNNNNNN NNN.NNNN NNN.NNNN NN.NNNNNNNNNNNNNN"
+                                                            className={`w-full px-3 py-2 bg-slate-800 border rounded-lg text-white text-xs font-mono
+                                                            ${errors.tleLine2 ? "border-red-500" : "border-slate-600"}
+                                                            focus:outline-none focus:border-cyan-500`}
+                                                        />
+                                                        {errors.tleLine2 && (
+                                                            <p className="text-xs text-red-400 mt-1">{errors.tleLine2}</p>
+                                                        )}
+                                                    </div>
+                                                </div>
+                                            )}
+
+                                        {/* Keplerian Elements */}
+                                        {formData.orbitSource === "keplerian" && (
+                                            <div className="space-y-3 p-3 bg-slate-800/50 rounded-lg border border-slate-700">
+                                                <h5 className="text-xs font-medium text-slate-400 uppercase">Keplerian Elements</h5>
+
+                                                <div className="grid grid-cols-2 gap-3">
+                                                    {/* Semi-major axis */}
+                                                    <div>
+                                                        <label className="block text-xs text-slate-400 mb-1">Semi-major Axis (km) *</label>
+                                                        <input
+                                                            type="number"
+                                                            step="0.001"
+                                                            value={formData.semiMajorAxis}
+                                                            onChange={(e) => handleChange("semiMajorAxis", e.target.value)}
+                                                            className={`w-full px-3 py-2 bg-slate-800 border rounded-lg text-white text-sm
+                                                                ${errors.semiMajorAxis ? "border-red-500" : "border-slate-600"}
+                                                                focus:outline-none focus:border-cyan-500`}
+                                                        />
+                                                        {errors.semiMajorAxis && (
+                                                            <p className="text-xs text-red-400 mt-1">{errors.semiMajorAxis}</p>
+                                                        )}
+                                                    </div>
+
+                                                    {/* Eccentricity */}
+                                                    <div>
+                                                        <label className="block text-xs text-slate-400 mb-1">Eccentricity *</label>
+                                                        <input
+                                                            type="number"
+                                                            step="0.0001"
+                                                            value={formData.eccentricity}
+                                                            onChange={(e) => handleChange("eccentricity", e.target.value)}
+                                                            className={`w-full px-3 py-2 bg-slate-800 border rounded-lg text-white text-sm
+                                                                ${errors.eccentricity ? "border-red-500" : "border-slate-600"}
+                                                                focus:outline-none focus:border-cyan-500`}
+                                                        />
+                                                        {errors.eccentricity && (
+                                                            <p className="text-xs text-red-400 mt-1">{errors.eccentricity}</p>
+                                                        )}
+                                                    </div>
+
+                                                    {/* Inclination */}
+                                                    <div>
+                                                        <label className="block text-xs text-slate-400 mb-1">Inclination (°) *</label>
+                                                        <input
+                                                            type="number"
+                                                            step="0.01"
+                                                            value={formData.inclination}
+                                                            onChange={(e) => handleChange("inclination", e.target.value)}
+                                                            className={`w-full px-3 py-2 bg-slate-800 border rounded-lg text-white text-sm
+                                                                ${errors.inclination ? "border-red-500" : "border-slate-600"}
+                                                                focus:outline-none focus:border-cyan-500`}
+                                                        />
+                                                        {errors.inclination && (
+                                                            <p className="text-xs text-red-400 mt-1">{errors.inclination}</p>
+                                                        )}
+                                                    </div>
+
+                                                    {/* RAAN */}
+                                                    <div>
+                                                        <label className="block text-xs text-slate-400 mb-1">RAAN (°) *</label>
+                                                        <input
+                                                            type="number"
+                                                            step="0.01"
+                                                            value={formData.raan}
+                                                            onChange={(e) => handleChange("raan", e.target.value)}
+                                                            className={`w-full px-3 py-2 bg-slate-800 border rounded-lg text-white text-sm
+                                                                ${errors.raan ? "border-red-500" : "border-slate-600"}
+                                                                focus:outline-none focus:border-cyan-500`}
+                                                        />
+                                                        {errors.raan && (
+                                                            <p className="text-xs text-red-400 mt-1">{errors.raan}</p>
+                                                        )}
+                                                    </div>
+
+                                                    {/* Argument of Perigee */}
+                                                    <div>
+                                                        <label className="block text-xs text-slate-400 mb-1">Arg. of Perigee (°) *</label>
+                                                        <input
+                                                            type="number"
+                                                            step="0.01"
+                                                            value={formData.argOfPerigee}
+                                                            onChange={(e) => handleChange("argOfPerigee", e.target.value)}
+                                                            className={`w-full px-3 py-2 bg-slate-800 border rounded-lg text-white text-sm
+                                                                ${errors.argOfPerigee ? "border-red-500" : "border-slate-600"}
+                                                                focus:outline-none focus:border-cyan-500`}
+                                                        />
+                                                        {errors.argOfPerigee && (
+                                                            <p className="text-xs text-red-400 mt-1">{errors.argOfPerigee}</p>
+                                                        )}
+                                                    </div>
+
+                                                    {/* Mean Anomaly */}
+                                                    <div>
+                                                        <label className="block text-xs text-slate-400 mb-1">Mean Anomaly (°) *</label>
+                                                        <input
+                                                            type="number"
+                                                            step="0.01"
+                                                            value={formData.meanAnomaly}
+                                                            onChange={(e) => handleChange("meanAnomaly", e.target.value)}
+                                                            className={`w-full px-3 py-2 bg-slate-800 border rounded-lg text-white text-sm
+                                                                ${errors.meanAnomaly ? "border-red-500" : "border-slate-600"}
+                                                                focus:outline-none focus:border-cyan-500`}
+                                                        />
+                                                        {errors.meanAnomaly && (
+                                                            <p className="text-xs text-red-400 mt-1">{errors.meanAnomaly}</p>
+                                                        )}
+                                                    </div>
+                                                </div>
+
+                                                {/* Epoch */}
+                                                <div>
+                                                    <label className="block text-xs text-slate-400 mb-1">Epoch *</label>
+                                                    <input
+                                                        type="datetime-local"
+                                                        value={formData.epoch}
+                                                        onChange={(e) => handleChange("epoch", e.target.value)}
+                                                        className="w-full px-3 py-2 bg-slate-800 border border-slate-600 rounded-lg text-white text-sm focus:outline-none focus:border-cyan-500"
+                                                    />
+                                                </div>
+                                            </div>
+                                        )}
+                                    </>
+                                )}
+
+                                {/* Payload Panel - Camera */}
+                                {selectedPayload && selectedPayload.type === "camera" && (
+                                    <div className="space-y-4">
+                                        {/* Payload Name */}
+                                        <div>
+                                            <label className="block text-xs text-slate-400 mb-1">Payload Name</label>
+                                            <input
+                                                type="text"
+                                                value={selectedPayload.name}
+                                                onChange={(e) => updatePayload(selectedPayload.id, "name", e.target.value)}
+                                                className="w-full px-3 py-2 bg-slate-800 border border-slate-600 rounded-lg text-white text-sm focus:outline-none focus:border-cyan-500"
+                                            />
+                                        </div>
+
+                                        {/* Camera Type */}
+                                        <div>
+                                            <label className="block text-xs text-slate-400 mb-1">Camera Type</label>
+                                            <div className="grid grid-cols-3 gap-2">
+                                                {CAMERA_TYPES.map((type) => (
+                                                    <button
+                                                        key={type.id}
+                                                        onClick={() => updatePayload(selectedPayload.id, "cameraType", type.id)}
+                                                        className={`px-3 py-2 rounded-lg border text-sm transition-all ${
+                                                            selectedPayload.cameraType === type.id
+                                                                ? "border-cyan-500 bg-cyan-500/10 text-cyan-400"
+                                                                : "border-slate-600 text-slate-300 hover:border-slate-500"
+                                                        }`}
+                                                    >
+                                                        {type.name}
+                                                    </button>
+                                                ))}
+                                            </div>
+                                        </div>
+
+                                        {/* Mounting Axis */}
+                                        <div>
+                                            <label className="block text-xs text-slate-400 mb-1">Mounting Axis (Boresight)</label>
+                                            <div className="grid grid-cols-3 gap-2">
+                                                {AXIS_OPTIONS.map((axis) => (
+                                                    <button
+                                                        key={axis.id}
+                                                        onClick={() => updatePayload(selectedPayload.id, "axis", axis.id)}
+                                                        className={`px-3 py-2 rounded-lg border text-sm transition-all ${
+                                                            selectedPayload.axis === axis.id
+                                                                ? "border-cyan-500 bg-cyan-500/10 text-cyan-400"
+                                                                : "border-slate-600 text-slate-300 hover:border-slate-500"
+                                                        }`}
+                                                    >
+                                                        {axis.name}
+                                                    </button>
+                                                ))}
+                                            </div>
+                                        </div>
+
+                                        {/* Field of View */}
+                                        <div>
+                                            <label className="block text-xs text-slate-400 mb-1">Field of View (°)</label>
+                                            <input
+                                                type="number"
+                                                step="0.1"
+                                                min="0.1"
+                                                max="180"
+                                                value={selectedPayload.fov || 30}
+                                                onChange={(e) => updatePayload(selectedPayload.id, "fov", parseFloat(e.target.value))}
+                                                className="w-full px-3 py-2 bg-slate-800 border border-slate-600 rounded-lg text-white text-sm focus:outline-none focus:border-cyan-500"
+                                            />
+                                        </div>
+                                    </div>
+                                )}
+
+                                {/* Payload Panel - AIS */}
+                                {selectedPayload && selectedPayload.type === "ais" && (
+                                    <div className="space-y-4">
+                                        {/* Payload Name */}
+                                        <div>
+                                            <label className="block text-xs text-slate-400 mb-1">Payload Name</label>
+                                            <input
+                                                type="text"
+                                                value={selectedPayload.name}
+                                                onChange={(e) => updatePayload(selectedPayload.id, "name", e.target.value)}
+                                                className="w-full px-3 py-2 bg-slate-800 border border-slate-600 rounded-lg text-white text-sm focus:outline-none focus:border-cyan-500"
+                                            />
+                                        </div>
+
+                                        {/* AIS Frequency */}
+                                        <div>
+                                            <label className="block text-xs text-slate-400 mb-1">AIS Frequency (MHz)</label>
+                                            <div className="grid grid-cols-2 gap-2 mb-2">
+                                                <button
+                                                    onClick={() => updatePayload(selectedPayload.id, "frequency", 161.975)}
+                                                    className={`px-3 py-2 rounded-lg border text-sm transition-all ${
+                                                        selectedPayload.frequency === 161.975
+                                                            ? "border-cyan-500 bg-cyan-500/10 text-cyan-400"
+                                                            : "border-slate-600 text-slate-300 hover:border-slate-500"
+                                                    }`}
+                                                >
+                                                    AIS 1 (161.975)
+                                                </button>
+                                                <button
+                                                    onClick={() => updatePayload(selectedPayload.id, "frequency", 162.025)}
+                                                    className={`px-3 py-2 rounded-lg border text-sm transition-all ${
+                                                        selectedPayload.frequency === 162.025
+                                                            ? "border-cyan-500 bg-cyan-500/10 text-cyan-400"
+                                                            : "border-slate-600 text-slate-300 hover:border-slate-500"
+                                                    }`}
+                                                >
+                                                    AIS 2 (162.025)
+                                                </button>
+                                            </div>
+                                            <input
+                                                type="number"
+                                                step="0.001"
+                                                min="150"
+                                                max="170"
+                                                value={selectedPayload.frequency || 162.0}
+                                                onChange={(e) => updatePayload(selectedPayload.id, "frequency", parseFloat(e.target.value))}
+                                                className="w-full px-3 py-2 bg-slate-800 border border-slate-600 rounded-lg text-white text-sm focus:outline-none focus:border-cyan-500"
+                                                placeholder="Custom frequency"
+                                            />
+                                        </div>
+
+                                        {/* Antenna Axis */}
+                                        <div>
+                                            <label className="block text-xs text-slate-400 mb-1">Antenna Axis</label>
+                                            <div className="grid grid-cols-3 gap-2">
+                                                {AXIS_OPTIONS.map((axis) => (
+                                                    <button
+                                                        key={axis.id}
+                                                        onClick={() => updatePayload(selectedPayload.id, "antennaAxis", axis.id)}
+                                                        className={`px-3 py-2 rounded-lg border text-sm transition-all ${
+                                                            selectedPayload.antennaAxis === axis.id
+                                                                ? "border-cyan-500 bg-cyan-500/10 text-cyan-400"
+                                                                : "border-slate-600 text-slate-300 hover:border-slate-500"
+                                                        }`}
+                                                    >
+                                                        {axis.name}
+                                                    </button>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+                    </div>
                 </div>
 
                 {/* Footer */}
