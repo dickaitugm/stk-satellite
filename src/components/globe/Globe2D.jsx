@@ -72,6 +72,7 @@ const Globe2D = ({ onMouseMove }) => {
     const currentTime = useTimeStore((state) => state.currentTime);
     const isPlaying = useTimeStore((state) => state.isPlaying);
     const tick = useTimeStore((state) => state.tick);
+    const mode = useTimeStore((state) => state.mode); // Track mode changes
 
     const scenarioLayers = useScenarioStore((state) => state.layers);
 
@@ -660,6 +661,26 @@ const Globe2D = ({ onMouseMove }) => {
             };
         }
     }, [isLoading, updateSatelliteMarker]);
+
+    // Refresh orbit paths when mode changes (simulation <-> realtime)
+    useEffect(() => {
+        if (wwdRef.current && !isLoading && satellites.length > 0) {
+            console.log(`🔄 Mode changed to ${mode}, refreshing orbit paths...`);
+
+            // Clear orbit update timestamps to force refresh
+            lastOrbitUpdateRef.current = {};
+
+            // Get current time and refresh all orbit paths
+            const currentTime = useTimeStore.getState().currentTime;
+            satellites
+                .filter((s) => s.isVisible)
+                .forEach((sat) => {
+                    updateOrbitPath(wwdRef.current, sat.id, sat, currentTime);
+                });
+
+            wwdRef.current.redraw();
+        }
+    }, [mode, isLoading, satellites, updateOrbitPath]);
 
     // Update ground stations when they change (also when satellites change for tracking coverage colors)
     useEffect(() => {
