@@ -3,10 +3,10 @@
  * Main WorldWind 2D globe with satellite tracking
  *
  * Performance Optimized:
- * - SGP4 calculations offloaded to main process via IPC (10-20 Hz)
- * - Smooth interpolation for 60 FPS rendering
- * - Coverage circles cached and throttled
- * - Orbit paths generated in background
+ * - Direct SGP4 calculation every frame (satrec is cached by store)
+ * - Coverage circles cached and throttled (5 Hz update)
+ * - Orbit paths updated every 10 seconds
+ * - Store updates throttled (10 Hz)
  */
 
 import React, { useState, useEffect, useRef, useCallback } from "react";
@@ -93,13 +93,8 @@ const Globe2D = ({ onMouseMove }) => {
     const satelliteRenderablesRef = useRef({}); // Store renderables per satellite
     const orbitPathDataRef = useRef({}); // Store orbit path data per satellite {points, endTime, pathRenderable}
 
-    // IPC-based position tracking refs
-    const ipcPositionsRef = useRef({}); // Current positions from IPC {[id]: {lat, lon, alt, velocity}}
-    const ipcNextPositionsRef = useRef({}); // Next positions for interpolation
-    const lastIpcFetchRef = useRef(0); // Last IPC fetch time
-    const interpolationFactorRef = useRef(0); // 0-1 for smooth animation
+    // Coverage circle caching
     const coverageCacheRef = useRef({}); // Cached coverage circles {[id]: {coords, lastLat, lastLon, lastAlt}}
-    const usingIPCRef = useRef(false); // Flag if IPC is available
 
     // Throttling refs for performance optimization
     const lastStoreUpdateRef = useRef(0); // Last time we updated Zustand store
@@ -459,62 +454,6 @@ const Globe2D = ({ onMouseMove }) => {
         [groundStations, getVisibleStations, satellites]
     );
 
-    // Linear interpolation helpers
-    const lerp = (a, b, t) => a + (b - a) * t;
-    const lerpLongitude = (a, b, t) => {
-        let diff = b - a;
-        if (diff > 180) diff -= 360;
-        if (diff < -180) diff += 360;
-        let result = a + diff * t;
-        if (result > 180) result -= 360;
-        if (result < -180) result += 360;
-        return result;
-    };
-
-    // Get interpolated position for smooth 60 FPS animation
-    const getInterpolatedPosition = useCallback((satelliteId) => {
-        const current = ipcPositionsRef.current[satelliteId];
-        const next = ipcNextPositionsRef.current[satelliteId];
-        const t = interpolationFactorRef.current;
-
-        if (!current) return null;
-        if (!next) return current;
-
-        return {
-            lat: lerp(current.lat, next.lat, t),
-            lon: lerpLongitude(current.lon, next.lon, t),
-            alt: lerp(current.alt, next.alt, t),
-            velocity: current.velocity || 0,
-        };
-    }, []);
-
-    // Fetch positions from main process via IPC
-    const fetchPositionsViaIPC = useCallback(async (satellites, timestamp) => {
-        if (!window.electronAPI?.calculatePositionsInterpolated) return false;
-
-        try {
-            const visibleSats = satellites.filter((s) => s.isVisible && s.tle);
-            if (visibleSats.length === 0) return true;
-
-            const result = await window.electronAPI.calculatePositionsInterpolated(
-                visibleSats,
-                timestamp,
-                PERF_CONFIG.POSITION_UPDATE_INTERVAL
-            );
-
-            if (result.success) {
-                ipcPositionsRef.current = result.current;
-                ipcNextPositionsRef.current = result.next;
-                lastIpcFetchRef.current = Date.now();
-                interpolationFactorRef.current = 0;
-                return true;
-            }
-        } catch (error) {
-            console.error("IPC position fetch failed:", error);
-        }
-        return false;
-    }, []);
-
     // Check and update coverage circle (throttled)
     const updateCoverageIfNeeded = useCallback((satelliteId, pos) => {
         const now = Date.now();
@@ -555,7 +494,8 @@ const Globe2D = ({ onMouseMove }) => {
     }, []);
 
     // Update satellite position with smooth animation
-    // OPTIMIZED: Uses IPC for calculations, interpolation for smooth 60 FPS
+    // Direct SGP4 calculation every frame (satrec is cached, so it's fast)
+    // Only throttle: store updates, orbit path updates, coverage circle updates
     const updateSatelliteMarker = useCallback(() => {
         if (!wwdRef.current || !satelliteLayerRef.current) return;
 
@@ -568,21 +508,6 @@ const Globe2D = ({ onMouseMove }) => {
         const { currentTime } = useTimeStore.getState();
         const { satellites, selectedSatelliteId, updatePosition } = useSatelliteStore.getState();
         const time = currentTime;
-        const timestamp = time.getTime();
-
-        // Update interpolation factor for smooth animation
-        const elapsed = now - lastIpcFetchRef.current;
-        interpolationFactorRef.current = Math.min(
-            elapsed / PERF_CONFIG.POSITION_UPDATE_INTERVAL,
-            1
-        );
-
-        // Fetch new positions via IPC (throttled)
-        const shouldFetchIPC =
-            now - lastIpcFetchRef.current >= PERF_CONFIG.POSITION_UPDATE_INTERVAL;
-        if (shouldFetchIPC && usingIPCRef.current) {
-            fetchPositionsViaIPC(satellites, timestamp);
-        }
 
         // Determine if we should update Zustand store (throttled)
         const shouldUpdateStore =
@@ -595,15 +520,8 @@ const Globe2D = ({ onMouseMove }) => {
         satellites
             .filter((s) => s.isVisible)
             .forEach((sat) => {
-                // Get position: prefer IPC interpolated, fallback to direct calculation
-                let pos;
-                if (usingIPCRef.current) {
-                    pos = getInterpolatedPosition(sat.id);
-                }
-                if (!pos) {
-                    // Fallback to direct calculation (for non-Electron or initial load)
-                    pos = useSatelliteStore.getState().calculatePosition(sat.id, time);
-                }
+                // Calculate position directly every frame (satrec is cached by store)
+                const pos = useSatelliteStore.getState().calculatePosition(sat.id, time);
 
                 if (pos) {
                     // Update position in Zustand store - THROTTLED
@@ -712,23 +630,7 @@ const Globe2D = ({ onMouseMove }) => {
 
         // Continue animation loop
         animationFrameRef.current = requestAnimationFrame(updateSatelliteMarker);
-    }, [
-        checkOrbitPathUpdate,
-        updateOrbitPath,
-        fetchPositionsViaIPC,
-        getInterpolatedPosition,
-        updateCoverageIfNeeded,
-    ]);
-
-    // Check if IPC is available on mount
-    useEffect(() => {
-        usingIPCRef.current = !!window.electronAPI?.calculatePositionsInterpolated;
-        console.log(
-            `🚀 Satellite tracking: ${
-                usingIPCRef.current ? "IPC (optimized)" : "Direct (fallback)"
-            }`
-        );
-    }, []);
+    }, [checkOrbitPathUpdate, updateOrbitPath, updateCoverageIfNeeded]);
 
     // Setup layers when satellites are loaded
     useEffect(() => {
