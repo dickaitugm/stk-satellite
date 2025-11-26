@@ -17,6 +17,9 @@ import {
     Edit,
     Circle,
     MapPin,
+    Orbit,
+    Settings2,
+    Box,
 } from "lucide-react";
 
 import TreeNode from "./TreeNode";
@@ -323,7 +326,74 @@ const ObjectTree = () => {
                                     }
                                     level={1}
                                 >
-                                    {/* Sensors */}
+                                    {/* Orbit Elements */}
+                                    <TreeNode
+                                        key={`${sat.id}-orbit`}
+                                        item={{
+                                            id: `${sat.id}-orbit`,
+                                            name: "Orbit Elements",
+                                            isVisible: undefined,
+                                        }}
+                                        icon={Orbit}
+                                        level={2}
+                                        renderLabel={() => (
+                                            <span className="flex items-center gap-1">
+                                                Orbit Elements
+                                                <span className="text-xs text-slate-500">
+                                                    (
+                                                    {sat.orbitSource === "keplerian"
+                                                        ? "Keplerian"
+                                                        : "TLE"}
+                                                    )
+                                                </span>
+                                            </span>
+                                        )}
+                                    />
+
+                                    {/* Payloads */}
+                                    {sat.payloads && sat.payloads.length > 0 && (
+                                        <TreeNode
+                                            key={`${sat.id}-payloads`}
+                                            item={{
+                                                id: `${sat.id}-payloads`,
+                                                name: `Payloads (${sat.payloads.length})`,
+                                                isVisible: undefined,
+                                            }}
+                                            icon={Box}
+                                            level={2}
+                                        >
+                                            {sat.payloads.map((payload) => (
+                                                <TreeNode
+                                                    key={payload.id}
+                                                    item={{
+                                                        ...payload,
+                                                        isVisible: undefined,
+                                                    }}
+                                                    icon={
+                                                        payload.type === "camera" ? Camera : Radio
+                                                    }
+                                                    level={3}
+                                                    renderLabel={() => (
+                                                        <span className="flex items-center gap-1">
+                                                            {payload.name}
+                                                            <span className="text-xs text-slate-500">
+                                                                (
+                                                                {payload.type === "camera"
+                                                                    ? payload.cameraType?.toUpperCase() ||
+                                                                      "RGB"
+                                                                    : `${
+                                                                          payload.frequency || 162
+                                                                      } MHz`}
+                                                                )
+                                                            </span>
+                                                        </span>
+                                                    )}
+                                                />
+                                            ))}
+                                        </TreeNode>
+                                    )}
+
+                                    {/* Sensors (legacy) */}
                                     {sat.sensors?.map((sensor) => (
                                         <TreeNode
                                             key={sensor.id}
@@ -333,7 +403,7 @@ const ObjectTree = () => {
                                             renderLabel={(item) => `${item.name} (${item.type})`}
                                         />
                                     ))}
-                                    {/* Antennas */}
+                                    {/* Antennas (legacy) */}
                                     {sat.antennas?.map((antenna) => (
                                         <TreeNode
                                             key={antenna.id}
