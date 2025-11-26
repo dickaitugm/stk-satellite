@@ -693,6 +693,12 @@ const Globe2D = ({ onMouseMove }) => {
                             new WorldWind.Position(pos.lat, pos.lon, 0);
                     }
 
+                    // Update coverage visibility based on satellite's showCoverage property
+                    if (satelliteRenderablesRef.current[sat.id]) {
+                        satelliteRenderablesRef.current[sat.id].coveragePolygon.enabled =
+                            sat.showCoverage !== false;
+                    }
+
                     // Update label - THROTTLED
                     if (shouldUpdateStore && satelliteRenderablesRef.current[sat.id]) {
                         satelliteRenderablesRef.current[sat.id].placemark.label = `${

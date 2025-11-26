@@ -28,6 +28,8 @@ import {
     Trash2,
     Settings,
     ChevronRight,
+    Eye,
+    EyeOff,
 } from "lucide-react";
 
 // Preset colors for satellites
@@ -297,6 +299,7 @@ const SatelliteDialog = ({
         epoch: new Date().toISOString().slice(0, 16),
         // Visual
         color: PRESET_COLORS[0],
+        showCoverage: true, // Toggle coverage visibility
         // Payloads
         payloads: [],
     });
@@ -331,6 +334,7 @@ const SatelliteDialog = ({
                 meanAnomaly: editSatellite.keplerian?.meanAnomaly?.toString() || "0",
                 epoch: editSatellite.keplerian?.epoch || new Date().toISOString().slice(0, 16),
                 color: editSatellite.color || PRESET_COLORS[0],
+                showCoverage: editSatellite.showCoverage !== false, // default true
                 payloads: editSatellite.payloads || [],
             });
             setSelectedComponent("orbit");
@@ -354,6 +358,7 @@ const SatelliteDialog = ({
                 meanAnomaly: "0",
                 epoch: new Date().toISOString().slice(0, 16),
                 color: PRESET_COLORS[0],
+                showCoverage: true,
                 payloads: [],
             });
             setSelectedComponent("orbit");
@@ -704,6 +709,7 @@ const SatelliteDialog = ({
             tleSource: formData.tleSource,
             tleUrl: formData.tleUrl,
             color: formData.color,
+            showCoverage: formData.showCoverage,
             isActive: true,
             isVisible: true,
             payloads: formData.payloads,
@@ -865,6 +871,31 @@ const SatelliteDialog = ({
                                     />
                                 ))}
                             </div>
+                        </div>
+
+                        {/* Coverage Visibility Toggle */}
+                        <div className="flex items-center justify-between">
+                            <label className="text-xs text-slate-400 flex items-center gap-1">
+                                {formData.showCoverage ? (
+                                    <Eye className="w-3 h-3" />
+                                ) : (
+                                    <EyeOff className="w-3 h-3" />
+                                )}
+                                Show Coverage Area
+                            </label>
+                            <button
+                                type="button"
+                                onClick={() => handleChange("showCoverage", !formData.showCoverage)}
+                                className={`relative w-10 h-5 rounded-full transition-colors ${
+                                    formData.showCoverage ? "bg-cyan-500" : "bg-slate-600"
+                                }`}
+                            >
+                                <span
+                                    className={`absolute top-0.5 left-0.5 w-4 h-4 bg-white rounded-full transition-transform ${
+                                        formData.showCoverage ? "translate-x-5" : "translate-x-0"
+                                    }`}
+                                />
+                            </button>
                         </div>
                     </div>
 
