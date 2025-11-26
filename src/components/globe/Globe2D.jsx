@@ -322,17 +322,31 @@ const Globe2D = ({ onMouseMove }) => {
                         if (!coverage.isVisible) return;
 
                         let maxRange = coverage.maxRange || 2500;
+                        let coverageColor = coverage.color;
 
                         // If satellite tracking, calculate range based on satellite altitude
+                        // and use satellite's color
                         if (coverage.type === "satellite" && coverage.satelliteId) {
                             const satState = useSatelliteStore.getState();
                             const satPosition = satState.positions[coverage.satelliteId];
+                            const trackedSatellite = satState.satellites.find(
+                                (s) => s.id === coverage.satelliteId
+                            );
+
+                            console.log(`🎯 Coverage "${coverage.name}" tracking satellite:`, {
+                                satelliteId: coverage.satelliteId,
+                                trackedSatellite: trackedSatellite?.name,
+                                satColor: trackedSatellite?.color,
+                                coverageColor: coverage.color,
+                            });
+
+                            // Use satellite's color for tracking coverage
+                            if (trackedSatellite?.color) {
+                                coverageColor = trackedSatellite.color;
+                            }
+
                             if (satPosition?.alt) {
                                 // Calculate coverage radius based on satellite altitude and min elevation
-                                // Using geometric formula: range = alt / tan(elevation)
-                                const minElRad = ((coverage.minElevation || 5) * Math.PI) / 180;
-                                const earthRadius = 6371; // km
-                                // Simplified calculation for ground track coverage
                                 maxRange = calculateCoverageRadius(
                                     satPosition.alt,
                                     coverage.minElevation || 5
@@ -349,17 +363,22 @@ const Globe2D = ({ onMouseMove }) => {
                             (coord) => new WorldWind.Location(coord.latitude, coord.longitude)
                         );
 
+                        // Use coverage color, satellite color (for tracking), or fallback to gs color
+                        const finalColor = coverageColor || gs.color || { r: 1, g: 0.5, b: 0 };
+
+                        console.log(`🎨 Final color for coverage "${coverage.name}":`, finalColor);
+
                         const polygonAttributes = new WorldWind.ShapeAttributes(null);
                         polygonAttributes.interiorColor = new WorldWind.Color(
-                            coverage.color?.r || gs.color?.r || 1,
-                            coverage.color?.g || gs.color?.g || 0.5,
-                            coverage.color?.b || gs.color?.b || 0,
+                            finalColor.r ?? 1,
+                            finalColor.g ?? 0.5,
+                            finalColor.b ?? 0,
                             0.1
                         );
                         polygonAttributes.outlineColor = new WorldWind.Color(
-                            coverage.color?.r || gs.color?.r || 1,
-                            coverage.color?.g || gs.color?.g || 0.5,
-                            coverage.color?.b || gs.color?.b || 0,
+                            finalColor.r ?? 1,
+                            finalColor.g ?? 0.5,
+                            finalColor.b ?? 0,
                             0.6
                         );
                         polygonAttributes.outlineWidth = 1;
@@ -369,6 +388,39 @@ const Globe2D = ({ onMouseMove }) => {
                             polygonAttributes
                         );
                         gsLayer.addRenderable(coveragePolygon);
+
+                        // Add range label at the edge of the circle (north point)
+                        const labelPosition = new WorldWind.Position(
+                            gs.location.lat + maxRange / 111, // Approximate degrees latitude
+                            gs.location.lon,
+                            0
+                        );
+
+                        const labelAttributes = new WorldWind.PlacemarkAttributes(null);
+                        labelAttributes.imageSource =
+                            WorldWind.configuration.baseUrl + "images/white-dot.png";
+                        labelAttributes.imageScale = 0.05;
+                        labelAttributes.labelAttributes.color = new WorldWind.Color(
+                            finalColor.r ?? 1,
+                            finalColor.g ?? 0.5,
+                            finalColor.b ?? 0,
+                            1
+                        );
+                        labelAttributes.labelAttributes.offset = new WorldWind.Offset(
+                            WorldWind.OFFSET_FRACTION,
+                            0.5,
+                            WorldWind.OFFSET_FRACTION,
+                            0
+                        );
+
+                        const rangeLabel = new WorldWind.Placemark(
+                            labelPosition,
+                            false,
+                            labelAttributes
+                        );
+                        rangeLabel.label = `${Math.round(maxRange)} km`;
+                        rangeLabel.altitudeMode = WorldWind.CLAMP_TO_GROUND;
+                        gsLayer.addRenderable(rangeLabel);
                     });
                 }
             });
@@ -380,7 +432,7 @@ const Globe2D = ({ onMouseMove }) => {
                 `✅ Ground stations layer created with ${getVisibleStations().length} stations`
             );
         },
-        [groundStations, getVisibleStations]
+        [groundStations, getVisibleStations, satellites]
     );
 
     // Update satellite position with smooth animation
@@ -490,7 +542,7 @@ const Globe2D = ({ onMouseMove }) => {
                             WorldWind.OFFSET_FRACTION,
                             0.5,
                             WorldWind.OFFSET_FRACTION,
-                            2.0
+                            1.2
                         );
 
                         const placemark = new WorldWind.Placemark(
@@ -557,12 +609,12 @@ const Globe2D = ({ onMouseMove }) => {
         }
     }, [isLoading, updateSatelliteMarker]);
 
-    // Update ground stations when they change
+    // Update ground stations when they change (also when satellites change for tracking coverage colors)
     useEffect(() => {
         if (wwdRef.current && !isLoading) {
             createGroundStationLayer(wwdRef.current);
         }
-    }, [groundStations, createGroundStationLayer, isLoading]);
+    }, [groundStations, satellites, createGroundStationLayer, isLoading]);
 
     // Listener to disable vertical pan when stable
     useEffect(() => {

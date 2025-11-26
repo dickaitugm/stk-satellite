@@ -45,10 +45,10 @@ const ObjectTree = () => {
 
     // Toggle coverage visibility within a ground station
     const toggleCoverageVisibility = (gsId, covId) => {
-        const gs = groundStations.find(g => g.id === gsId);
+        const gs = groundStations.find((g) => g.id === gsId);
         if (!gs || !gs.coverages) return;
-        
-        const updatedCoverages = gs.coverages.map(cov => 
+
+        const updatedCoverages = gs.coverages.map((cov) =>
             cov.id === covId ? { ...cov, isVisible: !cov.isVisible } : cov
         );
         updateGroundStation(gsId, { coverages: updatedCoverages });
@@ -361,35 +361,58 @@ const ObjectTree = () => {
                                 {/* Location info */}
                                 <TreeNode
                                     key={`${gs.id}-loc`}
-                                    item={{ 
-                                        id: `${gs.id}-loc`, 
-                                        name: `${gs.location?.lat?.toFixed(4)}°, ${gs.location?.lon?.toFixed(4)}°`,
-                                        isVisible: undefined // No visibility toggle for info
+                                    item={{
+                                        id: `${gs.id}-loc`,
+                                        name: `${gs.location?.lat?.toFixed(
+                                            4
+                                        )}°, ${gs.location?.lon?.toFixed(4)}°`,
+                                        isVisible: undefined, // No visibility toggle for info
                                     }}
                                     icon={MapPin}
                                     level={2}
                                 />
                                 {/* Coverage areas */}
-                                {gs.coverages?.map((coverage) => (
-                                    <TreeNode
-                                        key={coverage.id}
-                                        item={{ 
-                                            ...coverage, 
-                                            color: coverage.color 
-                                        }}
-                                        icon={Circle}
-                                        level={2}
-                                        onToggleVisibility={() => toggleCoverageVisibility(gs.id, coverage.id)}
-                                        renderLabel={(item) => (
-                                            <span className="flex items-center gap-1">
-                                                {item.name}
-                                                <span className="text-xs text-slate-500">
-                                                    ({item.type === 'satellite' ? 'Sat' : `${item.maxRange}km`})
+                                {gs.coverages?.map((coverage) => {
+                                    // Get satellite color if this is a satellite tracking coverage
+                                    let displayColor = coverage.color;
+                                    let satName = null;
+                                    if (coverage.type === "satellite" && coverage.satelliteId) {
+                                        const trackedSat = satellites.find(
+                                            (s) => s.id === coverage.satelliteId
+                                        );
+                                        if (trackedSat) {
+                                            displayColor = trackedSat.color;
+                                            satName = trackedSat.name;
+                                        }
+                                    }
+
+                                    return (
+                                        <TreeNode
+                                            key={coverage.id}
+                                            item={{
+                                                ...coverage,
+                                                color: displayColor,
+                                            }}
+                                            icon={Circle}
+                                            level={2}
+                                            onToggleVisibility={() =>
+                                                toggleCoverageVisibility(gs.id, coverage.id)
+                                            }
+                                            renderLabel={(item) => (
+                                                <span className="flex items-center gap-1">
+                                                    {item.name}
+                                                    <span className="text-xs text-slate-500">
+                                                        (
+                                                        {item.type === "satellite"
+                                                            ? satName || "Satellite"
+                                                            : `${item.maxRange}km`}
+                                                        )
+                                                    </span>
                                                 </span>
-                                            </span>
-                                        )}
-                                    />
-                                ))}
+                                            )}
+                                        />
+                                    );
+                                })}
                             </TreeNode>
                         ))}
                     </div>
