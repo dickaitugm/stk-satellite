@@ -15,6 +15,8 @@ import {
     Compass,
     Antenna,
     Edit,
+    Circle,
+    MapPin,
 } from "lucide-react";
 
 import TreeNode from "./TreeNode";
@@ -40,6 +42,17 @@ const ObjectTree = () => {
     const addGroundStation = useGroundStationStore((state) => state.addGroundStation);
     const updateGroundStation = useGroundStationStore((state) => state.updateGroundStation);
     const getStationById = useGroundStationStore((state) => state.getStationById);
+
+    // Toggle coverage visibility within a ground station
+    const toggleCoverageVisibility = (gsId, covId) => {
+        const gs = groundStations.find(g => g.id === gsId);
+        if (!gs || !gs.coverages) return;
+        
+        const updatedCoverages = gs.coverages.map(cov => 
+            cov.id === covId ? { ...cov, isVisible: !cov.isVisible } : cov
+        );
+        updateGroundStation(gsId, { coverages: updatedCoverages });
+    };
 
     const targetAreas = useTargetAreaStore((state) => state.targetAreas);
     const selectedAreaId = useTargetAreaStore((state) => state.selectedAreaId);
@@ -344,7 +357,40 @@ const ObjectTree = () => {
                                     handleContextMenu(e, item, "groundStation")
                                 }
                                 level={1}
-                            />
+                            >
+                                {/* Location info */}
+                                <TreeNode
+                                    key={`${gs.id}-loc`}
+                                    item={{ 
+                                        id: `${gs.id}-loc`, 
+                                        name: `${gs.location?.lat?.toFixed(4)}°, ${gs.location?.lon?.toFixed(4)}°`,
+                                        isVisible: undefined // No visibility toggle for info
+                                    }}
+                                    icon={MapPin}
+                                    level={2}
+                                />
+                                {/* Coverage areas */}
+                                {gs.coverages?.map((coverage) => (
+                                    <TreeNode
+                                        key={coverage.id}
+                                        item={{ 
+                                            ...coverage, 
+                                            color: coverage.color 
+                                        }}
+                                        icon={Circle}
+                                        level={2}
+                                        onToggleVisibility={() => toggleCoverageVisibility(gs.id, coverage.id)}
+                                        renderLabel={(item) => (
+                                            <span className="flex items-center gap-1">
+                                                {item.name}
+                                                <span className="text-xs text-slate-500">
+                                                    ({item.type === 'satellite' ? 'Sat' : `${item.maxRange}km`})
+                                                </span>
+                                            </span>
+                                        )}
+                                    />
+                                ))}
+                            </TreeNode>
                         ))}
                     </div>
                 )}

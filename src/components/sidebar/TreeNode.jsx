@@ -43,7 +43,12 @@ const TreeNode = ({
   const handleVisibilityClick = (e) => {
     e.stopPropagation();
     if (onToggleVisibility) {
-      onToggleVisibility(item.id);
+      // Support both callback styles: (id) => void or () => void
+      if (onToggleVisibility.length === 0) {
+        onToggleVisibility();
+      } else {
+        onToggleVisibility(item.id);
+      }
     }
   };
 
