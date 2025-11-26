@@ -256,7 +256,7 @@ const Globe2D = ({ onMouseMove }) => {
                 // Ground station placemark
                 const placemarkAttributes = new WorldWind.PlacemarkAttributes(null);
                 placemarkAttributes.imageSource =
-                    WorldWind.configuration.baseUrl + "images/pushpins/plain-red.png";
+                    WorldWind.configuration.baseUrl + "images/antenna.png";
                 placemarkAttributes.imageScale = 0.8;
                 placemarkAttributes.imageOffset = new WorldWind.Offset(
                     WorldWind.OFFSET_FRACTION,
@@ -795,7 +795,7 @@ const Globe2D = ({ onMouseMove }) => {
     const handleZoomIn = useCallback(() => {
         if (!wwdRef.current) return;
         const newRange = wwdRef.current.navigator.range * 0.7;
-        wwdRef.current.navigator.range = Math.max(newRange, 1000000); // Min 1000km
+        wwdRef.current.navigator.range = Math.max(newRange, 500); // Min 500m
         setRange(wwdRef.current.navigator.range);
         wwdRef.current.redraw();
     }, []);
@@ -803,7 +803,7 @@ const Globe2D = ({ onMouseMove }) => {
     const handleZoomOut = useCallback(() => {
         if (!wwdRef.current) return;
         const newRange = wwdRef.current.navigator.range * 1.4;
-        wwdRef.current.navigator.range = Math.min(newRange, 100000000); // Max 100,000km
+        wwdRef.current.navigator.range = Math.min(newRange, 30000000); // Max 30,000km
         setRange(wwdRef.current.navigator.range);
         wwdRef.current.redraw();
     }, []);
