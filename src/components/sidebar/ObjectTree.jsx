@@ -3,355 +3,409 @@
  * Tree view for satellites, ground stations, target areas
  */
 
-import React, { useState } from 'react';
-import { 
-  Satellite, 
-  Radio, 
-  Target, 
-  Plus,
-  FolderOpen,
-  Folder,
-  Camera,
-  Compass,
-  Antenna
-} from 'lucide-react';
+import React, { useState } from "react";
+import {
+    Satellite,
+    Radio,
+    Target,
+    Plus,
+    FolderOpen,
+    Folder,
+    Camera,
+    Compass,
+    Antenna,
+    Edit,
+} from "lucide-react";
 
-import TreeNode from './TreeNode';
-import ContextMenu from './ContextMenu';
+import TreeNode from "./TreeNode";
+import ContextMenu from "./ContextMenu";
+import { GroundStationDialog } from "../ui";
 
-import { 
-  useSatelliteStore, 
-  useGroundStationStore, 
-  useTargetAreaStore 
-} from '../../stores';
+import { useSatelliteStore, useGroundStationStore, useTargetAreaStore } from "../../stores";
 
 const ObjectTree = () => {
-  // Stores
-  const satellites = useSatelliteStore(state => state.satellites);
-  const selectedSatelliteId = useSatelliteStore(state => state.selectedSatelliteId);
-  const selectSatellite = useSatelliteStore(state => state.selectSatellite);
-  const toggleSatelliteVisibility = useSatelliteStore(state => state.toggleVisibility);
-  const removeSatellite = useSatelliteStore(state => state.removeSatellite);
-  const updateSatellite = useSatelliteStore(state => state.updateSatellite);
+    // Stores
+    const satellites = useSatelliteStore((state) => state.satellites);
+    const selectedSatelliteId = useSatelliteStore((state) => state.selectedSatelliteId);
+    const selectSatellite = useSatelliteStore((state) => state.selectSatellite);
+    const toggleSatelliteVisibility = useSatelliteStore((state) => state.toggleVisibility);
+    const removeSatellite = useSatelliteStore((state) => state.removeSatellite);
+    const updateSatellite = useSatelliteStore((state) => state.updateSatellite);
 
-  const groundStations = useGroundStationStore(state => state.groundStations);
-  const selectedStationId = useGroundStationStore(state => state.selectedStationId);
-  const selectStation = useGroundStationStore(state => state.selectStation);
-  const toggleStationVisibility = useGroundStationStore(state => state.toggleVisibility);
-  const removeGroundStation = useGroundStationStore(state => state.removeGroundStation);
+    const groundStations = useGroundStationStore((state) => state.groundStations);
+    const selectedStationId = useGroundStationStore((state) => state.selectedStationId);
+    const selectStation = useGroundStationStore((state) => state.selectStation);
+    const toggleStationVisibility = useGroundStationStore((state) => state.toggleVisibility);
+    const removeGroundStation = useGroundStationStore((state) => state.removeGroundStation);
+    const addGroundStation = useGroundStationStore((state) => state.addGroundStation);
+    const updateGroundStation = useGroundStationStore((state) => state.updateGroundStation);
+    const getStationById = useGroundStationStore((state) => state.getStationById);
 
-  const targetAreas = useTargetAreaStore(state => state.targetAreas);
-  const selectedAreaId = useTargetAreaStore(state => state.selectedAreaId);
-  const selectArea = useTargetAreaStore(state => state.selectArea);
-  const toggleAreaVisibility = useTargetAreaStore(state => state.toggleVisibility);
-  const removeTargetArea = useTargetAreaStore(state => state.removeTargetArea);
+    const targetAreas = useTargetAreaStore((state) => state.targetAreas);
+    const selectedAreaId = useTargetAreaStore((state) => state.selectedAreaId);
+    const selectArea = useTargetAreaStore((state) => state.selectArea);
+    const toggleAreaVisibility = useTargetAreaStore((state) => state.toggleVisibility);
+    const removeTargetArea = useTargetAreaStore((state) => state.removeTargetArea);
 
-  // Context menu state
-  const [contextMenu, setContextMenu] = useState(null);
+    // Context menu state
+    const [contextMenu, setContextMenu] = useState(null);
 
-  // Close context menu
-  const closeContextMenu = () => setContextMenu(null);
+    // Ground station dialog state
+    const [gsDialogOpen, setGsDialogOpen] = useState(false);
+    const [editingStation, setEditingStation] = useState(null);
 
-  // Satellite context menu items
-  const getSatelliteContextMenu = (sat) => [
-    {
-      label: 'Add Sensor',
-      icon: <Camera className="w-4 h-4" />,
-      onClick: () => {
-        const sensors = sat.sensors || [];
-        updateSatellite(sat.id, {
-          sensors: [...sensors, {
-            id: `sensor-${Date.now()}`,
-            name: `Sensor ${sensors.length + 1}`,
-            type: 'optical',
-            fov: 30, // degrees
-            isActive: true
-          }]
+    // Close context menu
+    const closeContextMenu = () => setContextMenu(null);
+
+    // Handle save ground station
+    const handleSaveGroundStation = (stationData, isEdit) => {
+        if (isEdit) {
+            updateGroundStation(stationData.id, stationData);
+        } else {
+            addGroundStation(stationData);
+        }
+    };
+
+    // Open add ground station dialog
+    const openAddGsDialog = () => {
+        setEditingStation(null);
+        setGsDialogOpen(true);
+    };
+
+    // Open edit ground station dialog
+    const openEditGsDialog = (gs) => {
+        setEditingStation(gs);
+        setGsDialogOpen(true);
+    };
+
+    // Satellite context menu items
+    const getSatelliteContextMenu = (sat) => [
+        {
+            label: "Add Sensor",
+            icon: <Camera className="w-4 h-4" />,
+            onClick: () => {
+                const sensors = sat.sensors || [];
+                updateSatellite(sat.id, {
+                    sensors: [
+                        ...sensors,
+                        {
+                            id: `sensor-${Date.now()}`,
+                            name: `Sensor ${sensors.length + 1}`,
+                            type: "optical",
+                            fov: 30, // degrees
+                            isActive: true,
+                        },
+                    ],
+                });
+            },
+        },
+        {
+            label: "Add Antenna",
+            icon: <Antenna className="w-4 h-4" />,
+            onClick: () => {
+                const antennas = sat.antennas || [];
+                updateSatellite(sat.id, {
+                    antennas: [
+                        ...antennas,
+                        {
+                            id: `antenna-${Date.now()}`,
+                            name: `Antenna ${antennas.length + 1}`,
+                            type: "parabolic",
+                            gain: 30, // dB
+                            frequency: 8000, // MHz
+                            isActive: true,
+                        },
+                    ],
+                });
+            },
+        },
+        {
+            label: "Edit Attitude",
+            icon: <Compass className="w-4 h-4" />,
+            onClick: () => {
+                // TODO: Open attitude editor modal
+                console.log("Edit attitude for:", sat.name);
+            },
+        },
+        { separator: true },
+        {
+            label: "Properties",
+            onClick: () => {
+                // TODO: Open properties panel
+                console.log("Properties for:", sat.name);
+            },
+        },
+        { separator: true },
+        {
+            label: "Delete",
+            danger: true,
+            onClick: () => removeSatellite(sat.id),
+        },
+    ];
+
+    // Ground station context menu items
+    const getGroundStationContextMenu = (gs) => [
+        {
+            label: "Edit Station",
+            icon: <Edit className="w-4 h-4" />,
+            onClick: () => {
+                openEditGsDialog(gs);
+            },
+        },
+        {
+            label: "Add Antenna",
+            icon: <Antenna className="w-4 h-4" />,
+            onClick: () => {
+                console.log("Add antenna to:", gs.name);
+            },
+        },
+        { separator: true },
+        {
+            label: "Properties",
+            onClick: () => {
+                openEditGsDialog(gs);
+            },
+        },
+        { separator: true },
+        {
+            label: "Delete",
+            danger: true,
+            onClick: () => removeGroundStation(gs.id),
+        },
+    ];
+
+    // Target area context menu items
+    const getTargetAreaContextMenu = (ta) => [
+        {
+            label: "Properties",
+            onClick: () => {
+                console.log("Properties for:", ta.name);
+            },
+        },
+        { separator: true },
+        {
+            label: "Delete",
+            danger: true,
+            onClick: () => removeTargetArea(ta.id),
+        },
+    ];
+
+    // Handle context menu
+    const handleContextMenu = (e, item, type) => {
+        let items = [];
+        switch (type) {
+            case "satellite":
+                items = getSatelliteContextMenu(item);
+                break;
+            case "groundStation":
+                items = getGroundStationContextMenu(item);
+                break;
+            case "targetArea":
+                items = getTargetAreaContextMenu(item);
+                break;
+        }
+
+        setContextMenu({
+            x: e.clientX,
+            y: e.clientY,
+            items,
         });
-      }
-    },
-    {
-      label: 'Add Antenna',
-      icon: <Antenna className="w-4 h-4" />,
-      onClick: () => {
-        const antennas = sat.antennas || [];
-        updateSatellite(sat.id, {
-          antennas: [...antennas, {
-            id: `antenna-${Date.now()}`,
-            name: `Antenna ${antennas.length + 1}`,
-            type: 'parabolic',
-            gain: 30, // dB
-            frequency: 8000, // MHz
-            isActive: true
-          }]
-        });
-      }
-    },
-    {
-      label: 'Edit Attitude',
-      icon: <Compass className="w-4 h-4" />,
-      onClick: () => {
-        // TODO: Open attitude editor modal
-        console.log('Edit attitude for:', sat.name);
-      }
-    },
-    { separator: true },
-    {
-      label: 'Properties',
-      onClick: () => {
-        // TODO: Open properties panel
-        console.log('Properties for:', sat.name);
-      }
-    },
-    { separator: true },
-    {
-      label: 'Delete',
-      danger: true,
-      onClick: () => removeSatellite(sat.id)
-    }
-  ];
+    };
 
-  // Ground station context menu items
-  const getGroundStationContextMenu = (gs) => [
-    {
-      label: 'Add Antenna',
-      icon: <Antenna className="w-4 h-4" />,
-      onClick: () => {
-        console.log('Add antenna to:', gs.name);
-      }
-    },
-    { separator: true },
-    {
-      label: 'Properties',
-      onClick: () => {
-        console.log('Properties for:', gs.name);
-      }
-    },
-    { separator: true },
-    {
-      label: 'Delete',
-      danger: true,
-      onClick: () => removeGroundStation(gs.id)
-    }
-  ];
-
-  // Target area context menu items
-  const getTargetAreaContextMenu = (ta) => [
-    {
-      label: 'Properties',
-      onClick: () => {
-        console.log('Properties for:', ta.name);
-      }
-    },
-    { separator: true },
-    {
-      label: 'Delete',
-      danger: true,
-      onClick: () => removeTargetArea(ta.id)
-    }
-  ];
-
-  // Handle context menu
-  const handleContextMenu = (e, item, type) => {
-    let items = [];
-    switch (type) {
-      case 'satellite':
-        items = getSatelliteContextMenu(item);
-        break;
-      case 'groundStation':
-        items = getGroundStationContextMenu(item);
-        break;
-      case 'targetArea':
-        items = getTargetAreaContextMenu(item);
-        break;
-    }
-    
-    setContextMenu({
-      x: e.clientX,
-      y: e.clientY,
-      items
+    // Category expand states
+    const [expandedCategories, setExpandedCategories] = useState({
+        satellites: true,
+        groundStations: true,
+        targetAreas: true,
     });
-  };
 
-  // Category expand states
-  const [expandedCategories, setExpandedCategories] = useState({
-    satellites: true,
-    groundStations: true,
-    targetAreas: true
-  });
+    const toggleCategory = (category) => {
+        setExpandedCategories((prev) => ({
+            ...prev,
+            [category]: !prev[category],
+        }));
+    };
 
-  const toggleCategory = (category) => {
-    setExpandedCategories(prev => ({
-      ...prev,
-      [category]: !prev[category]
-    }));
-  };
+    return (
+        <div className="text-sm">
+            {/* Context Menu */}
+            {contextMenu && (
+                <ContextMenu
+                    x={contextMenu.x}
+                    y={contextMenu.y}
+                    items={contextMenu.items}
+                    onClose={closeContextMenu}
+                />
+            )}
 
-  return (
-    <div className="text-sm">
-      {/* Context Menu */}
-      {contextMenu && (
-        <ContextMenu
-          x={contextMenu.x}
-          y={contextMenu.y}
-          items={contextMenu.items}
-          onClose={closeContextMenu}
-        />
-      )}
-
-      {/* Satellites */}
-      <div className="mb-2">
-        <div 
-          className="flex items-center gap-2 py-1.5 px-2 bg-slate-800/50 rounded cursor-pointer hover:bg-slate-800 border border-slate-700/50"
-          onClick={() => toggleCategory('satellites')}
-        >
-          {expandedCategories.satellites ? (
-            <FolderOpen className="w-4 h-4 text-cyan-400" />
-          ) : (
-            <Folder className="w-4 h-4 text-cyan-400" />
-          )}
-          <span className="font-medium flex-1 text-slate-200">Satellites</span>
-          <span className="text-xs text-slate-500">{satellites.length}</span>
-          <button 
-            className="p-0.5 hover:bg-slate-700 rounded text-slate-400 hover:text-white"
-            onClick={(e) => {
-              e.stopPropagation();
-              // TODO: Open add satellite dialog
-            }}
-            title="Add Satellite"
-          >
-            <Plus className="w-3 h-3" />
-          </button>
-        </div>
-        
-        {expandedCategories.satellites && (
-          <div className="mt-1">
-            {satellites.map(sat => (
-              <div key={sat.id}>
-                <TreeNode
-                  item={sat}
-                  icon={Satellite}
-                  isSelected={selectedSatelliteId === sat.id}
-                  onSelect={selectSatellite}
-                  onToggleVisibility={toggleSatelliteVisibility}
-                  onContextMenu={(e, item) => handleContextMenu(e, item, 'satellite')}
-                  level={1}
+            {/* Satellites */}
+            <div className="mb-2">
+                <div
+                    className="flex items-center gap-2 py-1.5 px-2 bg-slate-800/50 rounded cursor-pointer hover:bg-slate-800 border border-slate-700/50"
+                    onClick={() => toggleCategory("satellites")}
                 >
-                  {/* Sensors */}
-                  {sat.sensors?.map(sensor => (
-                    <TreeNode
-                      key={sensor.id}
-                      item={{ ...sensor, isVisible: sensor.isActive }}
-                      icon={Camera}
-                      level={2}
-                      renderLabel={(item) => `${item.name} (${item.type})`}
-                    />
-                  ))}
-                  {/* Antennas */}
-                  {sat.antennas?.map(antenna => (
-                    <TreeNode
-                      key={antenna.id}
-                      item={{ ...antenna, isVisible: antenna.isActive }}
-                      icon={Antenna}
-                      level={2}
-                      renderLabel={(item) => `${item.name}`}
-                    />
-                  ))}
-                </TreeNode>
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
+                    {expandedCategories.satellites ? (
+                        <FolderOpen className="w-4 h-4 text-cyan-400" />
+                    ) : (
+                        <Folder className="w-4 h-4 text-cyan-400" />
+                    )}
+                    <span className="font-medium flex-1 text-slate-200">Satellites</span>
+                    <span className="text-xs text-slate-500">{satellites.length}</span>
+                    <button
+                        className="p-0.5 hover:bg-slate-700 rounded text-slate-400 hover:text-white"
+                        onClick={(e) => {
+                            e.stopPropagation();
+                            // TODO: Open add satellite dialog
+                        }}
+                        title="Add Satellite"
+                    >
+                        <Plus className="w-3 h-3" />
+                    </button>
+                </div>
 
-      {/* Ground Stations */}
-      <div className="mb-2">
-        <div 
-          className="flex items-center gap-2 py-1.5 px-2 bg-slate-800/50 rounded cursor-pointer hover:bg-slate-800 border border-slate-700/50"
-          onClick={() => toggleCategory('groundStations')}
-        >
-          {expandedCategories.groundStations ? (
-            <FolderOpen className="w-4 h-4 text-orange-400" />
-          ) : (
-            <Folder className="w-4 h-4 text-orange-400" />
-          )}
-          <span className="font-medium flex-1 text-slate-200">Ground Stations</span>
-          <span className="text-xs text-slate-500">{groundStations.length}</span>
-          <button 
-            className="p-0.5 hover:bg-slate-700 rounded text-slate-400 hover:text-white"
-            onClick={(e) => {
-              e.stopPropagation();
-              // TODO: Open add ground station dialog
-            }}
-            title="Add Ground Station"
-          >
-            <Plus className="w-3 h-3" />
-          </button>
-        </div>
-        
-        {expandedCategories.groundStations && (
-          <div className="mt-1">
-            {groundStations.map(gs => (
-              <TreeNode
-                key={gs.id}
-                item={gs}
-                icon={Radio}
-                isSelected={selectedStationId === gs.id}
-                onSelect={selectStation}
-                onToggleVisibility={toggleStationVisibility}
-                onContextMenu={(e, item) => handleContextMenu(e, item, 'groundStation')}
-                level={1}
-              />
-            ))}
-          </div>
-        )}
-      </div>
+                {expandedCategories.satellites && (
+                    <div className="mt-1">
+                        {satellites.map((sat) => (
+                            <div key={sat.id}>
+                                <TreeNode
+                                    item={sat}
+                                    icon={Satellite}
+                                    isSelected={selectedSatelliteId === sat.id}
+                                    onSelect={selectSatellite}
+                                    onToggleVisibility={toggleSatelliteVisibility}
+                                    onContextMenu={(e, item) =>
+                                        handleContextMenu(e, item, "satellite")
+                                    }
+                                    level={1}
+                                >
+                                    {/* Sensors */}
+                                    {sat.sensors?.map((sensor) => (
+                                        <TreeNode
+                                            key={sensor.id}
+                                            item={{ ...sensor, isVisible: sensor.isActive }}
+                                            icon={Camera}
+                                            level={2}
+                                            renderLabel={(item) => `${item.name} (${item.type})`}
+                                        />
+                                    ))}
+                                    {/* Antennas */}
+                                    {sat.antennas?.map((antenna) => (
+                                        <TreeNode
+                                            key={antenna.id}
+                                            item={{ ...antenna, isVisible: antenna.isActive }}
+                                            icon={Antenna}
+                                            level={2}
+                                            renderLabel={(item) => `${item.name}`}
+                                        />
+                                    ))}
+                                </TreeNode>
+                            </div>
+                        ))}
+                    </div>
+                )}
+            </div>
 
-      {/* Target Areas */}
-      <div className="mb-2">
-        <div 
-          className="flex items-center gap-2 py-1.5 px-2 bg-slate-800/50 rounded cursor-pointer hover:bg-slate-800 border border-slate-700/50"
-          onClick={() => toggleCategory('targetAreas')}
-        >
-          {expandedCategories.targetAreas ? (
-            <FolderOpen className="w-4 h-4 text-green-400" />
-          ) : (
-            <Folder className="w-4 h-4 text-green-400" />
-          )}
-          <span className="font-medium flex-1 text-slate-200">Target Areas</span>
-          <span className="text-xs text-slate-500">{targetAreas.length}</span>
-          <button 
-            className="p-0.5 hover:bg-slate-700 rounded text-slate-400 hover:text-white"
-            onClick={(e) => {
-              e.stopPropagation();
-              // TODO: Open add target area dialog
-            }}
-            title="Add Target Area"
-          >
-            <Plus className="w-3 h-3" />
-          </button>
+            {/* Ground Stations */}
+            <div className="mb-2">
+                <div
+                    className="flex items-center gap-2 py-1.5 px-2 bg-slate-800/50 rounded cursor-pointer hover:bg-slate-800 border border-slate-700/50"
+                    onClick={() => toggleCategory("groundStations")}
+                >
+                    {expandedCategories.groundStations ? (
+                        <FolderOpen className="w-4 h-4 text-orange-400" />
+                    ) : (
+                        <Folder className="w-4 h-4 text-orange-400" />
+                    )}
+                    <span className="font-medium flex-1 text-slate-200">Ground Stations</span>
+                    <span className="text-xs text-slate-500">{groundStations.length}</span>
+                    <button
+                        className="p-0.5 hover:bg-slate-700 rounded text-slate-400 hover:text-white"
+                        onClick={(e) => {
+                            e.stopPropagation();
+                            openAddGsDialog();
+                        }}
+                        title="Add Ground Station"
+                    >
+                        <Plus className="w-3 h-3" />
+                    </button>
+                </div>
+
+                {expandedCategories.groundStations && (
+                    <div className="mt-1">
+                        {groundStations.map((gs) => (
+                            <TreeNode
+                                key={gs.id}
+                                item={gs}
+                                icon={Radio}
+                                isSelected={selectedStationId === gs.id}
+                                onSelect={selectStation}
+                                onToggleVisibility={toggleStationVisibility}
+                                onContextMenu={(e, item) =>
+                                    handleContextMenu(e, item, "groundStation")
+                                }
+                                level={1}
+                            />
+                        ))}
+                    </div>
+                )}
+            </div>
+
+            {/* Target Areas */}
+            <div className="mb-2">
+                <div
+                    className="flex items-center gap-2 py-1.5 px-2 bg-slate-800/50 rounded cursor-pointer hover:bg-slate-800 border border-slate-700/50"
+                    onClick={() => toggleCategory("targetAreas")}
+                >
+                    {expandedCategories.targetAreas ? (
+                        <FolderOpen className="w-4 h-4 text-green-400" />
+                    ) : (
+                        <Folder className="w-4 h-4 text-green-400" />
+                    )}
+                    <span className="font-medium flex-1 text-slate-200">Target Areas</span>
+                    <span className="text-xs text-slate-500">{targetAreas.length}</span>
+                    <button
+                        className="p-0.5 hover:bg-slate-700 rounded text-slate-400 hover:text-white"
+                        onClick={(e) => {
+                            e.stopPropagation();
+                            // TODO: Open add target area dialog
+                        }}
+                        title="Add Target Area"
+                    >
+                        <Plus className="w-3 h-3" />
+                    </button>
+                </div>
+
+                {expandedCategories.targetAreas && (
+                    <div className="mt-1">
+                        {targetAreas.map((ta) => (
+                            <TreeNode
+                                key={ta.id}
+                                item={ta}
+                                icon={Target}
+                                isSelected={selectedAreaId === ta.id}
+                                onSelect={selectArea}
+                                onToggleVisibility={toggleAreaVisibility}
+                                onContextMenu={(e, item) =>
+                                    handleContextMenu(e, item, "targetArea")
+                                }
+                                level={1}
+                                renderLabel={(item) => `${item.name} (${item.type})`}
+                            />
+                        ))}
+                    </div>
+                )}
+            </div>
+
+            {/* Ground Station Dialog */}
+            <GroundStationDialog
+                isOpen={gsDialogOpen}
+                onClose={() => setGsDialogOpen(false)}
+                onSave={handleSaveGroundStation}
+                editStation={editingStation}
+                title={editingStation ? "Edit Ground Station" : "Add Ground Station"}
+            />
         </div>
-        
-        {expandedCategories.targetAreas && (
-          <div className="mt-1">
-            {targetAreas.map(ta => (
-              <TreeNode
-                key={ta.id}
-                item={ta}
-                icon={Target}
-                isSelected={selectedAreaId === ta.id}
-                onSelect={selectArea}
-                onToggleVisibility={toggleAreaVisibility}
-                onContextMenu={(e, item) => handleContextMenu(e, item, 'targetArea')}
-                level={1}
-                renderLabel={(item) => `${item.name} (${item.type})`}
-              />
-            ))}
-          </div>
-        )}
-      </div>
-    </div>
-  );
+    );
 };
 
 export default ObjectTree;

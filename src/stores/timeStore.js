@@ -21,6 +21,7 @@ export const useTimeStore = create((set, get) => ({
     // Playback controls (only used in simulation mode)
     isPlaying: false,
     playbackSpeed: 1, // 1x, 2x, 4x, 10x, 60x, etc.
+    playbackDirection: 1, // 1 = forward, -1 = backward
 
     // For smooth animation - track last frame time
     lastFrameTime: Date.now(),
@@ -83,6 +84,12 @@ export const useTimeStore = create((set, get) => ({
         })),
 
     setPlaybackSpeed: (speed) => set({ playbackSpeed: speed }),
+
+    // Direction controls
+    setPlaybackDirection: (direction) => set({ playbackDirection: direction }),
+    toggleDirection: () => set((state) => ({ playbackDirection: state.playbackDirection * -1 })),
+    playForward: () => set({ isPlaying: true, playbackDirection: 1, lastFrameTime: Date.now() }),
+    playBackward: () => set({ isPlaying: true, playbackDirection: -1, lastFrameTime: Date.now() }),
 
     increaseSpeed: () =>
         set((state) => {
@@ -149,15 +156,24 @@ export const useTimeStore = create((set, get) => ({
             return 0;
         }
 
-        // Calculate new time based on delta and playback speed
-        // deltaTime is real ms elapsed, multiply by playbackSpeed for simulation time
-        const simDeltaMs = deltaTime * state.playbackSpeed;
+        // Calculate new time based on delta, playback speed, and direction
+        // deltaTime is real ms elapsed, multiply by playbackSpeed and direction
+        const simDeltaMs = deltaTime * state.playbackSpeed * state.playbackDirection;
         const newTime = new Date(state.currentTime.getTime() + simDeltaMs);
 
-        // Stop at end time
-        if (newTime >= state.endTime) {
+        // Stop at end time (forward) or start time (backward)
+        if (state.playbackDirection > 0 && newTime >= state.endTime) {
             set({
                 currentTime: state.endTime,
+                isPlaying: false,
+                lastFrameTime: now,
+            });
+            return deltaTime;
+        }
+
+        if (state.playbackDirection < 0 && newTime <= state.startTime) {
+            set({
+                currentTime: state.startTime,
                 isPlaying: false,
                 lastFrameTime: now,
             });
@@ -180,6 +196,7 @@ export const useTimeStore = create((set, get) => ({
             endTime: new Date(now.getTime() + 24 * 60 * 60 * 1000),
             isPlaying: false,
             playbackSpeed: 1,
+            playbackDirection: 1,
             mode: "realtime",
             lastFrameTime: Date.now(),
         });

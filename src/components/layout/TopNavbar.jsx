@@ -24,12 +24,15 @@ const TopNavbar = () => {
     const currentTime = useTimeStore((state) => state.currentTime);
     const isPlaying = useTimeStore((state) => state.isPlaying);
     const playbackSpeed = useTimeStore((state) => state.playbackSpeed);
+    const playbackDirection = useTimeStore((state) => state.playbackDirection);
     const availableSpeeds = useTimeStore((state) => state.availableSpeeds);
     const mode = useTimeStore((state) => state.mode);
     const setMode = useTimeStore((state) => state.setMode);
     const play = useTimeStore((state) => state.play);
     const pause = useTimeStore((state) => state.pause);
     const togglePlayback = useTimeStore((state) => state.togglePlayback);
+    const playForward = useTimeStore((state) => state.playForward);
+    const playBackward = useTimeStore((state) => state.playBackward);
     const increaseSpeed = useTimeStore((state) => state.increaseSpeed);
     const decreaseSpeed = useTimeStore((state) => state.decreaseSpeed);
     const stepForward = useTimeStore((state) => state.stepForward);
@@ -42,10 +45,11 @@ const TopNavbar = () => {
     const scenarioName = useScenarioStore((state) => state.name);
     const isDirty = useScenarioStore((state) => state.isDirty);
 
-    // Format speed display
-    const formatSpeed = (speed) => {
-        if (speed >= 1) return `${speed}x`;
-        return `${speed}x`;
+    // Format speed display with direction
+    const formatSpeed = (speed, direction) => {
+        const prefix = direction < 0 ? "-" : "";
+        if (speed >= 1) return `${prefix}${speed}x`;
+        return `${prefix}${speed}x`;
     };
 
     return (
@@ -118,8 +122,12 @@ const TopNavbar = () => {
                         >
                             <Rewind className="w-3 h-3" />
                         </button>
-                        <span className="px-2 text-xs font-mono text-emerald-400 min-w-[40px] text-center">
-                            {formatSpeed(playbackSpeed)}
+                        <span
+                            className={`px-2 text-xs font-mono min-w-[50px] text-center ${
+                                playbackDirection < 0 ? "text-orange-400" : "text-emerald-400"
+                            }`}
+                        >
+                            {formatSpeed(playbackSpeed, playbackDirection)}
                         </span>
                         <button
                             onClick={increaseSpeed}
@@ -135,6 +143,20 @@ const TopNavbar = () => {
                 {/* Playback controls - only show in simulation mode */}
                 {mode === "simulation" && (
                     <div className="flex items-center bg-slate-800 rounded-md p-1 border border-slate-700">
+                        {/* Play Backward button */}
+                        <button
+                            onClick={playBackward}
+                            className={`p-1.5 rounded text-white ${
+                                isPlaying && playbackDirection < 0
+                                    ? "bg-orange-600 hover:bg-orange-700"
+                                    : "hover:bg-slate-700 text-slate-300 hover:text-white"
+                            }`}
+                            title="Play Backward"
+                        >
+                            <Rewind className="w-4 h-4" />
+                        </button>
+
+                        {/* Step backward */}
                         <button
                             onClick={() => stepBackward(60)}
                             className="p-1.5 hover:bg-slate-700 rounded text-slate-300 hover:text-white"
@@ -142,27 +164,40 @@ const TopNavbar = () => {
                         >
                             <SkipBack className="w-4 h-4" />
                         </button>
+
+                        {/* Pause button */}
                         <button
-                            onClick={togglePlayback}
-                            className={`p-1.5 mx-1 rounded text-white ${
-                                isPlaying
-                                    ? "bg-red-600 hover:bg-red-700"
-                                    : "bg-emerald-600 hover:bg-emerald-700"
+                            onClick={pause}
+                            className={`p-1.5 mx-1 rounded ${
+                                !isPlaying
+                                    ? "bg-slate-600 text-white"
+                                    : "bg-red-600 hover:bg-red-700 text-white"
                             }`}
-                            title={isPlaying ? "Pause" : "Play"}
+                            title="Pause"
                         >
-                            {isPlaying ? (
-                                <Pause className="w-4 h-4" />
-                            ) : (
-                                <Play className="w-4 h-4" />
-                            )}
+                            <Pause className="w-4 h-4" />
                         </button>
+
+                        {/* Step forward */}
                         <button
                             onClick={() => stepForward(60)}
                             className="p-1.5 hover:bg-slate-700 rounded text-slate-300 hover:text-white"
                             title="Step forward 1 min"
                         >
                             <SkipForward className="w-4 h-4" />
+                        </button>
+
+                        {/* Play Forward button */}
+                        <button
+                            onClick={playForward}
+                            className={`p-1.5 rounded text-white ${
+                                isPlaying && playbackDirection > 0
+                                    ? "bg-emerald-600 hover:bg-emerald-700"
+                                    : "hover:bg-slate-700 text-slate-300 hover:text-white"
+                            }`}
+                            title="Play Forward"
+                        >
+                            <FastForward className="w-4 h-4" />
                         </button>
                     </div>
                 )}

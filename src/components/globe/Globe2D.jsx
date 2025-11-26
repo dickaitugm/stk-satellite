@@ -282,8 +282,11 @@ const Globe2D = ({ onMouseMove }) => {
 
                 gsLayer.addRenderable(placemark);
 
-                // Optional: Ground station coverage circle
-                if (gs.antenna?.maxRange) {
+                // Multi-coverage support
+                const coverages = gs.coverages || [];
+
+                // If no coverages array but has legacy antenna config, use that
+                if (coverages.length === 0 && gs.showCoverage !== false && gs.antenna?.maxRange) {
                     const coverageCoords = geodesicCircleCoords(
                         { latitude: gs.location.lat, longitude: gs.location.lon },
                         gs.antenna.maxRange
@@ -313,6 +316,60 @@ const Globe2D = ({ onMouseMove }) => {
                         polygonAttributes
                     );
                     gsLayer.addRenderable(coveragePolygon);
+                } else {
+                    // Render each coverage area
+                    coverages.forEach((coverage) => {
+                        if (!coverage.isVisible) return;
+
+                        let maxRange = coverage.maxRange || 2500;
+
+                        // If satellite tracking, calculate range based on satellite altitude
+                        if (coverage.type === "satellite" && coverage.satelliteId) {
+                            const satState = useSatelliteStore.getState();
+                            const satPosition = satState.positions[coverage.satelliteId];
+                            if (satPosition?.alt) {
+                                // Calculate coverage radius based on satellite altitude and min elevation
+                                // Using geometric formula: range = alt / tan(elevation)
+                                const minElRad = ((coverage.minElevation || 5) * Math.PI) / 180;
+                                const earthRadius = 6371; // km
+                                // Simplified calculation for ground track coverage
+                                maxRange = calculateCoverageRadius(
+                                    satPosition.alt,
+                                    coverage.minElevation || 5
+                                );
+                            }
+                        }
+
+                        const coverageCoords = geodesicCircleCoords(
+                            { latitude: gs.location.lat, longitude: gs.location.lon },
+                            maxRange
+                        );
+
+                        const boundaryLocations = coverageCoords.map(
+                            (coord) => new WorldWind.Location(coord.latitude, coord.longitude)
+                        );
+
+                        const polygonAttributes = new WorldWind.ShapeAttributes(null);
+                        polygonAttributes.interiorColor = new WorldWind.Color(
+                            coverage.color?.r || gs.color?.r || 1,
+                            coverage.color?.g || gs.color?.g || 0.5,
+                            coverage.color?.b || gs.color?.b || 0,
+                            0.1
+                        );
+                        polygonAttributes.outlineColor = new WorldWind.Color(
+                            coverage.color?.r || gs.color?.r || 1,
+                            coverage.color?.g || gs.color?.g || 0.5,
+                            coverage.color?.b || gs.color?.b || 0,
+                            0.6
+                        );
+                        polygonAttributes.outlineWidth = 1;
+
+                        const coveragePolygon = new WorldWind.SurfacePolygon(
+                            boundaryLocations,
+                            polygonAttributes
+                        );
+                        gsLayer.addRenderable(coveragePolygon);
+                    });
                 }
             });
 
