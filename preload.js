@@ -1,8 +1,8 @@
 // preload.js
-const { contextBridge, ipcRenderer } = require('electron');
+const { contextBridge, ipcRenderer } = require("electron");
 
 // Mengekspos API yang aman ke jendela renderer (GUI)
-contextBridge.exposeInMainWorld('electronAPI', {
+contextBridge.exposeInMainWorld("electronAPI", {
     // Fetch TLE from URL (bypasses CORS)
-    fetchTLE: (url) => ipcRenderer.invoke('fetch-tle', url),
+    fetchTLE: (url) => ipcRenderer.invoke("fetch-tle", url),
 });

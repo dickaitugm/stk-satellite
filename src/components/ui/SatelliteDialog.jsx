@@ -38,37 +38,58 @@ const PRESET_COLORS = [
 
 // Orbit element source types
 const ORBIT_SOURCE_TYPES = [
-    { id: "tle-url", name: "TLE from URL", icon: Link, description: "Fetch TLE from online source" },
-    { id: "tle-url-history", name: "TLE History URL", icon: FileText, description: "URL with multiple TLE epochs" },
-    { id: "tle-manual", name: "Manual TLE", icon: FileText, description: "Enter TLE lines manually" },
-    { id: "keplerian", name: "Keplerian Elements", icon: Globe, description: "Enter orbital elements manually" },
+    {
+        id: "tle-url",
+        name: "TLE from URL",
+        icon: Link,
+        description: "Fetch TLE from online source",
+    },
+    {
+        id: "tle-url-history",
+        name: "TLE History URL",
+        icon: FileText,
+        description: "URL with multiple TLE epochs",
+    },
+    {
+        id: "tle-manual",
+        name: "Manual TLE",
+        icon: FileText,
+        description: "Enter TLE lines manually",
+    },
+    {
+        id: "keplerian",
+        name: "Keplerian Elements",
+        icon: Globe,
+        description: "Enter orbital elements manually",
+    },
 ];
 
 // Common TLE sources
 const TLE_SOURCES = [
-    { 
-        id: "celestrak", 
-        name: "CelesTrak", 
+    {
+        id: "celestrak",
+        name: "CelesTrak",
         urlTemplate: "https://celestrak.org/NORAD/elements/gp.php?NAME={SATELLITE_NAME}&FORMAT=TLE",
-        description: "CelesTrak GP data"
+        description: "CelesTrak GP data",
     },
-    { 
-        id: "celestrak-catnr", 
-        name: "CelesTrak (NORAD ID)", 
+    {
+        id: "celestrak-catnr",
+        name: "CelesTrak (NORAD ID)",
         urlTemplate: "https://celestrak.org/NORAD/elements/gp.php?CATNR={NORAD_ID}&FORMAT=TLE",
-        description: "CelesTrak by catalog number"
+        description: "CelesTrak by catalog number",
     },
-    { 
-        id: "space-track", 
-        name: "Space-Track.org", 
-        urlTemplate: "https://www.space-track.org/basicspacedata/query/class/tle_latest/NORAD_CAT_ID/{NORAD_ID}/format/tle",
-        description: "Space-Track API (requires auth)"
+    {
+        id: "space-track",
+        name: "Space-Track.org",
+        urlTemplate:
+            "https://www.space-track.org/basicspacedata/query/class/tle_latest/NORAD_CAT_ID/{NORAD_ID}/format/tle",
+        description: "Space-Track API (requires auth)",
     },
-    { 
-        id: "custom", 
-        name: "Custom URL", 
+    {
+        id: "custom",
+        name: "Custom URL",
         urlTemplate: "",
-        description: "Enter custom URL"
+        description: "Enter custom URL",
     },
 ];
 
@@ -85,9 +106,9 @@ const TleHistoryPicker = ({ tleHistory, selectedIndex, onSelect }) => {
     // Filter TLEs based on search term (search by date)
     const filteredTLEs = searchTerm
         ? tleHistory.filter((tle) => {
-            const dateStr = new Date(tle.epoch).toLocaleString().toLowerCase();
-            return dateStr.includes(searchTerm.toLowerCase());
-        })
+              const dateStr = new Date(tle.epoch).toLocaleString().toLowerCase();
+              return dateStr.includes(searchTerm.toLowerCase());
+          })
         : tleHistory;
 
     // Reset display count when search changes
@@ -96,12 +117,15 @@ const TleHistoryPicker = ({ tleHistory, selectedIndex, onSelect }) => {
     }, [searchTerm]);
 
     // Handle scroll to load more
-    const handleScroll = useCallback((e) => {
-        const { scrollTop, scrollHeight, clientHeight } = e.target;
-        if (scrollHeight - scrollTop - clientHeight < 100) {
-            setDisplayCount((prev) => Math.min(prev + ITEMS_PER_PAGE, filteredTLEs.length));
-        }
-    }, [filteredTLEs.length]);
+    const handleScroll = useCallback(
+        (e) => {
+            const { scrollTop, scrollHeight, clientHeight } = e.target;
+            if (scrollHeight - scrollTop - clientHeight < 100) {
+                setDisplayCount((prev) => Math.min(prev + ITEMS_PER_PAGE, filteredTLEs.length));
+            }
+        },
+        [filteredTLEs.length]
+    );
 
     // Close dropdown when clicking outside
     useEffect(() => {
@@ -122,7 +146,7 @@ const TleHistoryPicker = ({ tleHistory, selectedIndex, onSelect }) => {
             <label className="block text-xs text-slate-400 mb-1">
                 Select TLE Epoch ({tleHistory.length.toLocaleString()} available)
             </label>
-            
+
             {/* Selected value display / trigger */}
             <button
                 type="button"
@@ -139,7 +163,11 @@ const TleHistoryPicker = ({ tleHistory, selectedIndex, onSelect }) => {
                         "Select TLE..."
                     )}
                 </span>
-                <ChevronDown className={`w-4 h-4 text-slate-400 transition-transform ${isOpen ? "rotate-180" : ""}`} />
+                <ChevronDown
+                    className={`w-4 h-4 text-slate-400 transition-transform ${
+                        isOpen ? "rotate-180" : ""
+                    }`}
+                />
             </button>
 
             {/* Dropdown */}
@@ -159,16 +187,13 @@ const TleHistoryPicker = ({ tleHistory, selectedIndex, onSelect }) => {
                             />
                         </div>
                         <div className="text-xs text-slate-500 mt-1">
-                            Showing {displayedTLEs.length.toLocaleString()} of {filteredTLEs.length.toLocaleString()}
+                            Showing {displayedTLEs.length.toLocaleString()} of{" "}
+                            {filteredTLEs.length.toLocaleString()}
                         </div>
                     </div>
 
                     {/* Virtualized list */}
-                    <div
-                        ref={listRef}
-                        onScroll={handleScroll}
-                        className="max-h-60 overflow-y-auto"
-                    >
+                    <div ref={listRef} onScroll={handleScroll} className="max-h-60 overflow-y-auto">
                         {displayedTLEs.map((tle, idx) => {
                             const originalIndex = tleHistory.indexOf(tle);
                             const isSelected = originalIndex === selectedIndex;
@@ -182,7 +207,9 @@ const TleHistoryPicker = ({ tleHistory, selectedIndex, onSelect }) => {
                                         setSearchTerm("");
                                     }}
                                     className={`w-full px-3 py-2 text-left text-sm hover:bg-slate-700 flex items-center gap-2 ${
-                                        isSelected ? "bg-cyan-500/20 text-cyan-400" : "text-slate-300"
+                                        isSelected
+                                            ? "bg-cyan-500/20 text-cyan-400"
+                                            : "text-slate-300"
                                     }`}
                                 >
                                     <Calendar className="w-3 h-3 flex-shrink-0" />
@@ -192,14 +219,14 @@ const TleHistoryPicker = ({ tleHistory, selectedIndex, onSelect }) => {
                                 </button>
                             );
                         })}
-                        
+
                         {/* Load more indicator */}
                         {displayCount < filteredTLEs.length && (
                             <div className="px-3 py-2 text-xs text-slate-500 text-center">
                                 Scroll for more... ({filteredTLEs.length - displayCount} remaining)
                             </div>
                         )}
-                        
+
                         {filteredTLEs.length === 0 && (
                             <div className="px-3 py-4 text-sm text-slate-500 text-center">
                                 No results found
@@ -299,9 +326,9 @@ const SatelliteDialog = ({
 
     // Build TLE URL based on source and satellite name
     const buildTleUrl = () => {
-        const source = TLE_SOURCES.find(s => s.id === formData.tleSource);
+        const source = TLE_SOURCES.find((s) => s.id === formData.tleSource);
         if (!source || source.id === "custom") return formData.tleUrl;
-        
+
         let url = source.urlTemplate;
         url = url.replace("{SATELLITE_NAME}", encodeURIComponent(formData.name));
         url = url.replace("{NORAD_ID}", formData.noradId);
@@ -311,7 +338,7 @@ const SatelliteDialog = ({
     // Fetch TLE from URL
     const fetchTLE = async () => {
         const url = formData.tleSource === "custom" ? formData.tleUrl : buildTleUrl();
-        
+
         if (!url) {
             setFetchStatus("error");
             setFetchMessage("Please enter a valid URL");
@@ -330,7 +357,7 @@ const SatelliteDialog = ({
 
         try {
             let text;
-            
+
             // Use Electron IPC if available (bypasses CORS), otherwise use fetch
             if (window.electronAPI?.fetchTLE) {
                 const result = await window.electronAPI.fetchTLE(url);
@@ -347,18 +374,21 @@ const SatelliteDialog = ({
                 text = await response.text();
             }
 
-            const lines = text.split('\n').map(l => l.trimEnd()).filter(l => l.trim());
+            const lines = text
+                .split("\n")
+                .map((l) => l.trimEnd())
+                .filter((l) => l.trim());
 
             // Parse all TLEs from the file (3-line format: name, line1, line2)
             const allTLEs = [];
             for (let i = 0; i < lines.length; i++) {
                 const line = lines[i].trim();
-                
+
                 // Check if this line looks like a TLE line 1
                 if (line.startsWith("1 ") && i + 1 < lines.length) {
                     const line1 = line;
                     const line2 = lines[i + 1].trim();
-                    
+
                     // Get the name from the previous line (if exists and doesn't start with 1 or 2)
                     let name = "";
                     if (i > 0) {
@@ -367,37 +397,39 @@ const SatelliteDialog = ({
                             name = prevLine;
                         }
                     }
-                    
+
                     if (line2.startsWith("2 ")) {
                         // Extract epoch from line1 (format: YYDDD.DDDDDDDD)
                         // TLE Line 1 columns 19-32 contain the epoch
                         const epochStr = line1.substring(18, 32).trim();
                         const epochYear = parseInt(epochStr.substring(0, 2));
                         const epochDayFull = parseFloat(epochStr.substring(2));
-                        
+
                         // Separate integer day and fractional part
                         const epochDayInt = Math.floor(epochDayFull);
                         const epochDayFrac = epochDayFull - epochDayInt;
-                        
+
                         // Convert fractional day to hours, minutes, seconds, milliseconds
                         const totalSecondsFloat = epochDayFrac * 86400; // 24 * 60 * 60
                         const hours = Math.floor(totalSecondsFloat / 3600);
                         const minutes = Math.floor((totalSecondsFloat % 3600) / 60);
                         const seconds = Math.floor(totalSecondsFloat % 60);
                         const milliseconds = Math.round((totalSecondsFloat % 1) * 1000);
-                        
+
                         const fullYear = epochYear > 56 ? 1900 + epochYear : 2000 + epochYear;
-                        
+
                         // Create date using UTC components directly
-                        const epochDate = new Date(Date.UTC(
-                            fullYear,
-                            0, // January
-                            epochDayInt, // Day of year (1-based works here since Jan 1 = day 1)
-                            hours,
-                            minutes,
-                            seconds,
-                            milliseconds
-                        ));
+                        const epochDate = new Date(
+                            Date.UTC(
+                                fullYear,
+                                0, // January
+                                epochDayInt, // Day of year (1-based works here since Jan 1 = day 1)
+                                hours,
+                                minutes,
+                                seconds,
+                                milliseconds
+                            )
+                        );
 
                         allTLEs.push({
                             name: name.trim(),
@@ -406,7 +438,7 @@ const SatelliteDialog = ({
                             epoch: epochDate.toISOString(),
                             noradId: line1.substring(2, 7).trim(),
                         });
-                        
+
                         i++; // Skip line2 since we already processed it
                     }
                 }
@@ -418,9 +450,10 @@ const SatelliteDialog = ({
 
             // Search for the satellite by name (case-insensitive, partial match)
             const searchName = formData.name.trim().toUpperCase();
-            const matchingTLEs = allTLEs.filter(tle => 
-                tle.name.toUpperCase().includes(searchName) ||
-                searchName.includes(tle.name.toUpperCase().replace(/\s+/g, ''))
+            const matchingTLEs = allTLEs.filter(
+                (tle) =>
+                    tle.name.toUpperCase().includes(searchName) ||
+                    searchName.includes(tle.name.toUpperCase().replace(/\s+/g, ""))
             );
 
             if (formData.orbitSource === "tle-url-history") {
@@ -428,8 +461,8 @@ const SatelliteDialog = ({
                 if (matchingTLEs.length > 0) {
                     // Sort by epoch (newest first)
                     matchingTLEs.sort((a, b) => new Date(b.epoch) - new Date(a.epoch));
-                    
-                    setFormData(prev => ({
+
+                    setFormData((prev) => ({
                         ...prev,
                         tleHistory: matchingTLEs,
                         selectedTleIndex: 0,
@@ -439,11 +472,17 @@ const SatelliteDialog = ({
                         tleUrl: url,
                     }));
                     setFetchStatus("success");
-                    setFetchMessage(`Found ${matchingTLEs.length} TLE records for "${formData.name}"`);
+                    setFetchMessage(
+                        `Found ${matchingTLEs.length} TLE records for "${formData.name}"`
+                    );
                 } else {
                     // Show all available satellites
-                    const availableNames = [...new Set(allTLEs.map(t => t.name))].slice(0, 10);
-                    throw new Error(`Satellite "${formData.name}" not found. Available: ${availableNames.join(", ")}${allTLEs.length > 10 ? "..." : ""}`);
+                    const availableNames = [...new Set(allTLEs.map((t) => t.name))].slice(0, 10);
+                    throw new Error(
+                        `Satellite "${formData.name}" not found. Available: ${availableNames.join(
+                            ", "
+                        )}${allTLEs.length > 10 ? "..." : ""}`
+                    );
                 }
             } else {
                 // Single TLE - get the first (or newest) match
@@ -452,7 +491,7 @@ const SatelliteDialog = ({
                     matchingTLEs.sort((a, b) => new Date(b.epoch) - new Date(a.epoch));
                     const tle = matchingTLEs[0];
 
-                    setFormData(prev => ({
+                    setFormData((prev) => ({
                         ...prev,
                         tleLine1: tle.line1,
                         tleLine2: tle.line2,
@@ -460,11 +499,19 @@ const SatelliteDialog = ({
                         tleUrl: url,
                     }));
                     setFetchStatus("success");
-                    setFetchMessage(`TLE found for "${tle.name}" (Epoch: ${new Date(tle.epoch).toLocaleDateString()})`);
+                    setFetchMessage(
+                        `TLE found for "${tle.name}" (Epoch: ${new Date(
+                            tle.epoch
+                        ).toLocaleDateString()})`
+                    );
                 } else {
                     // Show all available satellites
-                    const availableNames = [...new Set(allTLEs.map(t => t.name))].slice(0, 10);
-                    throw new Error(`Satellite "${formData.name}" not found. Available: ${availableNames.join(", ")}${allTLEs.length > 10 ? "..." : ""}`);
+                    const availableNames = [...new Set(allTLEs.map((t) => t.name))].slice(0, 10);
+                    throw new Error(
+                        `Satellite "${formData.name}" not found. Available: ${availableNames.join(
+                            ", "
+                        )}${allTLEs.length > 10 ? "..." : ""}`
+                    );
                 }
             }
         } catch (error) {
@@ -478,9 +525,9 @@ const SatelliteDialog = ({
 
     // Handle input changes
     const handleChange = (field, value) => {
-        setFormData(prev => ({ ...prev, [field]: value }));
+        setFormData((prev) => ({ ...prev, [field]: value }));
         if (errors[field]) {
-            setErrors(prev => ({ ...prev, [field]: null }));
+            setErrors((prev) => ({ ...prev, [field]: null }));
         }
     };
 
@@ -488,7 +535,7 @@ const SatelliteDialog = ({
     const selectTleFromHistory = (index) => {
         const tle = formData.tleHistory[index];
         if (tle) {
-            setFormData(prev => ({
+            setFormData((prev) => ({
                 ...prev,
                 selectedTleIndex: index,
                 tleLine1: tle.line1,
@@ -505,7 +552,11 @@ const SatelliteDialog = ({
             newErrors.name = "Name is required";
         }
 
-        if (formData.orbitSource === "tle-url" || formData.orbitSource === "tle-url-history" || formData.orbitSource === "tle-manual") {
+        if (
+            formData.orbitSource === "tle-url" ||
+            formData.orbitSource === "tle-url-history" ||
+            formData.orbitSource === "tle-manual"
+        ) {
             if (!formData.tleLine1.trim()) {
                 newErrors.tleLine1 = "TLE Line 1 is required";
             } else if (!formData.tleLine1.startsWith("1 ")) {
@@ -609,16 +660,24 @@ const SatelliteDialog = ({
         const year = epochDate.getFullYear() % 100;
         const startOfYear = new Date(epochDate.getFullYear(), 0, 1);
         const dayOfYear = (epochDate - startOfYear) / 86400000 + 1;
-        
-        const epochStr = `${year.toString().padStart(2, '0')}${dayOfYear.toFixed(8).padStart(12, '0')}`;
-        
+
+        const epochStr = `${year.toString().padStart(2, "0")}${dayOfYear
+            .toFixed(8)
+            .padStart(12, "0")}`;
+
         // Mean motion (revs/day) from semi-major axis
         const mu = 398600.4418; // km³/s²
-        const n = Math.sqrt(mu / Math.pow(kep.semiMajorAxis, 3)) * 86400 / (2 * Math.PI);
-        
+        const n = (Math.sqrt(mu / Math.pow(kep.semiMajorAxis, 3)) * 86400) / (2 * Math.PI);
+
         const line1 = `1 99999U 00000A   ${epochStr}  .00000000  00000-0  00000-0 0    0`;
-        const line2 = `2 99999 ${kep.inclination.toFixed(4).padStart(8)} ${kep.raan.toFixed(4).padStart(8)} ${(kep.eccentricity * 10000000).toFixed(0).padStart(7, '0')} ${kep.argOfPerigee.toFixed(4).padStart(8)} ${kep.meanAnomaly.toFixed(4).padStart(8)} ${n.toFixed(8).padStart(11)}    0`;
-        
+        const line2 = `2 99999 ${kep.inclination.toFixed(4).padStart(8)} ${kep.raan
+            .toFixed(4)
+            .padStart(8)} ${(kep.eccentricity * 10000000)
+            .toFixed(0)
+            .padStart(7, "0")} ${kep.argOfPerigee.toFixed(4).padStart(8)} ${kep.meanAnomaly
+            .toFixed(4)
+            .padStart(8)} ${n.toFixed(8).padStart(11)}    0`;
+
         return { line1, line2 };
     };
 
@@ -627,10 +686,7 @@ const SatelliteDialog = ({
     const dialogContent = (
         <div className="fixed inset-0 z-[9999] flex items-center justify-center">
             {/* Backdrop */}
-            <div
-                className="absolute inset-0 bg-black/60 backdrop-blur-sm"
-                onClick={onClose}
-            />
+            <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={onClose} />
 
             {/* Dialog */}
             <div className="relative bg-slate-900 border border-slate-700 rounded-lg shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-hidden">
@@ -709,7 +765,9 @@ const SatelliteDialog = ({
                                                 : "border-transparent hover:border-slate-500"
                                         }`}
                                         style={{
-                                            backgroundColor: `rgb(${color.r * 255}, ${color.g * 255}, ${color.b * 255})`,
+                                            backgroundColor: `rgb(${color.r * 255}, ${
+                                                color.g * 255
+                                            }, ${color.b * 255})`,
                                         }}
                                         title={color.name}
                                     />
@@ -738,14 +796,18 @@ const SatelliteDialog = ({
                                                 : "border-slate-600 hover:border-slate-500"
                                         }`}
                                     >
-                                        <Icon className={`w-4 h-4 mt-0.5 ${
-                                            formData.orbitSource === source.id
-                                                ? "text-cyan-400"
-                                                : "text-slate-400"
-                                        }`} />
+                                        <Icon
+                                            className={`w-4 h-4 mt-0.5 ${
+                                                formData.orbitSource === source.id
+                                                    ? "text-cyan-400"
+                                                    : "text-slate-400"
+                                            }`}
+                                        />
                                         <div>
                                             <div className="text-sm text-white">{source.name}</div>
-                                            <div className="text-xs text-slate-500">{source.description}</div>
+                                            <div className="text-xs text-slate-500">
+                                                {source.description}
+                                            </div>
                                         </div>
                                     </button>
                                 );
@@ -754,7 +816,8 @@ const SatelliteDialog = ({
                     </div>
 
                     {/* TLE from URL */}
-                    {(formData.orbitSource === "tle-url" || formData.orbitSource === "tle-url-history") && (
+                    {(formData.orbitSource === "tle-url" ||
+                        formData.orbitSource === "tle-url-history") && (
                         <div className="space-y-3 p-3 bg-slate-800/50 rounded-lg border border-slate-700">
                             <h4 className="text-sm font-medium text-slate-300">TLE Source</h4>
 
@@ -801,7 +864,9 @@ const SatelliteDialog = ({
                             {/* Fetch button */}
                             <button
                                 onClick={fetchTLE}
-                                disabled={loading || (!formData.name && formData.tleSource !== "custom")}
+                                disabled={
+                                    loading || (!formData.name && formData.tleSource !== "custom")
+                                }
                                 className="flex items-center gap-2 px-4 py-2 bg-cyan-600 hover:bg-cyan-500 disabled:bg-slate-600 disabled:cursor-not-allowed text-white rounded-lg text-sm transition-colors"
                             >
                                 {loading ? (
@@ -814,9 +879,13 @@ const SatelliteDialog = ({
 
                             {/* Status message */}
                             {fetchStatus && (
-                                <div className={`flex items-center gap-2 text-sm ${
-                                    fetchStatus === "success" ? "text-green-400" : "text-red-400"
-                                }`}>
+                                <div
+                                    className={`flex items-center gap-2 text-sm ${
+                                        fetchStatus === "success"
+                                            ? "text-green-400"
+                                            : "text-red-400"
+                                    }`}
+                                >
                                     {fetchStatus === "success" ? (
                                         <CheckCircle className="w-4 h-4" />
                                     ) : (
@@ -827,63 +896,71 @@ const SatelliteDialog = ({
                             )}
 
                             {/* TLE History selection */}
-                            {formData.orbitSource === "tle-url-history" && formData.tleHistory.length > 0 && (
-                                <TleHistoryPicker
-                                    tleHistory={formData.tleHistory}
-                                    selectedIndex={formData.selectedTleIndex}
-                                    onSelect={selectTleFromHistory}
-                                />
-                            )}
+                            {formData.orbitSource === "tle-url-history" &&
+                                formData.tleHistory.length > 0 && (
+                                    <TleHistoryPicker
+                                        tleHistory={formData.tleHistory}
+                                        selectedIndex={formData.selectedTleIndex}
+                                        onSelect={selectTleFromHistory}
+                                    />
+                                )}
                         </div>
                     )}
 
                     {/* Manual TLE Input */}
-                    {(formData.orbitSource === "tle-manual" || formData.tleLine1) && formData.orbitSource !== "keplerian" && (
-                        <div className="space-y-3 p-3 bg-slate-800/50 rounded-lg border border-slate-700">
-                            <h4 className="text-sm font-medium text-slate-300">TLE Data</h4>
+                    {(formData.orbitSource === "tle-manual" || formData.tleLine1) &&
+                        formData.orbitSource !== "keplerian" && (
+                            <div className="space-y-3 p-3 bg-slate-800/50 rounded-lg border border-slate-700">
+                                <h4 className="text-sm font-medium text-slate-300">TLE Data</h4>
 
-                            <div>
-                                <label className="block text-xs text-slate-400 mb-1">
-                                    Line 1 *
-                                </label>
-                                <input
-                                    type="text"
-                                    value={formData.tleLine1}
-                                    onChange={(e) => handleChange("tleLine1", e.target.value)}
-                                    placeholder="1 NNNNNC NNNNNAAA NNNNN.NNNNNNNN +.NNNNNNNN +NNNNN-N +NNNNN-N N NNNNN"
-                                    className={`w-full px-3 py-2 bg-slate-800 border rounded-lg text-white text-sm font-mono
+                                <div>
+                                    <label className="block text-xs text-slate-400 mb-1">
+                                        Line 1 *
+                                    </label>
+                                    <input
+                                        type="text"
+                                        value={formData.tleLine1}
+                                        onChange={(e) => handleChange("tleLine1", e.target.value)}
+                                        placeholder="1 NNNNNC NNNNNAAA NNNNN.NNNNNNNN +.NNNNNNNN +NNNNN-N +NNNNN-N N NNNNN"
+                                        className={`w-full px-3 py-2 bg-slate-800 border rounded-lg text-white text-sm font-mono
                                         ${errors.tleLine1 ? "border-red-500" : "border-slate-600"}
                                         focus:outline-none focus:border-cyan-500`}
-                                />
-                                {errors.tleLine1 && (
-                                    <p className="text-xs text-red-400 mt-1">{errors.tleLine1}</p>
-                                )}
-                            </div>
+                                    />
+                                    {errors.tleLine1 && (
+                                        <p className="text-xs text-red-400 mt-1">
+                                            {errors.tleLine1}
+                                        </p>
+                                    )}
+                                </div>
 
-                            <div>
-                                <label className="block text-xs text-slate-400 mb-1">
-                                    Line 2 *
-                                </label>
-                                <input
-                                    type="text"
-                                    value={formData.tleLine2}
-                                    onChange={(e) => handleChange("tleLine2", e.target.value)}
-                                    placeholder="2 NNNNN NNN.NNNN NNN.NNNN NNNNNNN NNN.NNNN NNN.NNNN NN.NNNNNNNNNNNNNN"
-                                    className={`w-full px-3 py-2 bg-slate-800 border rounded-lg text-white text-sm font-mono
+                                <div>
+                                    <label className="block text-xs text-slate-400 mb-1">
+                                        Line 2 *
+                                    </label>
+                                    <input
+                                        type="text"
+                                        value={formData.tleLine2}
+                                        onChange={(e) => handleChange("tleLine2", e.target.value)}
+                                        placeholder="2 NNNNN NNN.NNNN NNN.NNNN NNNNNNN NNN.NNNN NNN.NNNN NN.NNNNNNNNNNNNNN"
+                                        className={`w-full px-3 py-2 bg-slate-800 border rounded-lg text-white text-sm font-mono
                                         ${errors.tleLine2 ? "border-red-500" : "border-slate-600"}
                                         focus:outline-none focus:border-cyan-500`}
-                                />
-                                {errors.tleLine2 && (
-                                    <p className="text-xs text-red-400 mt-1">{errors.tleLine2}</p>
-                                )}
+                                    />
+                                    {errors.tleLine2 && (
+                                        <p className="text-xs text-red-400 mt-1">
+                                            {errors.tleLine2}
+                                        </p>
+                                    )}
+                                </div>
                             </div>
-                        </div>
-                    )}
+                        )}
 
                     {/* Keplerian Elements */}
                     {formData.orbitSource === "keplerian" && (
                         <div className="space-y-3 p-3 bg-slate-800/50 rounded-lg border border-slate-700">
-                            <h4 className="text-sm font-medium text-slate-300">Keplerian Elements</h4>
+                            <h4 className="text-sm font-medium text-slate-300">
+                                Keplerian Elements
+                            </h4>
 
                             <div className="grid grid-cols-2 gap-3">
                                 {/* Semi-major axis */}
@@ -895,13 +972,21 @@ const SatelliteDialog = ({
                                         type="number"
                                         step="0.001"
                                         value={formData.semiMajorAxis}
-                                        onChange={(e) => handleChange("semiMajorAxis", e.target.value)}
+                                        onChange={(e) =>
+                                            handleChange("semiMajorAxis", e.target.value)
+                                        }
                                         className={`w-full px-3 py-2 bg-slate-800 border rounded-lg text-white text-sm
-                                            ${errors.semiMajorAxis ? "border-red-500" : "border-slate-600"}
+                                            ${
+                                                errors.semiMajorAxis
+                                                    ? "border-red-500"
+                                                    : "border-slate-600"
+                                            }
                                             focus:outline-none focus:border-cyan-500`}
                                     />
                                     {errors.semiMajorAxis && (
-                                        <p className="text-xs text-red-400 mt-1">{errors.semiMajorAxis}</p>
+                                        <p className="text-xs text-red-400 mt-1">
+                                            {errors.semiMajorAxis}
+                                        </p>
                                     )}
                                 </div>
 
@@ -914,13 +999,21 @@ const SatelliteDialog = ({
                                         type="number"
                                         step="0.0001"
                                         value={formData.eccentricity}
-                                        onChange={(e) => handleChange("eccentricity", e.target.value)}
+                                        onChange={(e) =>
+                                            handleChange("eccentricity", e.target.value)
+                                        }
                                         className={`w-full px-3 py-2 bg-slate-800 border rounded-lg text-white text-sm
-                                            ${errors.eccentricity ? "border-red-500" : "border-slate-600"}
+                                            ${
+                                                errors.eccentricity
+                                                    ? "border-red-500"
+                                                    : "border-slate-600"
+                                            }
                                             focus:outline-none focus:border-cyan-500`}
                                     />
                                     {errors.eccentricity && (
-                                        <p className="text-xs text-red-400 mt-1">{errors.eccentricity}</p>
+                                        <p className="text-xs text-red-400 mt-1">
+                                            {errors.eccentricity}
+                                        </p>
                                     )}
                                 </div>
 
@@ -933,13 +1026,21 @@ const SatelliteDialog = ({
                                         type="number"
                                         step="0.01"
                                         value={formData.inclination}
-                                        onChange={(e) => handleChange("inclination", e.target.value)}
+                                        onChange={(e) =>
+                                            handleChange("inclination", e.target.value)
+                                        }
                                         className={`w-full px-3 py-2 bg-slate-800 border rounded-lg text-white text-sm
-                                            ${errors.inclination ? "border-red-500" : "border-slate-600"}
+                                            ${
+                                                errors.inclination
+                                                    ? "border-red-500"
+                                                    : "border-slate-600"
+                                            }
                                             focus:outline-none focus:border-cyan-500`}
                                     />
                                     {errors.inclination && (
-                                        <p className="text-xs text-red-400 mt-1">{errors.inclination}</p>
+                                        <p className="text-xs text-red-400 mt-1">
+                                            {errors.inclination}
+                                        </p>
                                     )}
                                 </div>
 
@@ -971,13 +1072,21 @@ const SatelliteDialog = ({
                                         type="number"
                                         step="0.01"
                                         value={formData.argOfPerigee}
-                                        onChange={(e) => handleChange("argOfPerigee", e.target.value)}
+                                        onChange={(e) =>
+                                            handleChange("argOfPerigee", e.target.value)
+                                        }
                                         className={`w-full px-3 py-2 bg-slate-800 border rounded-lg text-white text-sm
-                                            ${errors.argOfPerigee ? "border-red-500" : "border-slate-600"}
+                                            ${
+                                                errors.argOfPerigee
+                                                    ? "border-red-500"
+                                                    : "border-slate-600"
+                                            }
                                             focus:outline-none focus:border-cyan-500`}
                                     />
                                     {errors.argOfPerigee && (
-                                        <p className="text-xs text-red-400 mt-1">{errors.argOfPerigee}</p>
+                                        <p className="text-xs text-red-400 mt-1">
+                                            {errors.argOfPerigee}
+                                        </p>
                                     )}
                                 </div>
 
@@ -990,22 +1099,28 @@ const SatelliteDialog = ({
                                         type="number"
                                         step="0.01"
                                         value={formData.meanAnomaly}
-                                        onChange={(e) => handleChange("meanAnomaly", e.target.value)}
+                                        onChange={(e) =>
+                                            handleChange("meanAnomaly", e.target.value)
+                                        }
                                         className={`w-full px-3 py-2 bg-slate-800 border rounded-lg text-white text-sm
-                                            ${errors.meanAnomaly ? "border-red-500" : "border-slate-600"}
+                                            ${
+                                                errors.meanAnomaly
+                                                    ? "border-red-500"
+                                                    : "border-slate-600"
+                                            }
                                             focus:outline-none focus:border-cyan-500`}
                                     />
                                     {errors.meanAnomaly && (
-                                        <p className="text-xs text-red-400 mt-1">{errors.meanAnomaly}</p>
+                                        <p className="text-xs text-red-400 mt-1">
+                                            {errors.meanAnomaly}
+                                        </p>
                                     )}
                                 </div>
                             </div>
 
                             {/* Epoch */}
                             <div>
-                                <label className="block text-xs text-slate-400 mb-1">
-                                    Epoch *
-                                </label>
+                                <label className="block text-xs text-slate-400 mb-1">Epoch *</label>
                                 <input
                                     type="datetime-local"
                                     value={formData.epoch}
