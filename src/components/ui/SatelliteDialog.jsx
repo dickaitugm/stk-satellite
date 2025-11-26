@@ -1,0 +1,1042 @@
+/**
+ * SatelliteDialog Component
+ * Modal dialog for adding/editing satellites with TLE or Keplerian elements
+ */
+
+import React, { useState, useEffect, useRef, useCallback } from "react";
+import { createPortal } from "react-dom";
+import {
+    X,
+    Satellite,
+    Palette,
+    Link,
+    FileText,
+    Globe,
+    ChevronDown,
+    ChevronUp,
+    Download,
+    RefreshCw,
+    AlertCircle,
+    CheckCircle,
+    Loader2,
+    Search,
+    Calendar,
+} from "lucide-react";
+
+// Preset colors for satellites
+const PRESET_COLORS = [
+    { name: "Cyan", r: 0, g: 1, b: 1 },
+    { name: "Green", r: 0.2, g: 0.8, b: 0.2 },
+    { name: "Yellow", r: 1, g: 0.9, b: 0.2 },
+    { name: "Orange", r: 1, g: 0.5, b: 0 },
+    { name: "Red", r: 1, g: 0.2, b: 0.2 },
+    { name: "Purple", r: 0.7, g: 0.3, b: 0.9 },
+    { name: "Blue", r: 0.2, g: 0.5, b: 1 },
+    { name: "Pink", r: 1, g: 0.4, b: 0.7 },
+    { name: "White", r: 1, g: 1, b: 1 },
+];
+
+// Orbit element source types
+const ORBIT_SOURCE_TYPES = [
+    { id: "tle-url", name: "TLE from URL", icon: Link, description: "Fetch TLE from online source" },
+    { id: "tle-url-history", name: "TLE History URL", icon: FileText, description: "URL with multiple TLE epochs" },
+    { id: "tle-manual", name: "Manual TLE", icon: FileText, description: "Enter TLE lines manually" },
+    { id: "keplerian", name: "Keplerian Elements", icon: Globe, description: "Enter orbital elements manually" },
+];
+
+// Common TLE sources
+const TLE_SOURCES = [
+    { 
+        id: "celestrak", 
+        name: "CelesTrak", 
+        urlTemplate: "https://celestrak.org/NORAD/elements/gp.php?NAME={SATELLITE_NAME}&FORMAT=TLE",
+        description: "CelesTrak GP data"
+    },
+    { 
+        id: "celestrak-catnr", 
+        name: "CelesTrak (NORAD ID)", 
+        urlTemplate: "https://celestrak.org/NORAD/elements/gp.php?CATNR={NORAD_ID}&FORMAT=TLE",
+        description: "CelesTrak by catalog number"
+    },
+    { 
+        id: "space-track", 
+        name: "Space-Track.org", 
+        urlTemplate: "https://www.space-track.org/basicspacedata/query/class/tle_latest/NORAD_CAT_ID/{NORAD_ID}/format/tle",
+        description: "Space-Track API (requires auth)"
+    },
+    { 
+        id: "custom", 
+        name: "Custom URL", 
+        urlTemplate: "",
+        description: "Enter custom URL"
+    },
+];
+
+// Virtualized TLE History Picker Component
+const ITEMS_PER_PAGE = 50;
+
+const TleHistoryPicker = ({ tleHistory, selectedIndex, onSelect }) => {
+    const [displayCount, setDisplayCount] = useState(ITEMS_PER_PAGE);
+    const [searchTerm, setSearchTerm] = useState("");
+    const [isOpen, setIsOpen] = useState(false);
+    const listRef = useRef(null);
+    const containerRef = useRef(null);
+
+    // Filter TLEs based on search term (search by date)
+    const filteredTLEs = searchTerm
+        ? tleHistory.filter((tle) => {
+            const dateStr = new Date(tle.epoch).toLocaleString().toLowerCase();
+            return dateStr.includes(searchTerm.toLowerCase());
+        })
+        : tleHistory;
+
+    // Reset display count when search changes
+    useEffect(() => {
+        setDisplayCount(ITEMS_PER_PAGE);
+    }, [searchTerm]);
+
+    // Handle scroll to load more
+    const handleScroll = useCallback((e) => {
+        const { scrollTop, scrollHeight, clientHeight } = e.target;
+        if (scrollHeight - scrollTop - clientHeight < 100) {
+            setDisplayCount((prev) => Math.min(prev + ITEMS_PER_PAGE, filteredTLEs.length));
+        }
+    }, [filteredTLEs.length]);
+
+    // Close dropdown when clicking outside
+    useEffect(() => {
+        const handleClickOutside = (e) => {
+            if (containerRef.current && !containerRef.current.contains(e.target)) {
+                setIsOpen(false);
+            }
+        };
+        document.addEventListener("mousedown", handleClickOutside);
+        return () => document.removeEventListener("mousedown", handleClickOutside);
+    }, []);
+
+    const selectedTle = tleHistory[selectedIndex];
+    const displayedTLEs = filteredTLEs.slice(0, displayCount);
+
+    return (
+        <div ref={containerRef} className="relative">
+            <label className="block text-xs text-slate-400 mb-1">
+                Select TLE Epoch ({tleHistory.length.toLocaleString()} available)
+            </label>
+            
+            {/* Selected value display / trigger */}
+            <button
+                type="button"
+                onClick={() => setIsOpen(!isOpen)}
+                className="w-full px-3 py-2 bg-slate-800 border border-slate-600 rounded-lg text-white text-sm text-left focus:outline-none focus:border-cyan-500 flex items-center justify-between"
+            >
+                <span className="truncate">
+                    {selectedTle ? (
+                        <>
+                            <Calendar className="w-3 h-3 inline mr-2 text-cyan-400" />
+                            {new Date(selectedTle.epoch).toLocaleString()}
+                        </>
+                    ) : (
+                        "Select TLE..."
+                    )}
+                </span>
+                <ChevronDown className={`w-4 h-4 text-slate-400 transition-transform ${isOpen ? "rotate-180" : ""}`} />
+            </button>
+
+            {/* Dropdown */}
+            {isOpen && (
+                <div className="absolute z-50 mt-1 w-full bg-slate-800 border border-slate-600 rounded-lg shadow-xl overflow-hidden">
+                    {/* Search input */}
+                    <div className="p-2 border-b border-slate-700">
+                        <div className="relative">
+                            <Search className="absolute left-2 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
+                            <input
+                                type="text"
+                                placeholder="Search by date..."
+                                value={searchTerm}
+                                onChange={(e) => setSearchTerm(e.target.value)}
+                                className="w-full pl-8 pr-3 py-1.5 bg-slate-900 border border-slate-600 rounded text-white text-sm focus:outline-none focus:border-cyan-500"
+                                autoFocus
+                            />
+                        </div>
+                        <div className="text-xs text-slate-500 mt-1">
+                            Showing {displayedTLEs.length.toLocaleString()} of {filteredTLEs.length.toLocaleString()}
+                        </div>
+                    </div>
+
+                    {/* Virtualized list */}
+                    <div
+                        ref={listRef}
+                        onScroll={handleScroll}
+                        className="max-h-60 overflow-y-auto"
+                    >
+                        {displayedTLEs.map((tle, idx) => {
+                            const originalIndex = tleHistory.indexOf(tle);
+                            const isSelected = originalIndex === selectedIndex;
+                            return (
+                                <button
+                                    key={originalIndex}
+                                    type="button"
+                                    onClick={() => {
+                                        onSelect(originalIndex);
+                                        setIsOpen(false);
+                                        setSearchTerm("");
+                                    }}
+                                    className={`w-full px-3 py-2 text-left text-sm hover:bg-slate-700 flex items-center gap-2 ${
+                                        isSelected ? "bg-cyan-500/20 text-cyan-400" : "text-slate-300"
+                                    }`}
+                                >
+                                    <Calendar className="w-3 h-3 flex-shrink-0" />
+                                    <span className="truncate">
+                                        {new Date(tle.epoch).toLocaleString()}
+                                    </span>
+                                </button>
+                            );
+                        })}
+                        
+                        {/* Load more indicator */}
+                        {displayCount < filteredTLEs.length && (
+                            <div className="px-3 py-2 text-xs text-slate-500 text-center">
+                                Scroll for more... ({filteredTLEs.length - displayCount} remaining)
+                            </div>
+                        )}
+                        
+                        {filteredTLEs.length === 0 && (
+                            <div className="px-3 py-4 text-sm text-slate-500 text-center">
+                                No results found
+                            </div>
+                        )}
+                    </div>
+                </div>
+            )}
+        </div>
+    );
+};
+
+const SatelliteDialog = ({
+    isOpen,
+    onClose,
+    onSave,
+    editSatellite = null,
+    title = "Add Satellite",
+}) => {
+    // Form state
+    const [formData, setFormData] = useState({
+        name: "",
+        noradId: "",
+        orbitSource: "tle-url",
+        tleSource: "celestrak",
+        tleUrl: "",
+        tleLine1: "",
+        tleLine2: "",
+        tleHistory: [], // Array of {epoch, line1, line2}
+        selectedTleIndex: 0,
+        // Keplerian elements
+        semiMajorAxis: "6878.137", // km (LEO default)
+        eccentricity: "0.0001",
+        inclination: "51.6", // degrees (ISS-like)
+        raan: "0", // Right Ascension of Ascending Node
+        argOfPerigee: "0", // Argument of Perigee
+        meanAnomaly: "0",
+        epoch: new Date().toISOString().slice(0, 16),
+        // Visual
+        color: PRESET_COLORS[0],
+    });
+
+    const [errors, setErrors] = useState({});
+    const [loading, setLoading] = useState(false);
+    const [fetchStatus, setFetchStatus] = useState(null); // 'success', 'error', null
+    const [fetchMessage, setFetchMessage] = useState("");
+    const [showAdvanced, setShowAdvanced] = useState(false);
+
+    // Initialize form when editing
+    useEffect(() => {
+        if (editSatellite) {
+            setFormData({
+                name: editSatellite.name || "",
+                noradId: editSatellite.noradId || "",
+                orbitSource: editSatellite.orbitSource || "tle-manual",
+                tleSource: editSatellite.tleSource || "celestrak",
+                tleUrl: editSatellite.tleUrl || "",
+                tleLine1: editSatellite.tle?.line1 || "",
+                tleLine2: editSatellite.tle?.line2 || "",
+                tleHistory: editSatellite.tleHistory || [],
+                selectedTleIndex: 0,
+                semiMajorAxis: editSatellite.keplerian?.semiMajorAxis?.toString() || "6878.137",
+                eccentricity: editSatellite.keplerian?.eccentricity?.toString() || "0.0001",
+                inclination: editSatellite.keplerian?.inclination?.toString() || "51.6",
+                raan: editSatellite.keplerian?.raan?.toString() || "0",
+                argOfPerigee: editSatellite.keplerian?.argOfPerigee?.toString() || "0",
+                meanAnomaly: editSatellite.keplerian?.meanAnomaly?.toString() || "0",
+                epoch: editSatellite.keplerian?.epoch || new Date().toISOString().slice(0, 16),
+                color: editSatellite.color || PRESET_COLORS[0],
+            });
+        } else {
+            // Reset form for new satellite
+            setFormData({
+                name: "",
+                noradId: "",
+                orbitSource: "tle-url",
+                tleSource: "celestrak",
+                tleUrl: "",
+                tleLine1: "",
+                tleLine2: "",
+                tleHistory: [],
+                selectedTleIndex: 0,
+                semiMajorAxis: "6878.137",
+                eccentricity: "0.0001",
+                inclination: "51.6",
+                raan: "0",
+                argOfPerigee: "0",
+                meanAnomaly: "0",
+                epoch: new Date().toISOString().slice(0, 16),
+                color: PRESET_COLORS[0],
+            });
+        }
+        setErrors({});
+        setFetchStatus(null);
+        setFetchMessage("");
+    }, [editSatellite, isOpen]);
+
+    // Build TLE URL based on source and satellite name
+    const buildTleUrl = () => {
+        const source = TLE_SOURCES.find(s => s.id === formData.tleSource);
+        if (!source || source.id === "custom") return formData.tleUrl;
+        
+        let url = source.urlTemplate;
+        url = url.replace("{SATELLITE_NAME}", encodeURIComponent(formData.name));
+        url = url.replace("{NORAD_ID}", formData.noradId);
+        return url;
+    };
+
+    // Fetch TLE from URL
+    const fetchTLE = async () => {
+        const url = formData.tleSource === "custom" ? formData.tleUrl : buildTleUrl();
+        
+        if (!url) {
+            setFetchStatus("error");
+            setFetchMessage("Please enter a valid URL");
+            return;
+        }
+
+        if (!formData.name.trim()) {
+            setFetchStatus("error");
+            setFetchMessage("Please enter satellite name first");
+            return;
+        }
+
+        setLoading(true);
+        setFetchStatus(null);
+        setFetchMessage("");
+
+        try {
+            let text;
+            
+            // Use Electron IPC if available (bypasses CORS), otherwise use fetch
+            if (window.electronAPI?.fetchTLE) {
+                const result = await window.electronAPI.fetchTLE(url);
+                if (!result.success) {
+                    throw new Error(result.error);
+                }
+                text = result.data;
+            } else {
+                // Fallback to regular fetch (may have CORS issues)
+                const response = await fetch(url);
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                }
+                text = await response.text();
+            }
+
+            const lines = text.split('\n').map(l => l.trimEnd()).filter(l => l.trim());
+
+            // Parse all TLEs from the file (3-line format: name, line1, line2)
+            const allTLEs = [];
+            for (let i = 0; i < lines.length; i++) {
+                const line = lines[i].trim();
+                
+                // Check if this line looks like a TLE line 1
+                if (line.startsWith("1 ") && i + 1 < lines.length) {
+                    const line1 = line;
+                    const line2 = lines[i + 1].trim();
+                    
+                    // Get the name from the previous line (if exists and doesn't start with 1 or 2)
+                    let name = "";
+                    if (i > 0) {
+                        const prevLine = lines[i - 1].trim();
+                        if (!prevLine.startsWith("1 ") && !prevLine.startsWith("2 ")) {
+                            name = prevLine;
+                        }
+                    }
+                    
+                    if (line2.startsWith("2 ")) {
+                        // Extract epoch from line1 (format: YYDDD.DDDDDDDD)
+                        // TLE Line 1 columns 19-32 contain the epoch
+                        const epochStr = line1.substring(18, 32).trim();
+                        const epochYear = parseInt(epochStr.substring(0, 2));
+                        const epochDayFull = parseFloat(epochStr.substring(2));
+                        
+                        // Separate integer day and fractional part
+                        const epochDayInt = Math.floor(epochDayFull);
+                        const epochDayFrac = epochDayFull - epochDayInt;
+                        
+                        // Convert fractional day to hours, minutes, seconds, milliseconds
+                        const totalSecondsFloat = epochDayFrac * 86400; // 24 * 60 * 60
+                        const hours = Math.floor(totalSecondsFloat / 3600);
+                        const minutes = Math.floor((totalSecondsFloat % 3600) / 60);
+                        const seconds = Math.floor(totalSecondsFloat % 60);
+                        const milliseconds = Math.round((totalSecondsFloat % 1) * 1000);
+                        
+                        const fullYear = epochYear > 56 ? 1900 + epochYear : 2000 + epochYear;
+                        
+                        // Create date using UTC components directly
+                        const epochDate = new Date(Date.UTC(
+                            fullYear,
+                            0, // January
+                            epochDayInt, // Day of year (1-based works here since Jan 1 = day 1)
+                            hours,
+                            minutes,
+                            seconds,
+                            milliseconds
+                        ));
+
+                        allTLEs.push({
+                            name: name.trim(),
+                            line1,
+                            line2,
+                            epoch: epochDate.toISOString(),
+                            noradId: line1.substring(2, 7).trim(),
+                        });
+                        
+                        i++; // Skip line2 since we already processed it
+                    }
+                }
+            }
+
+            if (allTLEs.length === 0) {
+                throw new Error("No valid TLE data found in the file");
+            }
+
+            // Search for the satellite by name (case-insensitive, partial match)
+            const searchName = formData.name.trim().toUpperCase();
+            const matchingTLEs = allTLEs.filter(tle => 
+                tle.name.toUpperCase().includes(searchName) ||
+                searchName.includes(tle.name.toUpperCase().replace(/\s+/g, ''))
+            );
+
+            if (formData.orbitSource === "tle-url-history") {
+                // Return all matching TLEs as history
+                if (matchingTLEs.length > 0) {
+                    // Sort by epoch (newest first)
+                    matchingTLEs.sort((a, b) => new Date(b.epoch) - new Date(a.epoch));
+                    
+                    setFormData(prev => ({
+                        ...prev,
+                        tleHistory: matchingTLEs,
+                        selectedTleIndex: 0,
+                        tleLine1: matchingTLEs[0].line1,
+                        tleLine2: matchingTLEs[0].line2,
+                        noradId: matchingTLEs[0].noradId,
+                        tleUrl: url,
+                    }));
+                    setFetchStatus("success");
+                    setFetchMessage(`Found ${matchingTLEs.length} TLE records for "${formData.name}"`);
+                } else {
+                    // Show all available satellites
+                    const availableNames = [...new Set(allTLEs.map(t => t.name))].slice(0, 10);
+                    throw new Error(`Satellite "${formData.name}" not found. Available: ${availableNames.join(", ")}${allTLEs.length > 10 ? "..." : ""}`);
+                }
+            } else {
+                // Single TLE - get the first (or newest) match
+                if (matchingTLEs.length > 0) {
+                    // Sort by epoch and get the newest
+                    matchingTLEs.sort((a, b) => new Date(b.epoch) - new Date(a.epoch));
+                    const tle = matchingTLEs[0];
+
+                    setFormData(prev => ({
+                        ...prev,
+                        tleLine1: tle.line1,
+                        tleLine2: tle.line2,
+                        noradId: tle.noradId,
+                        tleUrl: url,
+                    }));
+                    setFetchStatus("success");
+                    setFetchMessage(`TLE found for "${tle.name}" (Epoch: ${new Date(tle.epoch).toLocaleDateString()})`);
+                } else {
+                    // Show all available satellites
+                    const availableNames = [...new Set(allTLEs.map(t => t.name))].slice(0, 10);
+                    throw new Error(`Satellite "${formData.name}" not found. Available: ${availableNames.join(", ")}${allTLEs.length > 10 ? "..." : ""}`);
+                }
+            }
+        } catch (error) {
+            console.error("Failed to fetch TLE:", error);
+            setFetchStatus("error");
+            setFetchMessage(error.message || "Failed to fetch TLE");
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    // Handle input changes
+    const handleChange = (field, value) => {
+        setFormData(prev => ({ ...prev, [field]: value }));
+        if (errors[field]) {
+            setErrors(prev => ({ ...prev, [field]: null }));
+        }
+    };
+
+    // Select TLE from history
+    const selectTleFromHistory = (index) => {
+        const tle = formData.tleHistory[index];
+        if (tle) {
+            setFormData(prev => ({
+                ...prev,
+                selectedTleIndex: index,
+                tleLine1: tle.line1,
+                tleLine2: tle.line2,
+            }));
+        }
+    };
+
+    // Validate form
+    const validateForm = () => {
+        const newErrors = {};
+
+        if (!formData.name.trim()) {
+            newErrors.name = "Name is required";
+        }
+
+        if (formData.orbitSource === "tle-url" || formData.orbitSource === "tle-url-history" || formData.orbitSource === "tle-manual") {
+            if (!formData.tleLine1.trim()) {
+                newErrors.tleLine1 = "TLE Line 1 is required";
+            } else if (!formData.tleLine1.startsWith("1 ")) {
+                newErrors.tleLine1 = "Invalid TLE Line 1 format";
+            }
+
+            if (!formData.tleLine2.trim()) {
+                newErrors.tleLine2 = "TLE Line 2 is required";
+            } else if (!formData.tleLine2.startsWith("2 ")) {
+                newErrors.tleLine2 = "Invalid TLE Line 2 format";
+            }
+        } else if (formData.orbitSource === "keplerian") {
+            const sma = parseFloat(formData.semiMajorAxis);
+            if (isNaN(sma) || sma <= 6371) {
+                newErrors.semiMajorAxis = "Must be > 6371 km";
+            }
+
+            const ecc = parseFloat(formData.eccentricity);
+            if (isNaN(ecc) || ecc < 0 || ecc >= 1) {
+                newErrors.eccentricity = "Must be 0 ≤ e < 1";
+            }
+
+            const inc = parseFloat(formData.inclination);
+            if (isNaN(inc) || inc < 0 || inc > 180) {
+                newErrors.inclination = "Must be 0-180°";
+            }
+
+            const raanVal = parseFloat(formData.raan);
+            if (isNaN(raanVal) || raanVal < 0 || raanVal > 360) {
+                newErrors.raan = "Must be 0-360°";
+            }
+
+            const aopVal = parseFloat(formData.argOfPerigee);
+            if (isNaN(aopVal) || aopVal < 0 || aopVal > 360) {
+                newErrors.argOfPerigee = "Must be 0-360°";
+            }
+
+            const maVal = parseFloat(formData.meanAnomaly);
+            if (isNaN(maVal) || maVal < 0 || maVal > 360) {
+                newErrors.meanAnomaly = "Must be 0-360°";
+            }
+        }
+
+        setErrors(newErrors);
+        return Object.keys(newErrors).length === 0;
+    };
+
+    // Handle save
+    const handleSave = () => {
+        if (!validateForm()) return;
+
+        const satelliteData = {
+            id: editSatellite?.id || `sat-${Date.now()}`,
+            name: formData.name.trim(),
+            noradId: formData.noradId || extractNoradId(formData.tleLine1),
+            orbitSource: formData.orbitSource,
+            tleSource: formData.tleSource,
+            tleUrl: formData.tleUrl,
+            color: formData.color,
+            isActive: true,
+            isVisible: true,
+        };
+
+        // Add TLE or Keplerian based on source
+        if (formData.orbitSource !== "keplerian") {
+            satelliteData.tle = {
+                line1: formData.tleLine1.trim(),
+                line2: formData.tleLine2.trim(),
+            };
+            if (formData.tleHistory.length > 0) {
+                satelliteData.tleHistory = formData.tleHistory;
+            }
+        } else {
+            satelliteData.keplerian = {
+                semiMajorAxis: parseFloat(formData.semiMajorAxis),
+                eccentricity: parseFloat(formData.eccentricity),
+                inclination: parseFloat(formData.inclination),
+                raan: parseFloat(formData.raan),
+                argOfPerigee: parseFloat(formData.argOfPerigee),
+                meanAnomaly: parseFloat(formData.meanAnomaly),
+                epoch: formData.epoch,
+            };
+            // Convert Keplerian to TLE for compatibility
+            satelliteData.tle = keplerianToTLE(satelliteData.keplerian, formData.name);
+        }
+
+        onSave(satelliteData, !!editSatellite);
+        onClose();
+    };
+
+    // Extract NORAD ID from TLE line 1
+    const extractNoradId = (line1) => {
+        if (!line1 || line1.length < 7) return "";
+        return line1.substring(2, 7).trim();
+    };
+
+    // Convert Keplerian elements to TLE (simplified)
+    const keplerianToTLE = (kep, name) => {
+        // This is a simplified conversion - real conversion requires more complex calculations
+        const epochDate = new Date(kep.epoch);
+        const year = epochDate.getFullYear() % 100;
+        const startOfYear = new Date(epochDate.getFullYear(), 0, 1);
+        const dayOfYear = (epochDate - startOfYear) / 86400000 + 1;
+        
+        const epochStr = `${year.toString().padStart(2, '0')}${dayOfYear.toFixed(8).padStart(12, '0')}`;
+        
+        // Mean motion (revs/day) from semi-major axis
+        const mu = 398600.4418; // km³/s²
+        const n = Math.sqrt(mu / Math.pow(kep.semiMajorAxis, 3)) * 86400 / (2 * Math.PI);
+        
+        const line1 = `1 99999U 00000A   ${epochStr}  .00000000  00000-0  00000-0 0    0`;
+        const line2 = `2 99999 ${kep.inclination.toFixed(4).padStart(8)} ${kep.raan.toFixed(4).padStart(8)} ${(kep.eccentricity * 10000000).toFixed(0).padStart(7, '0')} ${kep.argOfPerigee.toFixed(4).padStart(8)} ${kep.meanAnomaly.toFixed(4).padStart(8)} ${n.toFixed(8).padStart(11)}    0`;
+        
+        return { line1, line2 };
+    };
+
+    if (!isOpen) return null;
+
+    const dialogContent = (
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center">
+            {/* Backdrop */}
+            <div
+                className="absolute inset-0 bg-black/60 backdrop-blur-sm"
+                onClick={onClose}
+            />
+
+            {/* Dialog */}
+            <div className="relative bg-slate-900 border border-slate-700 rounded-lg shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-hidden">
+                {/* Header */}
+                <div className="flex items-center justify-between px-4 py-3 border-b border-slate-700 bg-slate-800/50">
+                    <div className="flex items-center gap-2">
+                        <Satellite className="w-5 h-5 text-cyan-400" />
+                        <h2 className="text-lg font-semibold text-white">{title}</h2>
+                    </div>
+                    <button
+                        onClick={onClose}
+                        className="p-1 hover:bg-slate-700 rounded-lg transition-colors"
+                    >
+                        <X className="w-5 h-5 text-slate-400" />
+                    </button>
+                </div>
+
+                {/* Content */}
+                <div className="p-4 overflow-y-auto max-h-[calc(90vh-120px)] space-y-4">
+                    {/* Basic Info */}
+                    <div className="space-y-3">
+                        <h3 className="text-sm font-medium text-slate-300 flex items-center gap-2">
+                            <Satellite className="w-4 h-4" />
+                            Basic Information
+                        </h3>
+
+                        <div className="grid grid-cols-2 gap-3">
+                            {/* Name */}
+                            <div>
+                                <label className="block text-xs text-slate-400 mb-1">
+                                    Satellite Name *
+                                </label>
+                                <input
+                                    type="text"
+                                    value={formData.name}
+                                    onChange={(e) => handleChange("name", e.target.value)}
+                                    placeholder="e.g., LAPAN-A2"
+                                    className={`w-full px-3 py-2 bg-slate-800 border rounded-lg text-white text-sm
+                                        ${errors.name ? "border-red-500" : "border-slate-600"}
+                                        focus:outline-none focus:border-cyan-500`}
+                                />
+                                {errors.name && (
+                                    <p className="text-xs text-red-400 mt-1">{errors.name}</p>
+                                )}
+                            </div>
+
+                            {/* NORAD ID */}
+                            <div>
+                                <label className="block text-xs text-slate-400 mb-1">
+                                    NORAD ID
+                                </label>
+                                <input
+                                    type="text"
+                                    value={formData.noradId}
+                                    onChange={(e) => handleChange("noradId", e.target.value)}
+                                    placeholder="e.g., 40931"
+                                    className="w-full px-3 py-2 bg-slate-800 border border-slate-600 rounded-lg text-white text-sm focus:outline-none focus:border-cyan-500"
+                                />
+                            </div>
+                        </div>
+
+                        {/* Color */}
+                        <div>
+                            <label className="block text-xs text-slate-400 mb-1">
+                                <Palette className="w-3 h-3 inline mr-1" />
+                                Color
+                            </label>
+                            <div className="flex gap-2 flex-wrap">
+                                {PRESET_COLORS.map((color) => (
+                                    <button
+                                        key={color.name}
+                                        onClick={() => handleChange("color", color)}
+                                        className={`w-8 h-8 rounded-lg border-2 transition-all ${
+                                            formData.color.name === color.name
+                                                ? "border-white scale-110"
+                                                : "border-transparent hover:border-slate-500"
+                                        }`}
+                                        style={{
+                                            backgroundColor: `rgb(${color.r * 255}, ${color.g * 255}, ${color.b * 255})`,
+                                        }}
+                                        title={color.name}
+                                    />
+                                ))}
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* Orbit Source Selection */}
+                    <div className="space-y-3">
+                        <h3 className="text-sm font-medium text-slate-300 flex items-center gap-2">
+                            <Globe className="w-4 h-4" />
+                            Orbit Elements Source
+                        </h3>
+
+                        <div className="grid grid-cols-2 gap-2">
+                            {ORBIT_SOURCE_TYPES.map((source) => {
+                                const Icon = source.icon;
+                                return (
+                                    <button
+                                        key={source.id}
+                                        onClick={() => handleChange("orbitSource", source.id)}
+                                        className={`flex items-start gap-2 p-3 rounded-lg border transition-all text-left ${
+                                            formData.orbitSource === source.id
+                                                ? "border-cyan-500 bg-cyan-500/10"
+                                                : "border-slate-600 hover:border-slate-500"
+                                        }`}
+                                    >
+                                        <Icon className={`w-4 h-4 mt-0.5 ${
+                                            formData.orbitSource === source.id
+                                                ? "text-cyan-400"
+                                                : "text-slate-400"
+                                        }`} />
+                                        <div>
+                                            <div className="text-sm text-white">{source.name}</div>
+                                            <div className="text-xs text-slate-500">{source.description}</div>
+                                        </div>
+                                    </button>
+                                );
+                            })}
+                        </div>
+                    </div>
+
+                    {/* TLE from URL */}
+                    {(formData.orbitSource === "tle-url" || formData.orbitSource === "tle-url-history") && (
+                        <div className="space-y-3 p-3 bg-slate-800/50 rounded-lg border border-slate-700">
+                            <h4 className="text-sm font-medium text-slate-300">TLE Source</h4>
+
+                            {/* Source selection */}
+                            <div className="grid grid-cols-2 gap-2">
+                                {TLE_SOURCES.map((source) => (
+                                    <button
+                                        key={source.id}
+                                        onClick={() => handleChange("tleSource", source.id)}
+                                        className={`px-3 py-2 rounded-lg border text-sm transition-all ${
+                                            formData.tleSource === source.id
+                                                ? "border-cyan-500 bg-cyan-500/10 text-cyan-400"
+                                                : "border-slate-600 text-slate-300 hover:border-slate-500"
+                                        }`}
+                                    >
+                                        {source.name}
+                                    </button>
+                                ))}
+                            </div>
+
+                            {/* Custom URL input */}
+                            {formData.tleSource === "custom" && (
+                                <div>
+                                    <label className="block text-xs text-slate-400 mb-1">
+                                        TLE URL
+                                    </label>
+                                    <input
+                                        type="text"
+                                        value={formData.tleUrl}
+                                        onChange={(e) => handleChange("tleUrl", e.target.value)}
+                                        placeholder="https://..."
+                                        className="w-full px-3 py-2 bg-slate-800 border border-slate-600 rounded-lg text-white text-sm focus:outline-none focus:border-cyan-500"
+                                    />
+                                </div>
+                            )}
+
+                            {/* Preview URL */}
+                            {formData.tleSource !== "custom" && formData.name && (
+                                <div className="text-xs text-slate-500 break-all">
+                                    URL: {buildTleUrl()}
+                                </div>
+                            )}
+
+                            {/* Fetch button */}
+                            <button
+                                onClick={fetchTLE}
+                                disabled={loading || (!formData.name && formData.tleSource !== "custom")}
+                                className="flex items-center gap-2 px-4 py-2 bg-cyan-600 hover:bg-cyan-500 disabled:bg-slate-600 disabled:cursor-not-allowed text-white rounded-lg text-sm transition-colors"
+                            >
+                                {loading ? (
+                                    <Loader2 className="w-4 h-4 animate-spin" />
+                                ) : (
+                                    <Download className="w-4 h-4" />
+                                )}
+                                {loading ? "Fetching..." : "Fetch TLE"}
+                            </button>
+
+                            {/* Status message */}
+                            {fetchStatus && (
+                                <div className={`flex items-center gap-2 text-sm ${
+                                    fetchStatus === "success" ? "text-green-400" : "text-red-400"
+                                }`}>
+                                    {fetchStatus === "success" ? (
+                                        <CheckCircle className="w-4 h-4" />
+                                    ) : (
+                                        <AlertCircle className="w-4 h-4" />
+                                    )}
+                                    {fetchMessage}
+                                </div>
+                            )}
+
+                            {/* TLE History selection */}
+                            {formData.orbitSource === "tle-url-history" && formData.tleHistory.length > 0 && (
+                                <TleHistoryPicker
+                                    tleHistory={formData.tleHistory}
+                                    selectedIndex={formData.selectedTleIndex}
+                                    onSelect={selectTleFromHistory}
+                                />
+                            )}
+                        </div>
+                    )}
+
+                    {/* Manual TLE Input */}
+                    {(formData.orbitSource === "tle-manual" || formData.tleLine1) && formData.orbitSource !== "keplerian" && (
+                        <div className="space-y-3 p-3 bg-slate-800/50 rounded-lg border border-slate-700">
+                            <h4 className="text-sm font-medium text-slate-300">TLE Data</h4>
+
+                            <div>
+                                <label className="block text-xs text-slate-400 mb-1">
+                                    Line 1 *
+                                </label>
+                                <input
+                                    type="text"
+                                    value={formData.tleLine1}
+                                    onChange={(e) => handleChange("tleLine1", e.target.value)}
+                                    placeholder="1 NNNNNC NNNNNAAA NNNNN.NNNNNNNN +.NNNNNNNN +NNNNN-N +NNNNN-N N NNNNN"
+                                    className={`w-full px-3 py-2 bg-slate-800 border rounded-lg text-white text-sm font-mono
+                                        ${errors.tleLine1 ? "border-red-500" : "border-slate-600"}
+                                        focus:outline-none focus:border-cyan-500`}
+                                />
+                                {errors.tleLine1 && (
+                                    <p className="text-xs text-red-400 mt-1">{errors.tleLine1}</p>
+                                )}
+                            </div>
+
+                            <div>
+                                <label className="block text-xs text-slate-400 mb-1">
+                                    Line 2 *
+                                </label>
+                                <input
+                                    type="text"
+                                    value={formData.tleLine2}
+                                    onChange={(e) => handleChange("tleLine2", e.target.value)}
+                                    placeholder="2 NNNNN NNN.NNNN NNN.NNNN NNNNNNN NNN.NNNN NNN.NNNN NN.NNNNNNNNNNNNNN"
+                                    className={`w-full px-3 py-2 bg-slate-800 border rounded-lg text-white text-sm font-mono
+                                        ${errors.tleLine2 ? "border-red-500" : "border-slate-600"}
+                                        focus:outline-none focus:border-cyan-500`}
+                                />
+                                {errors.tleLine2 && (
+                                    <p className="text-xs text-red-400 mt-1">{errors.tleLine2}</p>
+                                )}
+                            </div>
+                        </div>
+                    )}
+
+                    {/* Keplerian Elements */}
+                    {formData.orbitSource === "keplerian" && (
+                        <div className="space-y-3 p-3 bg-slate-800/50 rounded-lg border border-slate-700">
+                            <h4 className="text-sm font-medium text-slate-300">Keplerian Elements</h4>
+
+                            <div className="grid grid-cols-2 gap-3">
+                                {/* Semi-major axis */}
+                                <div>
+                                    <label className="block text-xs text-slate-400 mb-1">
+                                        Semi-major Axis (km) *
+                                    </label>
+                                    <input
+                                        type="number"
+                                        step="0.001"
+                                        value={formData.semiMajorAxis}
+                                        onChange={(e) => handleChange("semiMajorAxis", e.target.value)}
+                                        className={`w-full px-3 py-2 bg-slate-800 border rounded-lg text-white text-sm
+                                            ${errors.semiMajorAxis ? "border-red-500" : "border-slate-600"}
+                                            focus:outline-none focus:border-cyan-500`}
+                                    />
+                                    {errors.semiMajorAxis && (
+                                        <p className="text-xs text-red-400 mt-1">{errors.semiMajorAxis}</p>
+                                    )}
+                                </div>
+
+                                {/* Eccentricity */}
+                                <div>
+                                    <label className="block text-xs text-slate-400 mb-1">
+                                        Eccentricity *
+                                    </label>
+                                    <input
+                                        type="number"
+                                        step="0.0001"
+                                        value={formData.eccentricity}
+                                        onChange={(e) => handleChange("eccentricity", e.target.value)}
+                                        className={`w-full px-3 py-2 bg-slate-800 border rounded-lg text-white text-sm
+                                            ${errors.eccentricity ? "border-red-500" : "border-slate-600"}
+                                            focus:outline-none focus:border-cyan-500`}
+                                    />
+                                    {errors.eccentricity && (
+                                        <p className="text-xs text-red-400 mt-1">{errors.eccentricity}</p>
+                                    )}
+                                </div>
+
+                                {/* Inclination */}
+                                <div>
+                                    <label className="block text-xs text-slate-400 mb-1">
+                                        Inclination (°) *
+                                    </label>
+                                    <input
+                                        type="number"
+                                        step="0.01"
+                                        value={formData.inclination}
+                                        onChange={(e) => handleChange("inclination", e.target.value)}
+                                        className={`w-full px-3 py-2 bg-slate-800 border rounded-lg text-white text-sm
+                                            ${errors.inclination ? "border-red-500" : "border-slate-600"}
+                                            focus:outline-none focus:border-cyan-500`}
+                                    />
+                                    {errors.inclination && (
+                                        <p className="text-xs text-red-400 mt-1">{errors.inclination}</p>
+                                    )}
+                                </div>
+
+                                {/* RAAN */}
+                                <div>
+                                    <label className="block text-xs text-slate-400 mb-1">
+                                        RAAN (°) *
+                                    </label>
+                                    <input
+                                        type="number"
+                                        step="0.01"
+                                        value={formData.raan}
+                                        onChange={(e) => handleChange("raan", e.target.value)}
+                                        className={`w-full px-3 py-2 bg-slate-800 border rounded-lg text-white text-sm
+                                            ${errors.raan ? "border-red-500" : "border-slate-600"}
+                                            focus:outline-none focus:border-cyan-500`}
+                                    />
+                                    {errors.raan && (
+                                        <p className="text-xs text-red-400 mt-1">{errors.raan}</p>
+                                    )}
+                                </div>
+
+                                {/* Argument of Perigee */}
+                                <div>
+                                    <label className="block text-xs text-slate-400 mb-1">
+                                        Arg. of Perigee (°) *
+                                    </label>
+                                    <input
+                                        type="number"
+                                        step="0.01"
+                                        value={formData.argOfPerigee}
+                                        onChange={(e) => handleChange("argOfPerigee", e.target.value)}
+                                        className={`w-full px-3 py-2 bg-slate-800 border rounded-lg text-white text-sm
+                                            ${errors.argOfPerigee ? "border-red-500" : "border-slate-600"}
+                                            focus:outline-none focus:border-cyan-500`}
+                                    />
+                                    {errors.argOfPerigee && (
+                                        <p className="text-xs text-red-400 mt-1">{errors.argOfPerigee}</p>
+                                    )}
+                                </div>
+
+                                {/* Mean Anomaly */}
+                                <div>
+                                    <label className="block text-xs text-slate-400 mb-1">
+                                        Mean Anomaly (°) *
+                                    </label>
+                                    <input
+                                        type="number"
+                                        step="0.01"
+                                        value={formData.meanAnomaly}
+                                        onChange={(e) => handleChange("meanAnomaly", e.target.value)}
+                                        className={`w-full px-3 py-2 bg-slate-800 border rounded-lg text-white text-sm
+                                            ${errors.meanAnomaly ? "border-red-500" : "border-slate-600"}
+                                            focus:outline-none focus:border-cyan-500`}
+                                    />
+                                    {errors.meanAnomaly && (
+                                        <p className="text-xs text-red-400 mt-1">{errors.meanAnomaly}</p>
+                                    )}
+                                </div>
+                            </div>
+
+                            {/* Epoch */}
+                            <div>
+                                <label className="block text-xs text-slate-400 mb-1">
+                                    Epoch *
+                                </label>
+                                <input
+                                    type="datetime-local"
+                                    value={formData.epoch}
+                                    onChange={(e) => handleChange("epoch", e.target.value)}
+                                    className="w-full px-3 py-2 bg-slate-800 border border-slate-600 rounded-lg text-white text-sm focus:outline-none focus:border-cyan-500"
+                                />
+                            </div>
+                        </div>
+                    )}
+                </div>
+
+                {/* Footer */}
+                <div className="flex items-center justify-end gap-2 px-4 py-3 border-t border-slate-700 bg-slate-800/50">
+                    <button
+                        onClick={onClose}
+                        className="px-4 py-2 text-slate-300 hover:text-white hover:bg-slate-700 rounded-lg text-sm transition-colors"
+                    >
+                        Cancel
+                    </button>
+                    <button
+                        onClick={handleSave}
+                        className="px-4 py-2 bg-cyan-600 hover:bg-cyan-500 text-white rounded-lg text-sm transition-colors"
+                    >
+                        {editSatellite ? "Update" : "Add"} Satellite
+                    </button>
+                </div>
+            </div>
+        </div>
+    );
+
+    return createPortal(dialogContent, document.body);
+};
+
+export default SatelliteDialog;

@@ -21,7 +21,7 @@ import {
 
 import TreeNode from "./TreeNode";
 import ContextMenu from "./ContextMenu";
-import { GroundStationDialog } from "../ui";
+import { GroundStationDialog, SatelliteDialog } from "../ui";
 
 import { useSatelliteStore, useGroundStationStore, useTargetAreaStore } from "../../stores";
 
@@ -33,6 +33,7 @@ const ObjectTree = () => {
     const toggleSatelliteVisibility = useSatelliteStore((state) => state.toggleVisibility);
     const removeSatellite = useSatelliteStore((state) => state.removeSatellite);
     const updateSatellite = useSatelliteStore((state) => state.updateSatellite);
+    const addSatellite = useSatelliteStore((state) => state.addSatellite);
 
     const groundStations = useGroundStationStore((state) => state.groundStations);
     const selectedStationId = useGroundStationStore((state) => state.selectedStationId);
@@ -67,6 +68,10 @@ const ObjectTree = () => {
     const [gsDialogOpen, setGsDialogOpen] = useState(false);
     const [editingStation, setEditingStation] = useState(null);
 
+    // Satellite dialog state
+    const [satDialogOpen, setSatDialogOpen] = useState(false);
+    const [editingSatellite, setEditingSatellite] = useState(null);
+
     // Close context menu
     const closeContextMenu = () => setContextMenu(null);
 
@@ -77,6 +82,27 @@ const ObjectTree = () => {
         } else {
             addGroundStation(stationData);
         }
+    };
+
+    // Handle save satellite
+    const handleSaveSatellite = (satelliteData, isEdit) => {
+        if (isEdit) {
+            updateSatellite(satelliteData.id, satelliteData);
+        } else {
+            addSatellite(satelliteData);
+        }
+    };
+
+    // Open add satellite dialog
+    const openAddSatDialog = () => {
+        setEditingSatellite(null);
+        setSatDialogOpen(true);
+    };
+
+    // Open edit satellite dialog
+    const openEditSatDialog = (sat) => {
+        setEditingSatellite(sat);
+        setSatDialogOpen(true);
     };
 
     // Open add ground station dialog
@@ -93,6 +119,13 @@ const ObjectTree = () => {
 
     // Satellite context menu items
     const getSatelliteContextMenu = (sat) => [
+        {
+            label: "Edit Satellite",
+            icon: <Edit className="w-4 h-4" />,
+            onClick: () => {
+                openEditSatDialog(sat);
+            },
+        },
         {
             label: "Add Sensor",
             icon: <Camera className="w-4 h-4" />,
@@ -144,8 +177,7 @@ const ObjectTree = () => {
         {
             label: "Properties",
             onClick: () => {
-                // TODO: Open properties panel
-                console.log("Properties for:", sat.name);
+                openEditSatDialog(sat);
             },
         },
         { separator: true },
@@ -268,7 +300,7 @@ const ObjectTree = () => {
                         className="p-0.5 hover:bg-slate-700 rounded text-slate-400 hover:text-white"
                         onClick={(e) => {
                             e.stopPropagation();
-                            // TODO: Open add satellite dialog
+                            openAddSatDialog();
                         }}
                         title="Add Satellite"
                     >
@@ -472,6 +504,15 @@ const ObjectTree = () => {
                 onSave={handleSaveGroundStation}
                 editStation={editingStation}
                 title={editingStation ? "Edit Ground Station" : "Add Ground Station"}
+            />
+
+            {/* Satellite Dialog */}
+            <SatelliteDialog
+                isOpen={satDialogOpen}
+                onClose={() => setSatDialogOpen(false)}
+                onSave={handleSaveSatellite}
+                editSatellite={editingSatellite}
+                title={editingSatellite ? "Edit Satellite" : "Add Satellite"}
             />
         </div>
     );
