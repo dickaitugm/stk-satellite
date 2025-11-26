@@ -1,6 +1,10 @@
 /**
  * Time Store
  * Manages simulation time and playback controls
+ * 
+ * Modes:
+ * - realtime: Time follows real clock, updates every second automatically
+ * - simulation: Time is paused, only advances when Play is pressed with playback speed
  */
 
 import { create } from 'zustand';
@@ -11,13 +15,41 @@ export const useTimeStore = create((set, get) => ({
   startTime: new Date(),
   endTime: new Date(Date.now() + 24 * 60 * 60 * 1000), // +24 hours
   
-  // Playback controls
+  // Mode: 'realtime' or 'simulation'
+  mode: 'realtime',
+  
+  // Playback controls (only used in simulation mode)
   isPlaying: false,
   playbackSpeed: 1, // 1x, 2x, 4x, 10x, 60x, etc.
   timeStep: 1000, // ms per update (1 second)
   
+  // For realtime mode - track last update time
+  lastRealtimeUpdate: Date.now(),
+  
   // Available playback speeds
   availableSpeeds: [0.1, 0.5, 1, 2, 5, 10, 30, 60, 300, 600],
+  
+  // Mode switching
+  setMode: (mode) => {
+    const now = new Date();
+    if (mode === 'realtime') {
+      // Switch to realtime - sync to current time
+      set({ 
+        mode, 
+        currentTime: now,
+        isPlaying: false,
+        lastRealtimeUpdate: Date.now()
+      });
+    } else {
+      // Switch to simulation - pause at current time
+      set({ 
+        mode, 
+        isPlaying: false,
+        startTime: now,
+        currentTime: now
+      });
+    }
+  },
   
   // Actions
   setCurrentTime: (time) => set({ 
@@ -81,6 +113,17 @@ export const useTimeStore = create((set, get) => ({
   
   // Tick function for animation loop
   tick: () => set((state) => {
+    const now = Date.now();
+    
+    if (state.mode === 'realtime') {
+      // Realtime mode: sync to actual clock
+      return { 
+        currentTime: new Date(),
+        lastRealtimeUpdate: now
+      };
+    }
+    
+    // Simulation mode: only advance if playing
     if (!state.isPlaying) return state;
     
     const newTime = new Date(
@@ -106,7 +149,9 @@ export const useTimeStore = create((set, get) => ({
       startTime: now,
       endTime: new Date(now.getTime() + 24 * 60 * 60 * 1000),
       isPlaying: false,
-      playbackSpeed: 1
+      playbackSpeed: 1,
+      mode: 'realtime',
+      lastRealtimeUpdate: Date.now()
     });
   },
   
@@ -123,5 +168,11 @@ export const useTimeStore = create((set, get) => ({
     const minutes = Math.floor((elapsed % 3600000) / 60000);
     const seconds = Math.floor((elapsed % 60000) / 1000);
     return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+  },
+  
+  // Get mode label
+  getModeLabel: () => {
+    const mode = get().mode;
+    return mode === 'realtime' ? 'REALTIME' : 'SIMULATION';
   }
 }));

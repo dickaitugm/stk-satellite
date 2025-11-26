@@ -235,10 +235,46 @@ const Globe2D = ({ onMouseMove }) => {
   }, [groundStations, getVisibleStations]);
 
   // Update satellite position with animation
+  // Using direct store access via getState() to avoid stale closure issues
+  const lastTickRef = useRef(Date.now());
+  
   const updateSatelliteMarker = useCallback(() => {
     if (!wwdRef.current || !satelliteLayerRef.current) return;
     
-    const time = currentTime;
+    // Read current state directly from stores to avoid stale closures
+    const { currentTime, isPlaying, tick, mode, timeStep } = useTimeStore.getState();
+    const { satellites, selectedSatelliteId, calculatePosition, updatePosition } = useSatelliteStore.getState();
+    
+    const now = Date.now();
+    const elapsed = now - lastTickRef.current;
+    
+    // Tick interval: 1 second for realtime, timeStep for simulation
+    const tickInterval = mode === 'realtime' ? 1000 : timeStep;
+    
+    // For realtime mode: update time every ~1000ms (1 second)
+    // For simulation mode: update at timeStep intervals when playing
+    let shouldTick = false;
+    
+    if (mode === 'realtime') {
+      // Realtime: tick every second to sync with real clock
+      if (elapsed >= tickInterval) {
+        shouldTick = true;
+        lastTickRef.current = now;
+      }
+    } else {
+      // Simulation: tick at timeStep intervals if playing
+      if (isPlaying && elapsed >= tickInterval) {
+        shouldTick = true;
+        lastTickRef.current = now;
+      }
+    }
+    
+    if (shouldTick) {
+      tick();
+    }
+    
+    // Get the updated time after potential tick
+    const time = useTimeStore.getState().currentTime;
     
     // Update all visible satellites
     satellites.filter(s => s.isVisible).forEach(sat => {
@@ -322,19 +358,23 @@ const Globe2D = ({ onMouseMove }) => {
     
     wwdRef.current.redraw();
     
-    // Continue animation
-    if (isPlaying) {
-      tick();
-    }
+    // Continue animation loop
     animationFrameRef.current = requestAnimationFrame(updateSatelliteMarker);
-  }, [satellites, selectedSatelliteId, currentTime, isPlaying, calculatePosition, updatePosition, tick]);
+  }, []); // No dependencies - reads directly from stores
 
-  // Start satellite animation when WorldWind is ready
+  // Setup layers when satellites are loaded
   useEffect(() => {
     if (wwdRef.current && satellites.length > 0 && !isLoading) {
       createOrbitLayer(wwdRef.current);
       createSatelliteLayer(wwdRef.current);
       createGroundStationLayer(wwdRef.current);
+    }
+  }, [isLoading, satellites.length, createOrbitLayer, createSatelliteLayer, createGroundStationLayer]);
+
+  // Start animation loop - runs continuously, reads state from stores
+  useEffect(() => {
+    if (wwdRef.current && !isLoading) {
+      // Start the animation loop
       updateSatelliteMarker();
       
       return () => {
@@ -343,7 +383,7 @@ const Globe2D = ({ onMouseMove }) => {
         }
       };
     }
-  }, [isLoading, satellites.length, createOrbitLayer, createSatelliteLayer, createGroundStationLayer]);
+  }, [isLoading, updateSatelliteMarker]);
 
   // Update ground stations when they change
   useEffect(() => {
