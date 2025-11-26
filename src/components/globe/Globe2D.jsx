@@ -76,6 +76,12 @@ const Globe2D = ({ onMouseMove }) => {
     const satelliteRenderablesRef = useRef({}); // Store renderables per satellite
     const orbitPathDataRef = useRef({}); // Store orbit path data per satellite {points, endTime, pathRenderable}
 
+    // Throttling refs for performance optimization
+    const lastStoreUpdateRef = useRef(0); // Last time we updated Zustand store
+    const lastOrbitUpdateRef = useRef({}); // Last orbit update time per satellite
+    const STORE_UPDATE_INTERVAL = 100; // Update store every 100ms (10 Hz)
+    const ORBIT_UPDATE_COOLDOWN = 2000; // Minimum 2 seconds between orbit updates per satellite
+
     // State
     const [isLoading, setIsLoading] = useState(true);
     const [range, setRange] = useState(null);
@@ -322,8 +328,11 @@ const Globe2D = ({ onMouseMove }) => {
 
     // Update satellite position with smooth animation
     // Called every frame via requestAnimationFrame
+    // Optimized: throttle store updates, keep visual updates smooth
     const updateSatelliteMarker = useCallback(() => {
         if (!wwdRef.current || !satelliteLayerRef.current) return;
+
+        const now = Date.now();
 
         // Tick time every frame for smooth animation
         // tick() updates currentTime based on mode and playback speed
@@ -337,28 +346,46 @@ const Globe2D = ({ onMouseMove }) => {
         // Get the current time for position calculation
         const time = currentTime;
 
-        // Update all visible satellites - EVERY FRAME for smooth animation
+        // Determine if we should update store (throttled to reduce React re-renders)
+        const shouldUpdateStore = now - lastStoreUpdateRef.current >= STORE_UPDATE_INTERVAL;
+        if (shouldUpdateStore) {
+            lastStoreUpdateRef.current = now;
+        }
+
+        // Update all visible satellites
+        // Visual update: EVERY FRAME for smooth animation
+        // Store update: THROTTLED to 10 Hz for performance
         satellites
             .filter((s) => s.isVisible)
             .forEach((sat) => {
                 const pos = calculatePosition(sat.id, time);
 
                 if (pos) {
-                    // Update position in store
-                    updatePosition(sat.id, pos);
+                    // Update position in store - THROTTLED
+                    if (shouldUpdateStore) {
+                        updatePosition(sat.id, pos);
+                    }
 
-                    // Update current satellite position for info panel (selected satellite)
-                    if (sat.id === selectedSatelliteId) {
+                    // Update current satellite position for info panel - THROTTLED
+                    if (sat.id === selectedSatelliteId && shouldUpdateStore) {
                         setCurrentSatellitePosition(pos);
                     }
 
-                    // Check if orbit path needs update (5 points before end)
-                    if (checkOrbitPathUpdate(sat.id, time) && wwdRef.current) {
+                    // Check if orbit path needs update - with cooldown to prevent spam
+                    const lastOrbitUpdate = lastOrbitUpdateRef.current[sat.id] || 0;
+                    const orbitCooldownPassed = now - lastOrbitUpdate >= ORBIT_UPDATE_COOLDOWN;
+
+                    if (
+                        orbitCooldownPassed &&
+                        checkOrbitPathUpdate(sat.id, time) &&
+                        wwdRef.current
+                    ) {
                         updateOrbitPath(wwdRef.current, sat.id, sat, time);
+                        lastOrbitUpdateRef.current[sat.id] = now;
                         console.log(`🔄 Orbit path updated for ${sat.name}`);
                     }
 
-                    // Coverage circle
+                    // Coverage circle - visual update EVERY FRAME
                     const radiusKm = calculateCoverageRadius(pos.alt);
                     const center = { latitude: pos.lat, longitude: pos.lon };
                     const circleCoords = geodesicCircleCoords(center, radiusKm);
@@ -422,17 +449,19 @@ const Globe2D = ({ onMouseMove }) => {
                             placemark,
                         };
                     } else {
-                        // Update existing renderables
+                        // Update existing renderables - EVERY FRAME for smooth visual
                         satelliteRenderablesRef.current[sat.id].coveragePolygon.boundaries =
                             boundaryLocations;
                         satelliteRenderablesRef.current[sat.id].placemark.position =
                             new WorldWind.Position(pos.lat, pos.lon, 0);
                     }
 
-                    // Update label
-                    satelliteRenderablesRef.current[sat.id].placemark.label = `${
-                        sat.name
-                    }\n${pos.alt.toFixed(1)} km`;
+                    // Update label - THROTTLED to reduce string operations
+                    if (shouldUpdateStore && satelliteRenderablesRef.current[sat.id]) {
+                        satelliteRenderablesRef.current[sat.id].placemark.label = `${
+                            sat.name
+                        }\n${pos.alt.toFixed(1)} km`;
+                    }
                 }
             });
 
