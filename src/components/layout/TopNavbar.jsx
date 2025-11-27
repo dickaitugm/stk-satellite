@@ -35,8 +35,50 @@ const TopNavbar = () => {
   const [inputTime, setInputTime] = useState("");
   const inputRef = useRef(null);
 
+  // State untuk edit scenario name
+  const [isEditingName, setIsEditingName] = useState(false);
+  const [inputName, setInputName] = useState("");
+  const nameInputRef = useRef(null);
+
   // Cek apakah bisa edit waktu (mode simulation dan tidak sedang play)
   const canEditTime = mode === "simulation" && !isPlaying;
+
+  // Handler untuk mulai edit scenario name
+  const handleStartEditName = () => {
+    setInputName(scenarioName);
+    setIsEditingName(true);
+  };
+
+  // Handler untuk submit scenario name
+  const handleSubmitName = () => {
+    const trimmedName = inputName.trim();
+    if (trimmedName && trimmedName !== scenarioName) {
+      useScenarioStore.getState().setName(trimmedName);
+    }
+    setIsEditingName(false);
+  };
+
+  // Handler untuk cancel edit name
+  const handleCancelEditName = () => {
+    setIsEditingName(false);
+  };
+
+  // Handle keyboard events untuk name
+  const handleNameKeyDown = (e) => {
+    if (e.key === "Enter") {
+      handleSubmitName();
+    } else if (e.key === "Escape") {
+      handleCancelEditName();
+    }
+  };
+
+  // Focus input saat mulai edit name
+  useEffect(() => {
+    if (isEditingName && nameInputRef.current) {
+      nameInputRef.current.focus();
+      nameInputRef.current.select();
+    }
+  }, [isEditingName]);
 
   // Handler untuk mulai edit
   const handleStartEdit = () => {
@@ -108,7 +150,22 @@ const TopNavbar = () => {
         <div className="h-6 w-px bg-slate-700 mx-2" />
 
         <div className="text-sm text-slate-300">
-          <span className="font-medium">{scenarioName}</span>
+          {isEditingName ? (
+            <input
+              ref={nameInputRef}
+              type="text"
+              value={inputName}
+              onChange={(e) => setInputName(e.target.value)}
+              onBlur={handleSubmitName}
+              onKeyDown={handleNameKeyDown}
+              className="font-medium bg-slate-800 border border-blue-500 rounded px-2 py-0.5 text-sm text-slate-200 focus:outline-none focus:ring-1 focus:ring-blue-500 w-40"
+              placeholder="Scenario name"
+            />
+          ) : (
+            <span className="font-medium cursor-pointer hover:text-white hover:underline" onClick={handleStartEditName} title="Click to edit scenario name">
+              {scenarioName}
+            </span>
+          )}
           {isDirty && <span className="text-yellow-400 ml-1">*</span>}
         </div>
 
