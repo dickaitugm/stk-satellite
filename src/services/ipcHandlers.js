@@ -156,11 +156,14 @@ export function registerIpcHandlers() {
    * Opens save dialog and writes config data to selected file
    *
    * @param {Object} configData - Configuration data to save
+   * @param {string} scenarioName - Name of the scenario for filename
    * @returns {Promise<{success, filePath?, error?}>}
    */
-  ipcMain.handle("backup-config", async (event, configData) => {
+  ipcMain.handle("backup-config", async (event, configData, scenarioName = "Untitled") => {
     try {
-      const defaultPath = path.join(app.getPath("documents"), `orbitsim-backup-${new Date().toISOString().slice(0, 10)}.json`);
+      // Sanitize scenario name for filename (remove invalid characters)
+      const safeName = scenarioName.replace(/[<>:"/\\|?*]/g, "-").trim() || "Untitled";
+      const defaultPath = path.join(app.getPath("documents"), `orbitsim-${safeName}-${new Date().toISOString().slice(0, 10)}.json`);
 
       const result = await dialog.showSaveDialog({
         title: "Backup Configuration",

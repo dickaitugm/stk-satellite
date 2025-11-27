@@ -76,14 +76,14 @@ contextBridge.exposeInMainWorld("electronAPI", {
    * Backup configuration to JSON file
    * Opens save dialog and writes config data to selected file
    * @param {Object} configData - Configuration data to save
+   * @param {string} scenarioName - Name of the scenario for filename
    * @returns {Promise<{success, filePath?, error?}>}
    */
-  backupConfig: (configData) => ipcRenderer.invoke("backup-config", configData),
-
+  backupConfig: (configData, scenarioName) => ipcRenderer.invoke("backup-config", configData, scenarioName)
   /**
    * Restore configuration from JSON file
    * Opens file dialog and reads config data from selected file
    * @returns {Promise<{success, data?, filePath?, error?}>}
-   */
+   */,
   restoreConfig: () => ipcRenderer.invoke("restore-config"),
 });

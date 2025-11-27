@@ -4,7 +4,7 @@
  */
 
 import React, { useState } from "react";
-import { ChevronLeft, ChevronRight, Layers, FileText, Settings, PanelLeftClose, PanelLeft, Download, Upload, Check, X, Loader2 } from "lucide-react";
+import { ChevronLeft, ChevronRight, Layers, FileText, Settings, PanelLeftClose, PanelLeft, Download, Upload, Check, X, Loader2, FilePlus2, Trash2 } from "lucide-react";
 
 import ObjectTree from "./ObjectTree";
 import { useScenarioStore, useSatelliteStore, useGroundStationStore, useTimeStore } from "../../stores";
@@ -14,9 +14,68 @@ const Sidebar = () => {
   const [activeTab, setActiveTab] = useState("objects"); // 'objects' | 'properties' | 'settings'
   const [backupStatus, setBackupStatus] = useState(null); // null | 'loading' | 'success' | 'error'
   const [statusMessage, setStatusMessage] = useState("");
+  const [confirmAction, setConfirmAction] = useState(null); // null | 'new' | 'clear'
 
   const scenarioName = useScenarioStore((state) => state.name);
   const scenarioDescription = useScenarioStore((state) => state.description);
+
+  // New Scenario handler
+  const handleNewScenario = () => {
+    setConfirmAction("new");
+  };
+
+  // Clear Configuration handler
+  const handleClearConfig = () => {
+    setConfirmAction("clear");
+  };
+
+  // Confirm action handler
+  const handleConfirmAction = () => {
+    if (confirmAction === "new") {
+      // Clear localStorage first to ensure complete removal
+      localStorage.removeItem("satellite-storage");
+      localStorage.removeItem("ground-station-storage");
+      localStorage.removeItem("scenario-storage");
+      localStorage.removeItem("target-area-storage");
+
+      // Reset scenario to default name, but empty satellites and ground stations
+      useScenarioStore.getState().newScenario();
+      useSatelliteStore.setState({ satellites: [], selectedSatelliteId: null, positions: {} });
+      useGroundStationStore.setState({ groundStations: [], selectedStationId: null });
+      useTimeStore.getState().reset();
+
+      setBackupStatus("success");
+      setStatusMessage("New scenario created!");
+    } else if (confirmAction === "clear") {
+      // Clear localStorage first to ensure complete removal
+      localStorage.removeItem("satellite-storage");
+      localStorage.removeItem("ground-station-storage");
+      localStorage.removeItem("scenario-storage");
+      localStorage.removeItem("target-area-storage");
+
+      // Clear all data (empty state)
+      useScenarioStore.getState().newScenario();
+      useSatelliteStore.setState({ satellites: [], selectedSatelliteId: null, positions: {} });
+      useGroundStationStore.setState({ groundStations: [], selectedStationId: null });
+      useTimeStore.getState().reset();
+
+      setBackupStatus("success");
+      setStatusMessage("Configuration cleared!");
+    }
+
+    setConfirmAction(null);
+
+    // Clear status after 3 seconds
+    setTimeout(() => {
+      setBackupStatus(null);
+      setStatusMessage("");
+    }, 3000);
+  };
+
+  // Cancel confirm
+  const handleCancelConfirm = () => {
+    setConfirmAction(null);
+  };
 
   // Backup handler
   const handleBackup = async () => {
@@ -24,6 +83,9 @@ const Sidebar = () => {
     setStatusMessage("Backing up...");
 
     try {
+      // Get scenario name for filename
+      const currentScenarioName = useScenarioStore.getState().name || "Untitled";
+
       // Collect all configuration data from stores
       const configData = {
         scenario: useScenarioStore.getState().exportData(),
@@ -41,7 +103,7 @@ const Sidebar = () => {
         },
       };
 
-      const result = await window.electronAPI.backupConfig(configData);
+      const result = await window.electronAPI.backupConfig(configData, currentScenarioName);
 
       if (result.success) {
         setBackupStatus("success");
@@ -208,8 +270,25 @@ const Sidebar = () => {
 
       {/* Floating Backup/Restore Buttons */}
       <div className={`border-t border-slate-700 bg-slate-800/50 ${isCollapsed ? "p-1" : "p-2"}`}>
+        {/* Confirm Dialog */}
+        {confirmAction && !isCollapsed && (
+          <div className="mb-2 p-2 rounded bg-amber-600/20 border border-amber-600/30">
+            <p className="text-xs text-amber-400 mb-2">
+              {confirmAction === "new" ? "Create new scenario? This will reset to defaults." : "Clear all configuration? This cannot be undone."}
+            </p>
+            <div className="flex gap-1">
+              <button onClick={handleConfirmAction} className="flex-1 px-2 py-1 rounded text-xs font-medium bg-amber-600 hover:bg-amber-700 text-white transition-colors">
+                Confirm
+              </button>
+              <button onClick={handleCancelConfirm} className="flex-1 px-2 py-1 rounded text-xs font-medium bg-slate-600 hover:bg-slate-500 text-white transition-colors">
+                Cancel
+              </button>
+            </div>
+          </div>
+        )}
+
         {/* Status Message */}
-        {backupStatus && !isCollapsed && (
+        {backupStatus && !isCollapsed && !confirmAction && (
           <div
             className={`mb-2 px-2 py-1.5 rounded text-xs flex items-center gap-2 ${
               backupStatus === "loading" ? "bg-blue-600/20 text-blue-400" : backupStatus === "success" ? "bg-green-600/20 text-green-400" : "bg-red-600/20 text-red-400"
@@ -222,10 +301,39 @@ const Sidebar = () => {
           </div>
         )}
 
+        {/* Action Buttons - Row 1: New & Clear */}
+        <div className={`flex ${isCollapsed ? "flex-col" : ""} gap-1 mb-1`}>
+          <button
+            onClick={handleNewScenario}
+            disabled={backupStatus === "loading" || confirmAction !== null}
+            className={`flex items-center justify-center gap-2 px-3 py-1.5 rounded text-xs font-medium transition-colors
+              bg-blue-600/20 hover:bg-blue-600/30 text-blue-400 hover:text-blue-300 border border-blue-600/30
+              disabled:opacity-50 disabled:cursor-not-allowed
+              ${isCollapsed ? "w-full" : "flex-1"}`}
+            title="New Scenario"
+          >
+            <FilePlus2 className="w-3.5 h-3.5" />
+            {!isCollapsed && <span>New</span>}
+          </button>
+          <button
+            onClick={handleClearConfig}
+            disabled={backupStatus === "loading" || confirmAction !== null}
+            className={`flex items-center justify-center gap-2 px-3 py-1.5 rounded text-xs font-medium transition-colors
+              bg-red-600/20 hover:bg-red-600/30 text-red-400 hover:text-red-300 border border-red-600/30
+              disabled:opacity-50 disabled:cursor-not-allowed
+              ${isCollapsed ? "w-full" : "flex-1"}`}
+            title="Clear Configuration"
+          >
+            <Trash2 className="w-3.5 h-3.5" />
+            {!isCollapsed && <span>Clear</span>}
+          </button>
+        </div>
+
+        {/* Action Buttons - Row 2: Backup & Restore */}
         <div className={`flex ${isCollapsed ? "flex-col" : ""} gap-1`}>
           <button
             onClick={handleBackup}
-            disabled={backupStatus === "loading"}
+            disabled={backupStatus === "loading" || confirmAction !== null}
             className={`flex items-center justify-center gap-2 px-3 py-1.5 rounded text-xs font-medium transition-colors
               bg-slate-700 hover:bg-slate-600 text-slate-200 hover:text-white
               disabled:opacity-50 disabled:cursor-not-allowed
@@ -237,7 +345,7 @@ const Sidebar = () => {
           </button>
           <button
             onClick={handleRestore}
-            disabled={backupStatus === "loading"}
+            disabled={backupStatus === "loading" || confirmAction !== null}
             className={`flex items-center justify-center gap-2 px-3 py-1.5 rounded text-xs font-medium transition-colors
               bg-slate-700 hover:bg-slate-600 text-slate-200 hover:text-white
               disabled:opacity-50 disabled:cursor-not-allowed
