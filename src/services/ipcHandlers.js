@@ -11,6 +11,7 @@ import {
   calculateCoverageRadius,
   clearCache,
 } from "./satelliteCalculator.js";
+import { colorToKml, generateGroundTrackKml } from "./kmlGenerator.js";
 
 export function registerIpcHandlers() {
   // Fetch TLE from URL (bypasses CORS)
@@ -266,13 +267,12 @@ export function registerIpcHandlers() {
         .replace(/[:.]/g, "-") // Replace : and . with -
         .slice(0, 19); // YYYY-MM-DDTHH-MM-SS
 
-      const defaultPath = path.join(app.getPath("documents"), `${safeName}-groundtrack-${timeStr}.kmz`);
+      const defaultPath = path.join(app.getPath("documents"), `${safeName}-groundtrack-${timeStr}.kml`);
 
       const result = await dialog.showSaveDialog({
-        title: "Export Ground Track to KMZ",
+        title: "Export Ground Track to KML",
         defaultPath: defaultPath,
         filters: [
-          { name: "KMZ Files", extensions: ["kmz"] },
           { name: "KML Files", extensions: ["kml"] },
           { name: "All Files", extensions: ["*"] },
         ],
@@ -282,109 +282,21 @@ export function registerIpcHandlers() {
         return { success: false, error: "Export cancelled" };
       }
 
-      // Convert color from {r, g, b, a} (0-1) to KML format (aabbggrr hex)
-      const r = Math.round((color?.r || 0) * 255)
-        .toString(16)
-        .padStart(2, "0");
-      const g = Math.round((color?.g || 1) * 255)
-        .toString(16)
-        .padStart(2, "0");
-      const b = Math.round((color?.b || 1) * 255)
-        .toString(16)
-        .padStart(2, "0");
-      const a = Math.round((color?.a || 0.8) * 255)
-        .toString(16)
-        .padStart(2, "0");
-      const kmlColor = `${a}${b}${g}${r}`; // KML uses aabbggrr format
-
-      // Current position for placemark
+      // Convert color and get current position
+      const kmlColor = colorToKml(color);
       const currentPos = currentPosition || orbitPoints[0];
-      const currentCoord = `${currentPos.lon.toFixed(6)},${currentPos.lat.toFixed(6)},0`;
 
-      // Generate ground track coordinates (altitude = 0, clamped to ground)
-      const groundTrackCoords = orbitPoints.map((p) => `${p.lon.toFixed(6)},${p.lat.toFixed(6)},0`).join("\n              ");
+      // Generate KML content
+      const kmlContent = generateGroundTrackKml({
+        satelliteName,
+        kmlColor,
+        currentPos,
+        orbitPoints,
+        exportTime,
+      });
 
-      // Generate KML content (ground track only)
-      const kmlContent = `<?xml version="1.0" encoding="UTF-8"?>
-<kml xmlns="http://www.opengis.net/kml/2.2">
-  <Document>
-    <name>${satelliteName} Ground Track</name>
-    <description>Ground track exported from OrbitSim at ${exportTime.toISOString()}</description>
-
-    <!-- Ground Track Style -->
-    <Style id="groundTrackStyle">
-      <LineStyle>
-        <color>${kmlColor}</color>
-        <width>3</width>
-      </LineStyle>
-    </Style>
-
-    <!-- Satellite Sub-Point Style -->
-    <Style id="subPointStyle">
-      <IconStyle>
-        <color>${kmlColor}</color>
-        <scale>1.0</scale>
-        <Icon>
-          <href>http://maps.google.com/mapfiles/kml/shapes/target.png</href>
-        </Icon>
-      </IconStyle>
-      <LabelStyle>
-        <color>ffffffff</color>
-        <scale>0.8</scale>
-      </LabelStyle>
-    </Style>
-
-    <!-- Satellite Sub-Satellite Point (Current Position on Ground) -->
-    <Placemark>
-      <name>${satelliteName} (Sub-Point)</name>
-      <description>
-        <![CDATA[
-          <b>Satellite:</b> ${satelliteName}<br/>
-          <b>Altitude:</b> ${currentPos.alt.toFixed(2)} km<br/>
-          <b>Sub-Satellite Point:</b><br/>
-          &nbsp;&nbsp;Latitude: ${currentPos.lat.toFixed(4)}°<br/>
-          &nbsp;&nbsp;Longitude: ${currentPos.lon.toFixed(4)}°<br/>
-          <b>Time:</b> ${exportTime.toISOString()}
-        ]]>
-      </description>
-      <styleUrl>#subPointStyle</styleUrl>
-      <Point>
-        <altitudeMode>clampToGround</altitudeMode>
-        <coordinates>${currentCoord}</coordinates>
-      </Point>
-    </Placemark>
-
-    <!-- Ground Track Path -->
-    <Placemark>
-      <name>${satelliteName} Ground Track</name>
-      <description>Satellite ground track projection</description>
-      <styleUrl>#groundTrackStyle</styleUrl>
-      <LineString>
-        <tessellate>1</tessellate>
-        <altitudeMode>clampToGround</altitudeMode>
-        <coordinates>
-              ${groundTrackCoords}
-        </coordinates>
-      </LineString>
-    </Placemark>
-
-  </Document>
-</kml>`;
-
-      // Check if user wants KMZ (compressed) or KML
-      const isKmz = result.filePath.toLowerCase().endsWith(".kmz");
-
-      if (isKmz) {
-        // Create KMZ (ZIP file containing doc.kml)
-        const JSZip = (await import("jszip")).default;
-        const zip = new JSZip();
-        zip.file("doc.kml", kmlContent);
-        const zipBuffer = await zip.generateAsync({ type: "nodebuffer", compression: "DEFLATE" });
-        fs.writeFileSync(result.filePath, zipBuffer);
-      } else {
-        // Write plain KML file
-        fs.writeFileSync(result.filePath, kmlContent, "utf-8");
-      }
+      // Write KML file
+      fs.writeFileSync(result.filePath, kmlContent, "utf-8");
 
       return { success: true, filePath: result.filePath };
     } catch (error) {

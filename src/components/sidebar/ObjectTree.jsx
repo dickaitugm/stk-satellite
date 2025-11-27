@@ -426,7 +426,7 @@ const ObjectTree = () => {
                       }`}
                       onClick={() => handleExportOrbit(sat)}
                       disabled={exportStatus[sat.id] === "loading"}
-                      title="Export current orbit to KMZ for Google Earth"
+                      title="Export current orbit to KML for Google Earth"
                     >
                       {exportStatus[sat.id] === "loading" ? (
                         <>
@@ -446,7 +446,7 @@ const ObjectTree = () => {
                       ) : (
                         <>
                           <FileDown className="w-3 h-3" />
-                          Export Orbit KMZ
+                          Export Orbit KMl
                         </>
                       )}
                     </button>
