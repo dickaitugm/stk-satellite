@@ -135,16 +135,20 @@ const Sidebar = () => {
       if (result.success && result.data) {
         const { scenario, satellites, groundStations, time } = result.data;
 
+        // Reset time first to ensure clock is running
+        useTimeStore.getState().reset();
+
         // Restore scenario
         if (scenario) {
           useScenarioStore.getState().importData(scenario);
         }
 
-        // Restore satellites
+        // Restore satellites with fresh positions object
         if (satellites?.satellites) {
           useSatelliteStore.setState({
             satellites: satellites.satellites,
             selectedSatelliteId: satellites.selectedSatelliteId || satellites.satellites[0]?.id,
+            positions: {}, // Reset positions to force recalculation
           });
         }
 
@@ -156,10 +160,21 @@ const Sidebar = () => {
           });
         }
 
-        // Restore time settings
+        // Restore time settings after reset
         if (time) {
-          if (time.mode) useTimeStore.getState().setMode(time.mode);
-          if (time.playbackSpeed) useTimeStore.getState().setPlaybackSpeed(time.playbackSpeed);
+          // Set mode (this also resets lastFrameTime for animation)
+          if (time.mode) {
+            useTimeStore.getState().setMode(time.mode);
+          } else {
+            // Default to realtime mode if not specified
+            useTimeStore.getState().setMode("realtime");
+          }
+          if (time.playbackSpeed) {
+            useTimeStore.getState().setPlaybackSpeed(time.playbackSpeed);
+          }
+        } else {
+          // If no time settings, ensure realtime mode
+          useTimeStore.getState().setMode("realtime");
         }
 
         setBackupStatus("success");

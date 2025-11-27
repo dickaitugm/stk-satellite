@@ -497,26 +497,57 @@ const Globe2D = ({ onMouseMove }) => {
 
   // Setup layers when satellites are loaded
   useEffect(() => {
-    if (wwdRef.current && satellites.length > 0 && !isLoading) {
-      createOrbitLayer(wwdRef.current);
-      createSatelliteLayer(wwdRef.current);
-      createGroundStationLayer(wwdRef.current);
+    if (wwdRef.current && !isLoading) {
+      if (satellites.length > 0) {
+        createOrbitLayer(wwdRef.current);
+        createSatelliteLayer(wwdRef.current);
+        createGroundStationLayer(wwdRef.current);
+      } else {
+        // Clear layers when no satellites
+        if (orbitLayerRef.current) {
+          wwdRef.current.removeLayer(orbitLayerRef.current);
+          orbitLayerRef.current = null;
+        }
+        if (satelliteLayerRef.current) {
+          wwdRef.current.removeLayer(satelliteLayerRef.current);
+          satelliteLayerRef.current = null;
+        }
+        // Clear cached renderables
+        satelliteRenderablesRef.current = {};
+        orbitPathDataRef.current = {};
+        coverageCacheRef.current = {};
+        lastCoverageUpdateRef.current = {};
+        lastOrbitUpdateRef.current = {};
+
+        // Still update ground stations (they may exist without satellites)
+        createGroundStationLayer(wwdRef.current);
+
+        wwdRef.current.redraw();
+      }
     }
   }, [isLoading, satellites.length, createOrbitLayer, createSatelliteLayer, createGroundStationLayer]);
 
   // Start animation loop - runs continuously, reads state from stores
+  // Re-trigger when satellites change (e.g., after restore)
   useEffect(() => {
     if (wwdRef.current && !isLoading) {
+      // Cancel any existing animation frame before starting new one
+      if (animationFrameRef.current) {
+        cancelAnimationFrame(animationFrameRef.current);
+        animationFrameRef.current = null;
+      }
+
       // Start the animation loop
       updateSatelliteMarker();
 
       return () => {
         if (animationFrameRef.current) {
           cancelAnimationFrame(animationFrameRef.current);
+          animationFrameRef.current = null;
         }
       };
     }
-  }, [isLoading, updateSatelliteMarker]);
+  }, [isLoading, updateSatelliteMarker, satellites.length]);
 
   // Refresh orbit paths when mode changes (simulation <-> realtime)
   useEffect(() => {
