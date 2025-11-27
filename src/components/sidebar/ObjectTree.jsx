@@ -70,11 +70,16 @@ const ObjectTree = () => {
     setExportStatus((prev) => ({ ...prev, [sat.id]: "loading" }));
 
     try {
-      // Get current time
+      // Get current time from time store (simulation or realtime)
       const currentTime = useTimeStore.getState().currentTime;
+      const mode = useTimeStore.getState().mode;
 
-      // Generate orbit path (100 points for one orbit)
+      console.log(`📤 Export KML - Mode: ${mode}, Time: ${currentTime.toISOString()}`);
+
+      // Generate orbit path using the simulation/realtime time
       const result = await window.electronAPI.generateOrbitPath(sat.tle, currentTime.getTime(), 100);
+
+      console.log(`📤 Generated ${result.path?.length || 0} orbit points starting from ${new Date(result.path?.[0]?.time).toISOString()}`);
 
       if (!result.success || !result.path || result.path.length === 0) {
         console.error("Failed to generate orbit path for export");
@@ -446,7 +451,7 @@ const ObjectTree = () => {
                       ) : (
                         <>
                           <FileDown className="w-3 h-3" />
-                          Export Orbit KMl
+                          Export Orbit KML
                         </>
                       )}
                     </button>
