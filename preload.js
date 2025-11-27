@@ -97,5 +97,5 @@ contextBridge.exposeInMainWorld("electronAPI", {
    * @param {Object} orbitData - { satelliteName, color, orbitPoints, currentPosition }
    * @returns {Promise<{success, filePath?, error?}>}
    */
-  exportOrbitKML: (orbitData) => ipcRenderer.invoke("export-orbit-kmz", orbitData),
+  exportOrbitKmz: (orbitData) => ipcRenderer.invoke("export-orbit-kmz", orbitData),
 });

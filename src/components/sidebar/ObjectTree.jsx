@@ -4,7 +4,7 @@
  */
 
 import React, { useState } from "react";
-import { Satellite, Radio, Target, Plus, FolderOpen, Folder, Camera, Compass, Antenna, Edit, Circle, MapPin, Orbit, Settings2, Box, Download, Loader2 } from "lucide-react";
+import { Satellite, Radio, Target, Plus, FolderOpen, Folder, Camera, Compass, Antenna, Edit, Circle, MapPin, Orbit, Settings2, Box, FileDown } from "lucide-react";
 
 import TreeNode from "./TreeNode";
 import ContextMenu from "./ContextMenu";
@@ -95,6 +95,7 @@ const ObjectTree = () => {
           ...currentPosition,
           time: currentTime.getTime(),
         },
+        simulationTime: currentTime.getTime(),
       });
 
       if (exportResult.success) {

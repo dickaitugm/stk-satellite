@@ -239,18 +239,18 @@ export function registerIpcHandlers() {
   });
 
   // ============================================
-  // Export Orbit to KMZ API
+  // Export Ground Track to KMZ API
   // ============================================
 
   /**
-   * Export satellite orbit to KMZ file for Google Earth
+   * Export satellite ground track to KMZ file for Google Earth
    *
-   * @param {Object} orbitData - { satelliteName, color, orbitPoints: [{lat, lon, alt, time}] }
+   * @param {Object} orbitData - { satelliteName, color, orbitPoints: [{lat, lon, alt, time}], currentPosition, simulationTime }
    * @returns {Promise<{success, filePath?, error?}>}
    */
   ipcMain.handle("export-orbit-kmz", async (event, orbitData) => {
     try {
-      const { satelliteName, color, orbitPoints, currentPosition } = orbitData;
+      const { satelliteName, color, orbitPoints, currentPosition, simulationTime } = orbitData;
 
       if (!orbitPoints || orbitPoints.length === 0) {
         return { success: false, error: "No orbit data to export" };
@@ -258,12 +258,21 @@ export function registerIpcHandlers() {
 
       // Sanitize satellite name for filename
       const safeName = satelliteName.replace(/[<>:"/\\|?*]/g, "-").trim() || "Satellite";
-      const defaultPath = path.join(app.getPath("documents"), `${safeName}-orbit-${new Date().toISOString().slice(0, 10)}.kml`);
+
+      // Format simulation time for filename (use simulationTime if provided, otherwise current time)
+      const exportTime = new Date(simulationTime || Date.now());
+      const timeStr = exportTime
+        .toISOString()
+        .replace(/[:.]/g, "-") // Replace : and . with -
+        .slice(0, 19); // YYYY-MM-DDTHH-MM-SS
+
+      const defaultPath = path.join(app.getPath("documents"), `${safeName}-groundtrack-${timeStr}.kmz`);
 
       const result = await dialog.showSaveDialog({
-        title: "Export Orbit to KML",
+        title: "Export Ground Track to KMZ",
         defaultPath: defaultPath,
         filters: [
+          { name: "KMZ Files", extensions: ["kmz"] },
           { name: "KML Files", extensions: ["kml"] },
           { name: "All Files", extensions: ["*"] },
         ],
@@ -288,38 +297,35 @@ export function registerIpcHandlers() {
         .padStart(2, "0");
       const kmlColor = `${a}${b}${g}${r}`; // KML uses aabbggrr format
 
-      // Generate orbit path coordinates string
-      const orbitCoordinates = orbitPoints.map((p) => `${p.lon.toFixed(6)},${p.lat.toFixed(6)},${(p.alt * 1000).toFixed(0)}`).join("\n              ");
-
       // Current position for placemark
       const currentPos = currentPosition || orbitPoints[0];
-      const currentCoord = `${currentPos.lon.toFixed(6)},${currentPos.lat.toFixed(6)},${(currentPos.alt * 1000).toFixed(0)}`;
+      const currentCoord = `${currentPos.lon.toFixed(6)},${currentPos.lat.toFixed(6)},0`;
 
-      // Generate KML content
+      // Generate ground track coordinates (altitude = 0, clamped to ground)
+      const groundTrackCoords = orbitPoints.map((p) => `${p.lon.toFixed(6)},${p.lat.toFixed(6)},0`).join("\n              ");
+
+      // Generate KML content (ground track only)
       const kmlContent = `<?xml version="1.0" encoding="UTF-8"?>
-<kml xmlns="http://www.opengis.net/kml/2.2" xmlns:gx="http://www.google.com/kml/ext/2.2">
+<kml xmlns="http://www.opengis.net/kml/2.2">
   <Document>
-    <name>${satelliteName} Orbit</name>
-    <description>Orbit path exported from OrbitSim on ${new Date().toISOString()}</description>
-    
-    <!-- Orbit Line Style -->
-    <Style id="orbitStyle">
+    <name>${satelliteName} Ground Track</name>
+    <description>Ground track exported from OrbitSim at ${exportTime.toISOString()}</description>
+
+    <!-- Ground Track Style -->
+    <Style id="groundTrackStyle">
       <LineStyle>
         <color>${kmlColor}</color>
-        <width>2</width>
+        <width>3</width>
       </LineStyle>
-      <PolyStyle>
-        <color>40${kmlColor.substring(2)}</color>
-      </PolyStyle>
     </Style>
-    
-    <!-- Satellite Icon Style -->
-    <Style id="satelliteStyle">
+
+    <!-- Satellite Sub-Point Style -->
+    <Style id="subPointStyle">
       <IconStyle>
         <color>${kmlColor}</color>
-        <scale>1.2</scale>
+        <scale>1.0</scale>
         <Icon>
-          <href>http://maps.google.com/mapfiles/kml/shapes/spaceship.png</href>
+          <href>http://maps.google.com/mapfiles/kml/shapes/target.png</href>
         </Icon>
       </IconStyle>
       <LabelStyle>
@@ -328,55 +334,36 @@ export function registerIpcHandlers() {
       </LabelStyle>
     </Style>
 
-    <!-- Satellite Current Position -->
+    <!-- Satellite Sub-Satellite Point (Current Position on Ground) -->
     <Placemark>
-      <name>${satelliteName}</name>
+      <name>${satelliteName} (Sub-Point)</name>
       <description>
         <![CDATA[
           <b>Satellite:</b> ${satelliteName}<br/>
           <b>Altitude:</b> ${currentPos.alt.toFixed(2)} km<br/>
-          <b>Latitude:</b> ${currentPos.lat.toFixed(4)}°<br/>
-          <b>Longitude:</b> ${currentPos.lon.toFixed(4)}°<br/>
-          <b>Time:</b> ${new Date(currentPos.time).toISOString()}
+          <b>Sub-Satellite Point:</b><br/>
+          &nbsp;&nbsp;Latitude: ${currentPos.lat.toFixed(4)}°<br/>
+          &nbsp;&nbsp;Longitude: ${currentPos.lon.toFixed(4)}°<br/>
+          <b>Time:</b> ${exportTime.toISOString()}
         ]]>
       </description>
-      <styleUrl>#satelliteStyle</styleUrl>
+      <styleUrl>#subPointStyle</styleUrl>
       <Point>
-        <altitudeMode>absolute</altitudeMode>
+        <altitudeMode>clampToGround</altitudeMode>
         <coordinates>${currentCoord}</coordinates>
       </Point>
     </Placemark>
 
-    <!-- Orbit Path -->
-    <Placemark>
-      <name>${satelliteName} Orbit Path</name>
-      <description>Orbital trajectory</description>
-      <styleUrl>#orbitStyle</styleUrl>
-      <LineString>
-        <extrude>0</extrude>
-        <tessellate>1</tessellate>
-        <altitudeMode>absolute</altitudeMode>
-        <coordinates>
-              ${orbitCoordinates}
-        </coordinates>
-      </LineString>
-    </Placemark>
-
-    <!-- Ground Track -->
+    <!-- Ground Track Path -->
     <Placemark>
       <name>${satelliteName} Ground Track</name>
-      <description>Ground track projection</description>
-      <Style>
-        <LineStyle>
-          <color>80${kmlColor.substring(2)}</color>
-          <width>1</width>
-        </LineStyle>
-      </Style>
+      <description>Satellite ground track projection</description>
+      <styleUrl>#groundTrackStyle</styleUrl>
       <LineString>
         <tessellate>1</tessellate>
         <altitudeMode>clampToGround</altitudeMode>
         <coordinates>
-              ${orbitPoints.map((p) => `${p.lon.toFixed(6)},${p.lat.toFixed(6)},0`).join("\n              ")}
+              ${groundTrackCoords}
         </coordinates>
       </LineString>
     </Placemark>
@@ -384,12 +371,24 @@ export function registerIpcHandlers() {
   </Document>
 </kml>`;
 
-      // Write KML file
-      fs.writeFileSync(result.filePath, kmlContent, "utf-8");
+      // Check if user wants KMZ (compressed) or KML
+      const isKmz = result.filePath.toLowerCase().endsWith(".kmz");
+
+      if (isKmz) {
+        // Create KMZ (ZIP file containing doc.kml)
+        const JSZip = (await import("jszip")).default;
+        const zip = new JSZip();
+        zip.file("doc.kml", kmlContent);
+        const zipBuffer = await zip.generateAsync({ type: "nodebuffer", compression: "DEFLATE" });
+        fs.writeFileSync(result.filePath, zipBuffer);
+      } else {
+        // Write plain KML file
+        fs.writeFileSync(result.filePath, kmlContent, "utf-8");
+      }
 
       return { success: true, filePath: result.filePath };
     } catch (error) {
-      console.error("Failed to export orbit KMZ:", error);
+      console.error("Failed to export ground track:", error);
       return { success: false, error: error.message };
     }
   });
