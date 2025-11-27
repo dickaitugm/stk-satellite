@@ -206,14 +206,14 @@ export const useTimeStore = create((set, get) => ({
     getFormattedTime: () => {
         const time = get().currentTime;
         const iso = time.toISOString();
-        // Format: YYYY-MM-DD HH:MM:SS.mmm UTC
-        return iso.replace("T", " ").substring(0, 23) + " UTC";
+        // Format: YYYY-MM-DD HH:MM:SS.mmm (tanpa UTC, sudah ada di label)
+        return iso.replace("T", " ").substring(0, 23);
     },
 
     // Short format without milliseconds
     getFormattedTimeShort: () => {
         const time = get().currentTime;
-        return time.toISOString().replace("T", " ").substring(0, 19) + " UTC";
+        return time.toISOString().replace("T", " ").substring(0, 19);
     },
 
     getElapsedTime: () => {

@@ -3,7 +3,7 @@
  * Navigation bar with simulation controls and time display
  */
 
-import React from "react";
+import React, { useState, useEffect, useRef } from "react";
 import {
     Play,
     Pause,
@@ -40,6 +40,60 @@ const TopNavbar = () => {
     const goToNow = useTimeStore((state) => state.goToNow);
     const getFormattedTime = useTimeStore((state) => state.getFormattedTime);
     const getElapsedTime = useTimeStore((state) => state.getElapsedTime);
+    const setCurrentTime = useTimeStore((state) => state.setCurrentTime);
+
+    // State untuk input waktu
+    const [isEditingTime, setIsEditingTime] = useState(false);
+    const [inputTime, setInputTime] = useState("");
+    const inputRef = useRef(null);
+
+    // Cek apakah bisa edit waktu (mode simulation dan tidak sedang play)
+    const canEditTime = mode === "simulation" && !isPlaying;
+
+    // Handler untuk mulai edit
+    const handleStartEdit = () => {
+        if (!canEditTime) return;
+        setInputTime(getFormattedTime());
+        setIsEditingTime(true);
+    };
+
+    // Handler untuk submit waktu
+    const handleSubmitTime = () => {
+        try {
+            // Parse input: "YYYY-MM-DD HH:MM:SS.mmm" ke Date
+            const parsed = inputTime.trim().replace(" ", "T") + "Z";
+            const newDate = new Date(parsed);
+            
+            if (!isNaN(newDate.getTime())) {
+                setCurrentTime(newDate);
+            }
+        } catch (error) {
+            console.error("Invalid time format:", error);
+        }
+        setIsEditingTime(false);
+    };
+
+    // Handler untuk cancel edit
+    const handleCancelEdit = () => {
+        setIsEditingTime(false);
+    };
+
+    // Handle keyboard events
+    const handleKeyDown = (e) => {
+        if (e.key === "Enter") {
+            handleSubmitTime();
+        } else if (e.key === "Escape") {
+            handleCancelEdit();
+        }
+    };
+
+    // Focus input saat mulai edit
+    useEffect(() => {
+        if (isEditingTime && inputRef.current) {
+            inputRef.current.focus();
+            inputRef.current.select();
+        }
+    }, [isEditingTime]);
 
     // Scenario store
     const scenarioName = useScenarioStore((state) => state.name);
@@ -229,7 +283,26 @@ const TopNavbar = () => {
                     <div className="text-slate-400 text-[10px]">
                         {mode === "realtime" ? "Current Time (UTC)" : "Simulation Time (UTC)"}
                     </div>
-                    <div className="font-mono text-emerald-400">{getFormattedTime()}</div>
+                    {isEditingTime ? (
+                        <input
+                            ref={inputRef}
+                            type="text"
+                            value={inputTime}
+                            onChange={(e) => setInputTime(e.target.value)}
+                            onBlur={handleSubmitTime}
+                            onKeyDown={handleKeyDown}
+                            className="font-mono text-emerald-400 bg-slate-900 border border-emerald-500 rounded px-1 py-0.5 w-48 text-xs focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                            placeholder="YYYY-MM-DD HH:MM:SS.mmm"
+                        />
+                    ) : (
+                        <div
+                            onClick={handleStartEdit}
+                            className={`font-mono text-emerald-400 ${canEditTime ? "cursor-pointer hover:text-emerald-300 hover:underline" : ""}`}
+                            title={canEditTime ? "Click to edit time" : ""}
+                        >
+                            {getFormattedTime()}
+                        </div>
+                    )}
                 </div>
                 {mode === "simulation" && (
                     <div className="text-xs text-right hidden lg:block">
