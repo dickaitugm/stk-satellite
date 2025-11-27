@@ -75,21 +75,39 @@ export const useTimeStore = create((set, get) => ({
     }),
 
   // Playback controls
-  play: () => set({ isPlaying: true, lastFrameTime: Date.now() }),
-  pause: () => set({ isPlaying: false }),
+  play: () => {
+    console.log("▶️ Play called");
+    set({ isPlaying: true, lastFrameTime: Date.now() });
+  },
+  pause: () => {
+    console.log("⏸️ Pause called");
+    set({ isPlaying: false });
+  },
   togglePlayback: () =>
-    set((state) => ({
-      isPlaying: !state.isPlaying,
-      lastFrameTime: Date.now(),
-    })),
+    set((state) => {
+      console.log(`⏯️ Toggle playback: ${!state.isPlaying}`);
+      return {
+        isPlaying: !state.isPlaying,
+        lastFrameTime: Date.now(),
+      };
+    }),
 
-  setPlaybackSpeed: (speed) => set({ playbackSpeed: speed }),
+  setPlaybackSpeed: (speed) => {
+    console.log(`⏩ Speed changed to: ${speed}x`);
+    set({ playbackSpeed: speed });
+  },
 
   // Direction controls
   setPlaybackDirection: (direction) => set({ playbackDirection: direction }),
   toggleDirection: () => set((state) => ({ playbackDirection: state.playbackDirection * -1 })),
-  playForward: () => set({ isPlaying: true, playbackDirection: 1, lastFrameTime: Date.now() }),
-  playBackward: () => set({ isPlaying: true, playbackDirection: -1, lastFrameTime: Date.now() }),
+  playForward: () => {
+    console.log("▶️ Play Forward called");
+    set({ isPlaying: true, playbackDirection: 1, lastFrameTime: Date.now() });
+  },
+  playBackward: () => {
+    console.log("◀️ Play Backward called");
+    set({ isPlaying: true, playbackDirection: -1, lastFrameTime: Date.now() });
+  },
 
   increaseSpeed: () =>
     set((state) => {
