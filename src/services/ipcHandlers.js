@@ -184,7 +184,6 @@ export function registerIpcHandlers() {
           version: "1.0",
           appName: "OrbitSim",
           createdAt: new Date().toISOString(),
-          platform: process.platform,
         },
         ...configData,
       };
@@ -204,7 +203,7 @@ export function registerIpcHandlers() {
    *
    * @returns {Promise<{success, data?, filePath?, error?}>}
    */
-  ipcMain.handle("restore-config", async (event) => {
+  ipcMain.handle("restore-config", async () => {
     try {
       const result = await dialog.showOpenDialog({
         title: "Restore Configuration",
@@ -235,6 +234,162 @@ export function registerIpcHandlers() {
       return { success: true, data: configData, filePath };
     } catch (error) {
       console.error("Failed to restore config:", error);
+      return { success: false, error: error.message };
+    }
+  });
+
+  // ============================================
+  // Export Orbit to KMZ API
+  // ============================================
+
+  /**
+   * Export satellite orbit to KMZ file for Google Earth
+   *
+   * @param {Object} orbitData - { satelliteName, color, orbitPoints: [{lat, lon, alt, time}] }
+   * @returns {Promise<{success, filePath?, error?}>}
+   */
+  ipcMain.handle("export-orbit-kmz", async (event, orbitData) => {
+    try {
+      const { satelliteName, color, orbitPoints, currentPosition } = orbitData;
+
+      if (!orbitPoints || orbitPoints.length === 0) {
+        return { success: false, error: "No orbit data to export" };
+      }
+
+      // Sanitize satellite name for filename
+      const safeName = satelliteName.replace(/[<>:"/\\|?*]/g, "-").trim() || "Satellite";
+      const defaultPath = path.join(app.getPath("documents"), `${safeName}-orbit-${new Date().toISOString().slice(0, 10)}.kml`);
+
+      const result = await dialog.showSaveDialog({
+        title: "Export Orbit to KML",
+        defaultPath: defaultPath,
+        filters: [
+          { name: "KML Files", extensions: ["kml"] },
+          { name: "All Files", extensions: ["*"] },
+        ],
+      });
+
+      if (result.canceled || !result.filePath) {
+        return { success: false, error: "Export cancelled" };
+      }
+
+      // Convert color from {r, g, b, a} (0-1) to KML format (aabbggrr hex)
+      const r = Math.round((color?.r || 0) * 255)
+        .toString(16)
+        .padStart(2, "0");
+      const g = Math.round((color?.g || 1) * 255)
+        .toString(16)
+        .padStart(2, "0");
+      const b = Math.round((color?.b || 1) * 255)
+        .toString(16)
+        .padStart(2, "0");
+      const a = Math.round((color?.a || 0.8) * 255)
+        .toString(16)
+        .padStart(2, "0");
+      const kmlColor = `${a}${b}${g}${r}`; // KML uses aabbggrr format
+
+      // Generate orbit path coordinates string
+      const orbitCoordinates = orbitPoints.map((p) => `${p.lon.toFixed(6)},${p.lat.toFixed(6)},${(p.alt * 1000).toFixed(0)}`).join("\n              ");
+
+      // Current position for placemark
+      const currentPos = currentPosition || orbitPoints[0];
+      const currentCoord = `${currentPos.lon.toFixed(6)},${currentPos.lat.toFixed(6)},${(currentPos.alt * 1000).toFixed(0)}`;
+
+      // Generate KML content
+      const kmlContent = `<?xml version="1.0" encoding="UTF-8"?>
+<kml xmlns="http://www.opengis.net/kml/2.2" xmlns:gx="http://www.google.com/kml/ext/2.2">
+  <Document>
+    <name>${satelliteName} Orbit</name>
+    <description>Orbit path exported from OrbitSim on ${new Date().toISOString()}</description>
+    
+    <!-- Orbit Line Style -->
+    <Style id="orbitStyle">
+      <LineStyle>
+        <color>${kmlColor}</color>
+        <width>2</width>
+      </LineStyle>
+      <PolyStyle>
+        <color>40${kmlColor.substring(2)}</color>
+      </PolyStyle>
+    </Style>
+    
+    <!-- Satellite Icon Style -->
+    <Style id="satelliteStyle">
+      <IconStyle>
+        <color>${kmlColor}</color>
+        <scale>1.2</scale>
+        <Icon>
+          <href>http://maps.google.com/mapfiles/kml/shapes/spaceship.png</href>
+        </Icon>
+      </IconStyle>
+      <LabelStyle>
+        <color>ffffffff</color>
+        <scale>0.8</scale>
+      </LabelStyle>
+    </Style>
+
+    <!-- Satellite Current Position -->
+    <Placemark>
+      <name>${satelliteName}</name>
+      <description>
+        <![CDATA[
+          <b>Satellite:</b> ${satelliteName}<br/>
+          <b>Altitude:</b> ${currentPos.alt.toFixed(2)} km<br/>
+          <b>Latitude:</b> ${currentPos.lat.toFixed(4)}°<br/>
+          <b>Longitude:</b> ${currentPos.lon.toFixed(4)}°<br/>
+          <b>Time:</b> ${new Date(currentPos.time).toISOString()}
+        ]]>
+      </description>
+      <styleUrl>#satelliteStyle</styleUrl>
+      <Point>
+        <altitudeMode>absolute</altitudeMode>
+        <coordinates>${currentCoord}</coordinates>
+      </Point>
+    </Placemark>
+
+    <!-- Orbit Path -->
+    <Placemark>
+      <name>${satelliteName} Orbit Path</name>
+      <description>Orbital trajectory</description>
+      <styleUrl>#orbitStyle</styleUrl>
+      <LineString>
+        <extrude>0</extrude>
+        <tessellate>1</tessellate>
+        <altitudeMode>absolute</altitudeMode>
+        <coordinates>
+              ${orbitCoordinates}
+        </coordinates>
+      </LineString>
+    </Placemark>
+
+    <!-- Ground Track -->
+    <Placemark>
+      <name>${satelliteName} Ground Track</name>
+      <description>Ground track projection</description>
+      <Style>
+        <LineStyle>
+          <color>80${kmlColor.substring(2)}</color>
+          <width>1</width>
+        </LineStyle>
+      </Style>
+      <LineString>
+        <tessellate>1</tessellate>
+        <altitudeMode>clampToGround</altitudeMode>
+        <coordinates>
+              ${orbitPoints.map((p) => `${p.lon.toFixed(6)},${p.lat.toFixed(6)},0`).join("\n              ")}
+        </coordinates>
+      </LineString>
+    </Placemark>
+
+  </Document>
+</kml>`;
+
+      // Write KML file
+      fs.writeFileSync(result.filePath, kmlContent, "utf-8");
+
+      return { success: true, filePath: result.filePath };
+    } catch (error) {
+      console.error("Failed to export orbit KMZ:", error);
       return { success: false, error: error.message };
     }
   });

@@ -79,11 +79,23 @@ contextBridge.exposeInMainWorld("electronAPI", {
    * @param {string} scenarioName - Name of the scenario for filename
    * @returns {Promise<{success, filePath?, error?}>}
    */
-  backupConfig: (configData, scenarioName) => ipcRenderer.invoke("backup-config", configData, scenarioName)
+  backupConfig: (configData, scenarioName) => ipcRenderer.invoke("backup-config", configData, scenarioName),
+
   /**
    * Restore configuration from JSON file
    * Opens file dialog and reads config data from selected file
    * @returns {Promise<{success, data?, filePath?, error?}>}
-   */,
+   */
   restoreConfig: () => ipcRenderer.invoke("restore-config"),
+
+  // ============================================
+  // Export Orbit API
+  // ============================================
+
+  /**
+   * Export satellite orbit to KML file for Google Earth
+   * @param {Object} orbitData - { satelliteName, color, orbitPoints, currentPosition }
+   * @returns {Promise<{success, filePath?, error?}>}
+   */
+  exportOrbitKML: (orbitData) => ipcRenderer.invoke("export-orbit-kmz", orbitData),
 });
