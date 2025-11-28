@@ -4,9 +4,30 @@
  * 2-Column Layout: Left (Object Tree) | Right (Form Input)
  */
 
-import React, { useState, useEffect } from "react";
-import { ChevronDown, ChevronRight, MapPin, Radio, Palette, Target, Save, Trash2, Plus, Satellite, Circle, Settings, Eye, X, ChevronUp } from "lucide-react";
-import { useGroundStationStore, useSatelliteStore, useTabsStore } from "../../stores";
+import React, { useState, useEffect, useCallback } from "react";
+import {
+  ChevronDown,
+  ChevronRight,
+  MapPin,
+  Radio,
+  Palette,
+  Target,
+  Save,
+  Trash2,
+  Plus,
+  Satellite,
+  Circle,
+  Settings,
+  Eye,
+  X,
+  ChevronUp,
+  Clock,
+  Play,
+  Loader2,
+  Calendar,
+} from "lucide-react";
+import { useGroundStationStore, useSatelliteStore, useTabsStore, useTimeStore } from "../../stores";
+import { calculateSatellitePasses } from "../../services/satelliteCalculator";
 
 // Predefined colors for ground stations
 const PRESET_COLORS = [
@@ -75,6 +96,7 @@ const GroundStationPropertiesTab = ({ stationId }) => {
   const updateGroundStation = useGroundStationStore((state) => state.updateGroundStation);
   const satellites = useSatelliteStore((state) => state.satellites);
   const removeTab = useTabsStore((state) => state.removeTab);
+  const currentTime = useTimeStore((state) => state.currentTime);
 
   // Tree state
   const [expandedNodes, setExpandedNodes] = useState({
@@ -96,6 +118,71 @@ const GroundStationPropertiesTab = ({ stationId }) => {
 
   const [errors, setErrors] = useState({});
   const [hasChanges, setHasChanges] = useState(false);
+
+  // Access Analysis state
+  const [accessConfig, setAccessConfig] = useState({
+    satelliteId: "",
+    startDate: "",
+    endDate: "",
+    minElevation: 5,
+  });
+  const [accessResults, setAccessResults] = useState([]);
+  const [isCalculating, setIsCalculating] = useState(false);
+
+  // Initialize access config with current time (only once on mount)
+  useEffect(() => {
+    const now = new Date(currentTime);
+    const startDate = now.toISOString().slice(0, 16);
+    const endDate = new Date(now.getTime() + 24 * 60 * 60 * 1000).toISOString().slice(0, 16); // +24 hours
+    setAccessConfig((prev) => ({
+      ...prev,
+      startDate,
+      endDate,
+    }));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Calculate Access (AOS/LOS)
+  const calculateAccess = useCallback(() => {
+    if (!accessConfig.satelliteId || !accessConfig.startDate || !accessConfig.endDate) {
+      return;
+    }
+
+    const selectedSat = satellites.find((s) => s.id === accessConfig.satelliteId);
+    if (!selectedSat?.tle) return;
+
+    if (!station?.location) return;
+
+    setIsCalculating(true);
+    setAccessResults([]);
+
+    // Run calculation (could be async in future)
+    setTimeout(() => {
+      try {
+        const startTimestamp = new Date(accessConfig.startDate).getTime();
+        const endTimestamp = new Date(accessConfig.endDate).getTime();
+
+        const passes = calculateSatellitePasses(
+          selectedSat.tle,
+          {
+            lat: station.location.lat,
+            lon: station.location.lon,
+            alt: station.location.alt || 0,
+          },
+          startTimestamp,
+          endTimestamp,
+          accessConfig.minElevation
+        );
+
+        setAccessResults(passes);
+      } catch (error) {
+        console.error("Error calculating access:", error);
+        setAccessResults([]);
+      } finally {
+        setIsCalculating(false);
+      }
+    }, 100);
+  }, [accessConfig, satellites, station]);
 
   // Initialize form when station changes
   useEffect(() => {
@@ -753,7 +840,7 @@ const GroundStationPropertiesTab = ({ stationId }) => {
               />
             ))}
 
-          {/* Access Analysis (placeholder for future feature) */}
+          {/* Access Analysis */}
           <div className="mt-2 border-t border-slate-700 pt-2">
             <TreeItem icon={Eye} label="Access" isSelected={selectedNode === "access"} onClick={() => setSelectedNode("access")} />
           </div>
@@ -762,16 +849,188 @@ const GroundStationPropertiesTab = ({ stationId }) => {
         {/* Right Column - Form Input */}
         <div className="flex-1 overflow-y-auto p-4">
           {selectedNode === "access" ? (
-            <div className="space-y-4">
+            <div className="space-y-6">
               <h3 className="text-sm font-medium text-slate-200 flex items-center gap-2">
                 <Eye className="w-4 h-4 text-purple-400" />
                 Access Analysis
               </h3>
-              <div className="p-4 bg-slate-800/50 rounded-lg border border-slate-700 text-center">
-                <Eye className="w-12 h-12 text-slate-600 mx-auto mb-3" />
-                <p className="text-sm text-slate-400 mb-2">Access Analysis Coming Soon</p>
-                <p className="text-xs text-slate-500">Calculate AOS/LOS pass predictions for satellites over this ground station</p>
+
+              {/* Access Configuration Form */}
+              <div className="space-y-4">
+                {/* Satellite Selection */}
+                <div>
+                  <label className="flex items-center gap-2 text-xs text-slate-300 font-medium mb-2">
+                    <Satellite className="w-3.5 h-3.5 text-blue-400" />
+                    Target Satellite
+                  </label>
+                  <select
+                    value={accessConfig.satelliteId}
+                    onChange={(e) => setAccessConfig((prev) => ({ ...prev, satelliteId: e.target.value }))}
+                    className="w-full px-3 py-2 bg-slate-800 border border-slate-600 rounded-lg text-white text-sm focus:outline-none focus:ring-2 focus:ring-purple-500/50"
+                  >
+                    <option value="">Select satellite...</option>
+                    {satellites.map((sat) => (
+                      <option key={sat.id} value={sat.id}>
+                        {sat.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* Time Period */}
+                <div className="space-y-3">
+                  <label className="flex items-center gap-2 text-xs text-slate-300 font-medium">
+                    <Calendar className="w-3.5 h-3.5 text-green-400" />
+                    Time Period
+                  </label>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-xs text-slate-500 mb-1">Start</label>
+                      <input
+                        type="datetime-local"
+                        value={accessConfig.startDate}
+                        onChange={(e) => setAccessConfig((prev) => ({ ...prev, startDate: e.target.value }))}
+                        className="w-full px-3 py-2 bg-slate-800 border border-slate-600 rounded-lg text-white text-sm focus:outline-none focus:ring-2 focus:ring-green-500/50"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs text-slate-500 mb-1">End</label>
+                      <input
+                        type="datetime-local"
+                        value={accessConfig.endDate}
+                        onChange={(e) => setAccessConfig((prev) => ({ ...prev, endDate: e.target.value }))}
+                        className="w-full px-3 py-2 bg-slate-800 border border-slate-600 rounded-lg text-white text-sm focus:outline-none focus:ring-2 focus:ring-green-500/50"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {/* Min Elevation */}
+                <div>
+                  <label className="flex items-center gap-2 text-xs text-slate-300 font-medium mb-2">
+                    <Target className="w-3.5 h-3.5 text-orange-400" />
+                    Minimum Elevation (°)
+                  </label>
+                  <input
+                    type="number"
+                    value={accessConfig.minElevation}
+                    onChange={(e) => setAccessConfig((prev) => ({ ...prev, minElevation: parseFloat(e.target.value) || 0 }))}
+                    min="0"
+                    max="90"
+                    step="1"
+                    className="w-full px-3 py-2 bg-slate-800 border border-slate-600 rounded-lg text-white text-sm focus:outline-none focus:ring-2 focus:ring-orange-500/50"
+                  />
+                </div>
+
+                {/* Calculate Button */}
+                <button
+                  onClick={calculateAccess}
+                  disabled={!accessConfig.satelliteId || !accessConfig.startDate || !accessConfig.endDate || isCalculating}
+                  className={`w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium transition-all ${
+                    accessConfig.satelliteId && accessConfig.startDate && accessConfig.endDate && !isCalculating
+                      ? "bg-gradient-to-r from-purple-500 to-purple-600 text-white hover:from-purple-400 hover:to-purple-500 shadow-lg shadow-purple-500/20"
+                      : "bg-slate-700 text-slate-500 cursor-not-allowed"
+                  }`}
+                >
+                  {isCalculating ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      Calculating...
+                    </>
+                  ) : (
+                    <>
+                      <Play className="w-4 h-4" />
+                      Calculate Access
+                    </>
+                  )}
+                </button>
               </div>
+
+              {/* Results Table */}
+              {accessResults.length > 0 && (
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between">
+                    <h4 className="text-xs font-medium text-slate-300">Pass Predictions ({accessResults.length} passes found)</h4>
+                  </div>
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-xs">
+                      <thead>
+                        <tr className="border-b border-slate-700">
+                          <th className="text-left py-2 px-2 text-slate-400 font-medium">#</th>
+                          <th className="text-left py-2 px-2 text-slate-400 font-medium">AOS Time</th>
+                          <th className="text-center py-2 px-2 text-slate-400 font-medium">AOS Az</th>
+                          <th className="text-left py-2 px-2 text-slate-400 font-medium">Max El Time</th>
+                          <th className="text-center py-2 px-2 text-slate-400 font-medium">Max El</th>
+                          <th className="text-left py-2 px-2 text-slate-400 font-medium">LOS Time</th>
+                          <th className="text-center py-2 px-2 text-slate-400 font-medium">LOS Az</th>
+                          <th className="text-center py-2 px-2 text-slate-400 font-medium">Duration</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {accessResults.map((pass, index) => (
+                          <tr
+                            key={index}
+                            className={`border-b border-slate-800 hover:bg-slate-800/50 ${
+                              pass.maxElevation?.elevation >= 45 ? "text-green-300" : pass.maxElevation?.elevation >= 20 ? "text-yellow-300" : "text-slate-300"
+                            }`}
+                          >
+                            <td className="py-2 px-2">{index + 1}</td>
+                            <td className="py-2 px-2 whitespace-nowrap">
+                              {new Date(pass.aos.time).toLocaleString("id-ID", {
+                                month: "short",
+                                day: "2-digit",
+                                hour: "2-digit",
+                                minute: "2-digit",
+                                second: "2-digit",
+                              })}
+                            </td>
+                            <td className="py-2 px-2 text-center">{pass.aos.azimuth.toFixed(1)}°</td>
+                            <td className="py-2 px-2 whitespace-nowrap">
+                              {new Date(pass.maxElevation.time).toLocaleString("id-ID", {
+                                hour: "2-digit",
+                                minute: "2-digit",
+                                second: "2-digit",
+                              })}
+                            </td>
+                            <td className="py-2 px-2 text-center font-medium">{pass.maxElevation.elevation.toFixed(1)}°</td>
+                            <td className="py-2 px-2 whitespace-nowrap">
+                              {new Date(pass.los.time).toLocaleString("id-ID", {
+                                hour: "2-digit",
+                                minute: "2-digit",
+                                second: "2-digit",
+                              })}
+                              {pass.los.partial && <span className="text-amber-400 ml-1">*</span>}
+                            </td>
+                            <td className="py-2 px-2 text-center">{pass.los.azimuth.toFixed(1)}°</td>
+                            <td className="py-2 px-2 text-center">
+                              {Math.floor(pass.duration / 60)}m {Math.floor(pass.duration % 60)}s
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                  <div className="flex items-center gap-4 text-xs text-slate-500">
+                    <span className="flex items-center gap-1">
+                      <span className="w-2 h-2 rounded-full bg-green-400" /> Max El ≥ 45°
+                    </span>
+                    <span className="flex items-center gap-1">
+                      <span className="w-2 h-2 rounded-full bg-yellow-400" /> Max El ≥ 20°
+                    </span>
+                    <span className="flex items-center gap-1">
+                      <span className="w-2 h-2 rounded-full bg-slate-400" /> Max El &lt; 20°
+                    </span>
+                  </div>
+                </div>
+              )}
+
+              {/* Empty State */}
+              {!isCalculating && accessResults.length === 0 && accessConfig.satelliteId && (
+                <div className="p-4 bg-slate-800/30 rounded-lg border border-slate-700/50 text-center">
+                  <Clock className="w-8 h-8 text-slate-600 mx-auto mb-2" />
+                  <p className="text-xs text-slate-500">No passes calculated yet. Click "Calculate Access" to find satellite passes.</p>
+                </div>
+              )}
             </div>
           ) : isBasicSection ? (
             renderBasicForm()

@@ -19,27 +19,27 @@ const satrecCache = new Map();
  * @returns {Object|null} satrec object or null if parsing fails
  */
 function getSatrec(id, line1, line2) {
-    const cacheKey = `${id}-${line1.substring(18, 32)}`; // ID + epoch for cache invalidation
+  const cacheKey = `${id}-${line1.substring(18, 32)}`; // ID + epoch for cache invalidation
 
-    if (satrecCache.has(cacheKey)) {
-        return satrecCache.get(cacheKey);
+  if (satrecCache.has(cacheKey)) {
+    return satrecCache.get(cacheKey);
+  }
+
+  try {
+    const satrec = satellite.twoline2satrec(line1, line2);
+    satrecCache.set(cacheKey, satrec);
+
+    // Limit cache size to prevent memory leaks
+    if (satrecCache.size > 100) {
+      const firstKey = satrecCache.keys().next().value;
+      satrecCache.delete(firstKey);
     }
 
-    try {
-        const satrec = satellite.twoline2satrec(line1, line2);
-        satrecCache.set(cacheKey, satrec);
-
-        // Limit cache size to prevent memory leaks
-        if (satrecCache.size > 100) {
-            const firstKey = satrecCache.keys().next().value;
-            satrecCache.delete(firstKey);
-        }
-
-        return satrec;
-    } catch (error) {
-        console.error(`Failed to parse TLE for ${id}:`, error);
-        return null;
-    }
+    return satrec;
+  } catch (error) {
+    console.error(`Failed to parse TLE for ${id}:`, error);
+    return null;
+  }
 }
 
 /**
@@ -49,26 +49,26 @@ function getSatrec(id, line1, line2) {
  * @returns {Object|null} Position {lat, lon, alt, velocity} or null
  */
 function calculatePositionFromSatrec(satrec, date) {
-    try {
-        const positionAndVelocity = satellite.propagate(satrec, date);
-        if (!positionAndVelocity.position) return null;
+  try {
+    const positionAndVelocity = satellite.propagate(satrec, date);
+    if (!positionAndVelocity.position) return null;
 
-        const gmst = satellite.gstime(date);
-        const positionGd = satellite.eciToGeodetic(positionAndVelocity.position, gmst);
+    const gmst = satellite.gstime(date);
+    const positionGd = satellite.eciToGeodetic(positionAndVelocity.position, gmst);
 
-        // Calculate velocity magnitude for interpolation hints
-        const vel = positionAndVelocity.velocity;
-        const velocityMag = vel ? Math.sqrt(vel.x * vel.x + vel.y * vel.y + vel.z * vel.z) : 0;
+    // Calculate velocity magnitude for interpolation hints
+    const vel = positionAndVelocity.velocity;
+    const velocityMag = vel ? Math.sqrt(vel.x * vel.x + vel.y * vel.y + vel.z * vel.z) : 0;
 
-        return {
-            lat: satellite.degreesLat(positionGd.latitude),
-            lon: satellite.degreesLong(positionGd.longitude),
-            alt: positionGd.height,
-            velocity: velocityMag, // km/s
-        };
-    } catch (error) {
-        return null;
-    }
+    return {
+      lat: satellite.degreesLat(positionGd.latitude),
+      lon: satellite.degreesLong(positionGd.longitude),
+      alt: positionGd.height,
+      velocity: velocityMag, // km/s
+    };
+  } catch (error) {
+    return null;
+  }
 }
 
 /**
@@ -80,22 +80,22 @@ function calculatePositionFromSatrec(satrec, date) {
  * @returns {Object} { positions: {[id]: {lat, lon, alt, velocity}}, timestamp }
  */
 export function calculateSatellitePositions(satellites, timestamp) {
-    const date = new Date(timestamp);
-    const positions = {};
+  const date = new Date(timestamp);
+  const positions = {};
 
-    for (const sat of satellites) {
-        if (!sat.tle?.line1 || !sat.tle?.line2) continue;
+  for (const sat of satellites) {
+    if (!sat.tle?.line1 || !sat.tle?.line2) continue;
 
-        const satrec = getSatrec(sat.id, sat.tle.line1, sat.tle.line2);
-        if (!satrec) continue;
+    const satrec = getSatrec(sat.id, sat.tle.line1, sat.tle.line2);
+    if (!satrec) continue;
 
-        const pos = calculatePositionFromSatrec(satrec, date);
-        if (pos) {
-            positions[sat.id] = pos;
-        }
+    const pos = calculatePositionFromSatrec(satrec, date);
+    if (pos) {
+      positions[sat.id] = pos;
     }
+  }
 
-    return { positions, timestamp };
+  return { positions, timestamp };
 }
 
 /**
@@ -108,15 +108,15 @@ export function calculateSatellitePositions(satellites, timestamp) {
  * @returns {Object} { current: positions, next: positions, deltaMs }
  */
 export function calculatePositionsForInterpolation(satellites, timestamp, deltaMs = 100) {
-    const current = calculateSatellitePositions(satellites, timestamp);
-    const next = calculateSatellitePositions(satellites, timestamp + deltaMs);
+  const current = calculateSatellitePositions(satellites, timestamp);
+  const next = calculateSatellitePositions(satellites, timestamp + deltaMs);
 
-    return {
-        current: current.positions,
-        next: next.positions,
-        timestamp,
-        deltaMs,
-    };
+  return {
+    current: current.positions,
+    next: next.positions,
+    timestamp,
+    deltaMs,
+  };
 }
 
 /**
@@ -129,35 +129,35 @@ export function calculatePositionsForInterpolation(satellites, timestamp, deltaM
  * @returns {Array} Array of {lat, lon, alt, time}
  */
 export function generateOrbitPath(tle, startTimestamp, periodMinutes = null, numPoints = 100) {
-    if (!tle?.line1 || !tle?.line2) return [];
+  if (!tle?.line1 || !tle?.line2) return [];
 
-    const satrec = satellite.twoline2satrec(tle.line1, tle.line2);
-    if (!satrec) return [];
+  const satrec = satellite.twoline2satrec(tle.line1, tle.line2);
+  if (!satrec) return [];
 
-    // Calculate orbit period from mean motion if not provided
-    if (!periodMinutes) {
-        const meanMotion = (satrec.no * 1440) / (2 * Math.PI); // rev/day to rev/day
-        periodMinutes = 1440 / meanMotion; // minutes per orbit
+  // Calculate orbit period from mean motion if not provided
+  if (!periodMinutes) {
+    const meanMotion = (satrec.no * 1440) / (2 * Math.PI); // rev/day to rev/day
+    periodMinutes = 1440 / meanMotion; // minutes per orbit
+  }
+
+  const stepMinutes = periodMinutes / numPoints;
+  const points = [];
+
+  for (let i = 0; i <= numPoints; i++) {
+    const time = new Date(startTimestamp + i * stepMinutes * 60 * 1000);
+    const pos = calculatePositionFromSatrec(satrec, time);
+
+    if (pos) {
+      points.push({
+        lat: pos.lat,
+        lon: pos.lon,
+        alt: pos.alt,
+        time: time.getTime(),
+      });
     }
+  }
 
-    const stepMinutes = periodMinutes / numPoints;
-    const points = [];
-
-    for (let i = 0; i <= numPoints; i++) {
-        const time = new Date(startTimestamp + i * stepMinutes * 60 * 1000);
-        const pos = calculatePositionFromSatrec(satrec, time);
-
-        if (pos) {
-            points.push({
-                lat: pos.lat,
-                lon: pos.lon,
-                alt: pos.alt,
-                time: time.getTime(),
-            });
-        }
-    }
-
-    return points;
+  return points;
 }
 
 /**
@@ -169,14 +169,14 @@ export function generateOrbitPath(tle, startTimestamp, periodMinutes = null, num
  * @returns {Object} { [id]: Array of orbit points }
  */
 export function generateOrbitPathsBatch(satellites, startTimestamp, numPoints = 100) {
-    const paths = {};
+  const paths = {};
 
-    for (const sat of satellites) {
-        if (!sat.tle?.line1 || !sat.tle?.line2) continue;
-        paths[sat.id] = generateOrbitPath(sat.tle, startTimestamp, null, numPoints);
-    }
+  for (const sat of satellites) {
+    if (!sat.tle?.line1 || !sat.tle?.line2) continue;
+    paths[sat.id] = generateOrbitPath(sat.tle, startTimestamp, null, numPoints);
+  }
 
-    return paths;
+  return paths;
 }
 
 /**
@@ -187,10 +187,10 @@ export function generateOrbitPathsBatch(satellites, startTimestamp, numPoints = 
  * @returns {number} Coverage radius in km
  */
 export function calculateCoverageRadius(altitudeKm) {
-    const EARTH_RADIUS_KM = 6371;
-    const cosTheta = EARTH_RADIUS_KM / (EARTH_RADIUS_KM + altitudeKm);
-    const theta = Math.acos(cosTheta);
-    return EARTH_RADIUS_KM * theta;
+  const EARTH_RADIUS_KM = 6371;
+  const cosTheta = EARTH_RADIUS_KM / (EARTH_RADIUS_KM + altitudeKm);
+  const theta = Math.acos(cosTheta);
+  return EARTH_RADIUS_KM * theta;
 }
 
 /**
@@ -202,22 +202,22 @@ export function calculateCoverageRadius(altitudeKm) {
  */
 let unitCircleCache = null;
 export function getUnitCircle(nPoints = 72) {
-    if (unitCircleCache && unitCircleCache.length === nPoints) {
-        return unitCircleCache;
-    }
-
-    unitCircleCache = [];
-    for (let i = 0; i < nPoints; i++) {
-        const bearing = (i * 360) / nPoints;
-        const bearingRad = (bearing * Math.PI) / 180;
-        unitCircleCache.push({
-            bearing,
-            sinB: Math.sin(bearingRad),
-            cosB: Math.cos(bearingRad),
-        });
-    }
-
+  if (unitCircleCache && unitCircleCache.length === nPoints) {
     return unitCircleCache;
+  }
+
+  unitCircleCache = [];
+  for (let i = 0; i < nPoints; i++) {
+    const bearing = (i * 360) / nPoints;
+    const bearingRad = (bearing * Math.PI) / 180;
+    unitCircleCache.push({
+      bearing,
+      sinB: Math.sin(bearingRad),
+      cosB: Math.cos(bearingRad),
+    });
+  }
+
+  return unitCircleCache;
 }
 
 /**
@@ -230,36 +230,36 @@ export function getUnitCircle(nPoints = 72) {
  * @returns {Array} Array of {latitude, longitude}
  */
 export function generateGeodesicCircleFast(center, radiusKm, unitCircle = null) {
-    const EARTH_RADIUS_KM = 6371;
-    const uc = unitCircle || getUnitCircle();
+  const EARTH_RADIUS_KM = 6371;
+  const uc = unitCircle || getUnitCircle();
 
-    const lat1 = (center.latitude * Math.PI) / 180;
-    const lon1 = (center.longitude * Math.PI) / 180;
-    const d = radiusKm / EARTH_RADIUS_KM;
+  const lat1 = (center.latitude * Math.PI) / 180;
+  const lon1 = (center.longitude * Math.PI) / 180;
+  const d = radiusKm / EARTH_RADIUS_KM;
 
-    const sinLat1 = Math.sin(lat1);
-    const cosLat1 = Math.cos(lat1);
-    const sinD = Math.sin(d);
-    const cosD = Math.cos(d);
+  const sinLat1 = Math.sin(lat1);
+  const cosLat1 = Math.cos(lat1);
+  const sinD = Math.sin(d);
+  const cosD = Math.cos(d);
 
-    const coords = [];
+  const coords = [];
 
-    for (const { sinB, cosB } of uc) {
-        const lat2 = Math.asin(sinLat1 * cosD + cosLat1 * sinD * cosB);
-        const lon2 = lon1 + Math.atan2(sinB * sinD * cosLat1, cosD - sinLat1 * Math.sin(lat2));
+  for (const { sinB, cosB } of uc) {
+    const lat2 = Math.asin(sinLat1 * cosD + cosLat1 * sinD * cosB);
+    const lon2 = lon1 + Math.atan2(sinB * sinD * cosLat1, cosD - sinLat1 * Math.sin(lat2));
 
-        coords.push({
-            latitude: (lat2 * 180) / Math.PI,
-            longitude: (((lon2 * 180) / Math.PI + 540) % 360) - 180,
-        });
-    }
+    coords.push({
+      latitude: (lat2 * 180) / Math.PI,
+      longitude: (((lon2 * 180) / Math.PI + 540) % 360) - 180,
+    });
+  }
 
-    // Close the circle
-    if (coords.length > 0) {
-        coords.push({ ...coords[0] });
-    }
+  // Close the circle
+  if (coords.length > 0) {
+    coords.push({ ...coords[0] });
+  }
 
-    return coords;
+  return coords;
 }
 
 /**
@@ -267,14 +267,210 @@ export function generateGeodesicCircleFast(center, radiusKm, unitCircle = null) 
  * @param {string} id - Optional satellite ID to clear specific entry
  */
 export function clearCache(id = null) {
-    if (id) {
-        // Clear all entries for this satellite ID
-        for (const key of satrecCache.keys()) {
-            if (key.startsWith(id + "-")) {
-                satrecCache.delete(key);
-            }
-        }
-    } else {
-        satrecCache.clear();
+  if (id) {
+    // Clear all entries for this satellite ID
+    for (const key of satrecCache.keys()) {
+      if (key.startsWith(id + "-")) {
+        satrecCache.delete(key);
+      }
     }
+  } else {
+    satrecCache.clear();
+  }
+}
+
+/**
+ * Calculate look angles (azimuth, elevation, range) from ground station to satellite
+ * @param {Object} groundStation - {lat, lon, alt} in degrees and meters
+ * @param {Object} satrec - Parsed satrec object
+ * @param {Date} date - Time for calculation
+ * @returns {Object|null} {azimuth, elevation, range} in degrees and km
+ */
+function calculateLookAngles(groundStation, satrec, date) {
+  try {
+    const positionAndVelocity = satellite.propagate(satrec, date);
+    if (!positionAndVelocity.position) return null;
+
+    const gmst = satellite.gstime(date);
+
+    // Observer position
+    const observerGd = {
+      latitude: satellite.degreesLat((groundStation.lat * Math.PI) / 180),
+      longitude: satellite.degreesLong((groundStation.lon * Math.PI) / 180),
+      height: (groundStation.alt || 0) / 1000, // Convert m to km
+    };
+
+    // Convert observer geodetic to radians for lookAngles
+    const observerEcf = satellite.geodeticToEcf({
+      latitude: (groundStation.lat * Math.PI) / 180,
+      longitude: (groundStation.lon * Math.PI) / 180,
+      height: (groundStation.alt || 0) / 1000,
+    });
+
+    // Get satellite ECI position
+    const positionEci = positionAndVelocity.position;
+
+    // Convert satellite ECI to ECF
+    const positionEcf = satellite.eciToEcf(positionEci, gmst);
+
+    // Calculate look angles
+    const lookAngles = satellite.ecfToLookAngles(
+      { latitude: (groundStation.lat * Math.PI) / 180, longitude: (groundStation.lon * Math.PI) / 180, height: (groundStation.alt || 0) / 1000 },
+      positionEcf
+    );
+
+    return {
+      azimuth: (lookAngles.azimuth * 180) / Math.PI, // Convert to degrees
+      elevation: (lookAngles.elevation * 180) / Math.PI, // Convert to degrees
+      range: lookAngles.rangeSat, // Already in km
+    };
+  } catch (error) {
+    console.error("Error calculating look angles:", error);
+    return null;
+  }
+}
+
+/**
+ * Calculate satellite passes (AOS/LOS) over a ground station
+ * @param {Object} tle - {line1, line2} TLE data
+ * @param {Object} groundStation - {lat, lon, alt} ground station location
+ * @param {number} startTimestamp - Start time (Unix ms)
+ * @param {number} endTimestamp - End time (Unix ms)
+ * @param {number} minElevation - Minimum elevation in degrees (default: 5)
+ * @returns {Array} Array of pass objects with AOS, LOS, and max elevation details
+ */
+export function calculateSatellitePasses(tle, groundStation, startTimestamp, endTimestamp, minElevation = 5) {
+  if (!tle?.line1 || !tle?.line2) return [];
+
+  const satrec = satellite.twoline2satrec(tle.line1, tle.line2);
+  if (!satrec) return [];
+
+  const passes = [];
+  const stepMs = 30 * 1000; // 30 second step for initial scan
+  const fineStepMs = 1000; // 1 second step for precise AOS/LOS
+
+  let inPass = false;
+  let currentPass = null;
+  let maxElevation = -90;
+  let maxElevationTime = null;
+  let maxElevationAz = 0;
+
+  // Iterate through time range
+  for (let t = startTimestamp; t <= endTimestamp; t += stepMs) {
+    const date = new Date(t);
+    const lookAngles = calculateLookAngles(groundStation, satrec, date);
+
+    if (!lookAngles) continue;
+
+    const elevation = lookAngles.elevation;
+
+    if (elevation >= minElevation) {
+      if (!inPass) {
+        // Start of pass - find precise AOS
+        inPass = true;
+        let aosTime = t;
+
+        // Search backwards for precise AOS
+        for (let tAos = t; tAos >= t - stepMs; tAos -= fineStepMs) {
+          const aosDate = new Date(tAos);
+          const aosLookAngles = calculateLookAngles(groundStation, satrec, aosDate);
+          if (aosLookAngles && aosLookAngles.elevation < minElevation) {
+            aosTime = tAos + fineStepMs;
+            break;
+          }
+          aosTime = tAos;
+        }
+
+        const aosDate = new Date(aosTime);
+        const aosLookAngles = calculateLookAngles(groundStation, satrec, aosDate);
+
+        currentPass = {
+          aos: {
+            time: aosTime,
+            date: aosDate.toISOString(),
+            azimuth: aosLookAngles?.azimuth || 0,
+            elevation: aosLookAngles?.elevation || minElevation,
+          },
+          los: null,
+          maxElevation: null,
+        };
+
+        maxElevation = aosLookAngles?.elevation || minElevation;
+        maxElevationTime = aosTime;
+        maxElevationAz = aosLookAngles?.azimuth || 0;
+      }
+
+      // Track max elevation
+      if (elevation > maxElevation) {
+        maxElevation = elevation;
+        maxElevationTime = t;
+        maxElevationAz = lookAngles.azimuth;
+      }
+    } else if (inPass) {
+      // End of pass - find precise LOS
+      inPass = false;
+      let losTime = t;
+
+      // Search backwards for precise LOS
+      for (let tLos = t - stepMs; tLos <= t; tLos += fineStepMs) {
+        const losDate = new Date(tLos);
+        const losLookAngles = calculateLookAngles(groundStation, satrec, losDate);
+        if (losLookAngles && losLookAngles.elevation < minElevation) {
+          losTime = tLos;
+          break;
+        }
+      }
+
+      const losDate = new Date(losTime);
+      const losLookAngles = calculateLookAngles(groundStation, satrec, losDate);
+
+      currentPass.los = {
+        time: losTime,
+        date: losDate.toISOString(),
+        azimuth: losLookAngles?.azimuth || 0,
+        elevation: losLookAngles?.elevation || minElevation,
+      };
+
+      currentPass.maxElevation = {
+        time: maxElevationTime,
+        date: new Date(maxElevationTime).toISOString(),
+        azimuth: maxElevationAz,
+        elevation: maxElevation,
+      };
+
+      currentPass.duration = (losTime - currentPass.aos.time) / 1000; // seconds
+
+      passes.push(currentPass);
+      currentPass = null;
+      maxElevation = -90;
+    }
+  }
+
+  // Handle pass that extends beyond end time
+  if (inPass && currentPass) {
+    const losDate = new Date(endTimestamp);
+    const losLookAngles = calculateLookAngles(groundStation, satrec, losDate);
+
+    currentPass.los = {
+      time: endTimestamp,
+      date: losDate.toISOString(),
+      azimuth: losLookAngles?.azimuth || 0,
+      elevation: losLookAngles?.elevation || 0,
+      partial: true, // Indicates pass extends beyond time range
+    };
+
+    currentPass.maxElevation = {
+      time: maxElevationTime,
+      date: new Date(maxElevationTime).toISOString(),
+      azimuth: maxElevationAz,
+      elevation: maxElevation,
+    };
+
+    currentPass.duration = (endTimestamp - currentPass.aos.time) / 1000;
+    currentPass.partial = true;
+
+    passes.push(currentPass);
+  }
+
+  return passes;
 }
