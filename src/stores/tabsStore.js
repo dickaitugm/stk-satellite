@@ -1,16 +1,40 @@
 /**
  * Tabs Store
  * Manages dynamic property tabs for Ground Stations and Satellites
+ * Includes a main "Globe" tab that is always present
+ * Also manages sidebar collapsed state
  */
 
 import { create } from "zustand";
 
-export const useTabsStore = create((set, get) => ({
-  // Array of open tabs: { id, type: 'satellite' | 'groundStation', entityId, title }
-  tabs: [],
+// Main Globe tab - always present and cannot be closed
+const GLOBE_TAB = {
+  id: "tab-globe-main",
+  type: "globe",
+  entityId: "globe",
+  title: "2D Globe",
+  isMain: true, // Cannot be closed
+};
 
-  // Currently active tab id
-  activeTabId: null,
+export const useTabsStore = create((set, get) => ({
+  // Array of open tabs: { id, type: 'satellite' | 'groundStation' | 'globe', entityId, title, isMain? }
+  tabs: [GLOBE_TAB],
+
+  // Currently active tab id - defaults to globe
+  activeTabId: GLOBE_TAB.id,
+
+  // Sidebar collapsed state - default to collapsed
+  sidebarCollapsed: true,
+
+  // Toggle sidebar collapsed state
+  toggleSidebar: () => {
+    set((state) => ({ sidebarCollapsed: !state.sidebarCollapsed }));
+  },
+
+  // Set sidebar collapsed state
+  setSidebarCollapsed: (collapsed) => {
+    set({ sidebarCollapsed: collapsed });
+  },
 
   /**
    * Add a new tab or focus existing tab for the same entity
@@ -47,23 +71,26 @@ export const useTabsStore = create((set, get) => ({
   },
 
   /**
-   * Remove a tab by ID
+   * Remove a tab by ID (cannot remove main tab)
    * @param {string} tabId - The tab ID to remove
    */
   removeTab: (tabId) => {
     const { tabs, activeTabId } = get();
-    const tabIndex = tabs.findIndex((tab) => tab.id === tabId);
+    const tab = tabs.find((t) => t.id === tabId);
+
+    // Cannot remove main tab
+    if (tab?.isMain) return;
+
+    const tabIndex = tabs.findIndex((t) => t.id === tabId);
 
     if (tabIndex === -1) return;
 
-    const newTabs = tabs.filter((tab) => tab.id !== tabId);
+    const newTabs = tabs.filter((t) => t.id !== tabId);
 
-    // If removing the active tab, select adjacent tab
+    // If removing the active tab, select adjacent tab or main tab
     let newActiveTabId = activeTabId;
     if (activeTabId === tabId) {
-      if (newTabs.length === 0) {
-        newActiveTabId = null;
-      } else if (tabIndex >= newTabs.length) {
+      if (tabIndex >= newTabs.length) {
         // Was last tab, select new last tab
         newActiveTabId = newTabs[newTabs.length - 1].id;
       } else {
@@ -110,29 +137,37 @@ export const useTabsStore = create((set, get) => ({
   },
 
   /**
-   * Close all tabs
+   * Close all tabs except main
    */
   closeAllTabs: () => {
-    set({ tabs: [], activeTabId: null });
+    set({ tabs: [GLOBE_TAB], activeTabId: GLOBE_TAB.id });
   },
 
   /**
-   * Close tabs for a specific entity type
+   * Close tabs for a specific entity type (except main)
    * @param {string} type - 'satellite' or 'groundStation'
    */
   closeTabsByType: (type) => {
     const { tabs, activeTabId } = get();
-    const newTabs = tabs.filter((tab) => tab.type !== type);
+    const newTabs = tabs.filter((tab) => tab.type !== type || tab.isMain);
     const activeTab = tabs.find((tab) => tab.id === activeTabId);
 
     let newActiveTabId = activeTabId;
-    if (activeTab && activeTab.type === type) {
-      newActiveTabId = newTabs.length > 0 ? newTabs[0].id : null;
+    if (activeTab && activeTab.type === type && !activeTab.isMain) {
+      newActiveTabId = GLOBE_TAB.id;
     }
 
     set({
       tabs: newTabs,
       activeTabId: newActiveTabId,
     });
+  },
+
+  /**
+   * Check if globe tab is active
+   */
+  isGlobeActive: () => {
+    const { activeTabId } = get();
+    return activeTabId === GLOBE_TAB.id;
   },
 }));

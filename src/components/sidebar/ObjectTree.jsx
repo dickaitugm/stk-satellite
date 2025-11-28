@@ -46,8 +46,9 @@ const ObjectTree = () => {
   const toggleAreaVisibility = useTargetAreaStore((state) => state.toggleVisibility);
   const removeTargetArea = useTargetAreaStore((state) => state.removeTargetArea);
 
-  // Tabs store for property panels
+  // Tabs store for property panels and sidebar control
   const addTab = useTabsStore((state) => state.addTab);
+  const setSidebarCollapsed = useTabsStore((state) => state.setSidebarCollapsed);
 
   // Context menu state
   const [contextMenu, setContextMenu] = useState(null);
@@ -226,8 +227,9 @@ const ObjectTree = () => {
     {
       label: "Properties",
       onClick: () => {
-        // Open properties in tab panel instead of dialog
+        // Open properties in tab panel and collapse sidebar
         addTab("satellite", sat.id, sat.name);
+        setSidebarCollapsed(true);
       },
     },
     { separator: true },
@@ -258,8 +260,9 @@ const ObjectTree = () => {
     {
       label: "Properties",
       onClick: () => {
-        // Open properties in tab panel instead of dialog
+        // Open properties in tab panel and collapse sidebar
         addTab("groundStation", gs.id, gs.name);
+        setSidebarCollapsed(true);
       },
     },
     { separator: true },

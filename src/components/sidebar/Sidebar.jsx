@@ -7,10 +7,13 @@ import React, { useState } from "react";
 import { ChevronLeft, ChevronRight, Layers, FileText, Settings, PanelLeftClose, PanelLeft, Download, Upload, Check, X, Loader2, FilePlus2, Trash2 } from "lucide-react";
 
 import ObjectTree from "./ObjectTree";
-import { useScenarioStore, useSatelliteStore, useGroundStationStore, useTimeStore } from "../../stores";
+import { useScenarioStore, useSatelliteStore, useGroundStationStore, useTimeStore, useTabsStore } from "../../stores";
 
 const Sidebar = () => {
-  const [isCollapsed, setIsCollapsed] = useState(false);
+  // Get sidebar collapsed state from tabs store
+  const isCollapsed = useTabsStore((state) => state.sidebarCollapsed);
+  const toggleSidebar = useTabsStore((state) => state.toggleSidebar);
+
   const [activeTab, setActiveTab] = useState("objects"); // 'objects' | 'properties' | 'settings'
   const [backupStatus, setBackupStatus] = useState(null); // null | 'loading' | 'success' | 'error'
   const [statusMessage, setStatusMessage] = useState("");
@@ -212,7 +215,7 @@ const Sidebar = () => {
           </div>
         )}
         <button
-          onClick={() => setIsCollapsed(!isCollapsed)}
+          onClick={toggleSidebar}
           className="p-1 hover:bg-slate-700 rounded transition-colors text-slate-400 hover:text-white"
           title={isCollapsed ? "Expand sidebar" : "Collapse sidebar"}
         >
