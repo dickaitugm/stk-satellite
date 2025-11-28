@@ -5,7 +5,7 @@
 
 import React, { useState, useEffect, useRef } from "react";
 import { Play, Pause, FastForward, Rewind, Settings, Globe, SkipBack, SkipForward, Clock, Radio, Activity } from "lucide-react";
-import { useTimeStore, useScenarioStore } from "../../stores";
+import { useTimeStore, useScenarioStore, useTabsStore } from "../../stores";
 
 const TopNavbar = () => {
   // Time store
@@ -29,6 +29,28 @@ const TopNavbar = () => {
   const getFormattedTime = useTimeStore((state) => state.getFormattedTime);
   const getElapsedTime = useTimeStore((state) => state.getElapsedTime);
   const setCurrentTime = useTimeStore((state) => state.setCurrentTime);
+
+  // Check if globe tab is active
+  const activeTabId = useTabsStore((state) => state.activeTabId);
+  const isGlobeActive = activeTabId === "tab-globe-main";
+
+  // Always tick time when globe is NOT active (Globe handles its own tick when active)
+  // This ensures time keeps running in realtime mode even when viewing other tabs
+  useEffect(() => {
+    if (isGlobeActive) return; // Globe handles its own tick
+
+    let frameId;
+    const tick = () => {
+      useTimeStore.getState().tick();
+      frameId = requestAnimationFrame(tick);
+    };
+
+    frameId = requestAnimationFrame(tick);
+
+    return () => {
+      if (frameId) cancelAnimationFrame(frameId);
+    };
+  }, [isGlobeActive]);
 
   // State untuk input waktu
   const [isEditingTime, setIsEditingTime] = useState(false);
