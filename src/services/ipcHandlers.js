@@ -11,7 +11,7 @@ import {
   calculateCoverageRadius,
   clearCache,
 } from "./satelliteCalculator.js";
-import { colorToKml, generateGroundTrackKml } from "./kmlGenerator.js";
+import { colorToKml, generateGroundTrackKml, generatePassKml, generateMultiPassKml } from "./kmlGenerator.js";
 
 export function registerIpcHandlers() {
   // Fetch TLE from URL (bypasses CORS)
@@ -301,6 +301,108 @@ export function registerIpcHandlers() {
       return { success: true, filePath: result.filePath };
     } catch (error) {
       console.error("Failed to export ground track:", error);
+      return { success: false, error: error.message };
+    }
+  });
+
+  /**
+   * Export pass(es) to KML
+   * @param {Object} passData - Pass export data
+   * @param {string} passData.groundStationName - Name of the ground station
+   * @param {string} passData.groundStationId - ID of the ground station
+   * @param {Object} passData.location - Ground station location {lat, lon}
+   * @param {Array} passData.passes - Array of pass data with path, aos, los, maxElevation
+   * @param {boolean} passData.exportAll - Whether exporting all passes
+   * @returns {Promise<{success, filePath?, error?}>}
+   */
+  ipcMain.handle("export-pass-kml", async (event, passData) => {
+    try {
+      const { groundStationName, location, passes, exportAll } = passData;
+
+      if (!passes || passes.length === 0) {
+        return { success: false, error: "No pass data to export" };
+      }
+
+      // Sanitize name for filename
+      const safeName = groundStationName.replace(/[<>:"/\\|?*]/g, "-").trim() || "GroundStation";
+
+      // Helper function to format UTC time for filename (YYYYMMDD-HHmmss)
+      const formatTimeForFilename = (timestamp) => {
+        const d = new Date(timestamp);
+        const year = d.getUTCFullYear();
+        const month = String(d.getUTCMonth() + 1).padStart(2, "0");
+        const day = String(d.getUTCDate()).padStart(2, "0");
+        const hour = String(d.getUTCHours()).padStart(2, "0");
+        const min = String(d.getUTCMinutes()).padStart(2, "0");
+        const sec = String(d.getUTCSeconds()).padStart(2, "0");
+        return `${year}${month}${day}-${hour}${min}${sec}`;
+      };
+
+      const exportTime = new Date();
+
+      let defaultFilename;
+      if (exportAll) {
+        // For all passes: use AOS of first pass and LOS of last pass
+        const firstAos = formatTimeForFilename(passes[0].aos.time);
+        const lastLos = formatTimeForFilename(passes[passes.length - 1].los.time);
+        const satName = passes[0].satelliteName.replace(/[<>:"/\\|?*]/g, "-").trim();
+        defaultFilename = `${safeName}-${satName}-passes-${firstAos}_to_${lastLos}UTC.kml`;
+      } else {
+        // For single pass: use AOS and LOS times
+        const pass = passes[0];
+        const satName = pass.satelliteName.replace(/[<>:"/\\|?*]/g, "-").trim();
+        const aosTime = formatTimeForFilename(pass.aos.time);
+        const losTime = formatTimeForFilename(pass.los.time);
+        defaultFilename = `${safeName}-${satName}-pass-${aosTime}_to_${losTime}UTC.kml`;
+      }
+
+      const defaultPath = path.join(app.getPath("documents"), defaultFilename);
+
+      const result = await dialog.showSaveDialog({
+        title: exportAll ? "Export All Passes to KML" : "Export Pass to KML",
+        defaultPath: defaultPath,
+        filters: [
+          { name: "KML Files", extensions: ["kml"] },
+          { name: "All Files", extensions: ["*"] },
+        ],
+      });
+
+      if (result.canceled || !result.filePath) {
+        return { success: false, error: "Export cancelled" };
+      }
+
+      // Generate KML content
+      let kmlContent;
+      if (exportAll) {
+        kmlContent = generateMultiPassKml({
+          groundStationName,
+          satelliteName: passes[0]?.satelliteName || "Unknown Satellite",
+          passes,
+          groundStation: location,
+          exportTime,
+        });
+      } else {
+        const pass = passes[0];
+        kmlContent = generatePassKml({
+          satelliteName: pass.satelliteName,
+          groundStationName,
+          kmlColor: "ff9900ff", // Purple default
+          aos: pass.aos,
+          los: pass.los,
+          maxElevation: pass.maxElevation,
+          pathPoints: pass.path,
+          groundStation: location,
+          passNumber: pass.passNumber || 1,
+          exportTime,
+        });
+      }
+
+      // Write KML file
+      fs.writeFileSync(result.filePath, kmlContent, "utf-8");
+
+      return { success: true, filePath: result.filePath };
+    } catch (error) {
+      console.error("Failed to export pass KML:", error);
       return { success: false, error: error.message };
     }
   });

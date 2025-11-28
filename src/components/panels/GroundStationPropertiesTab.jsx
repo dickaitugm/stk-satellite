@@ -547,6 +547,128 @@ const GroundStationPropertiesTab = ({ stationId }) => {
     URL.revokeObjectURL(url);
   };
 
+  // Export single pass to KML
+  const exportPassToKML = async (pass, index) => {
+    if (!station?.location || !pass._tleUsed) {
+      showToast("error", "Cannot export: Missing location or TLE data");
+      return;
+    }
+
+    // Generate path for the pass
+    const path = generatePassPath(
+      pass._tleUsed,
+      {
+        lat: station.location.lat,
+        lon: station.location.lon,
+        alt: station.location.alt || 0,
+      },
+      pass,
+      60
+    );
+
+    if (path.length === 0) {
+      showToast("error", `Failed to generate path for Pass #${index + 1}`);
+      return;
+    }
+
+    const sat = satellites.find((s) => s.id === accessConfig.satelliteId);
+    const passData = {
+      groundStationName: station.name,
+      groundStationId: stationId,
+      location: station.location,
+      passes: [
+        {
+          satelliteId: accessConfig.satelliteId,
+          satelliteName: sat?.name || "Unknown Satellite",
+          aos: pass.aos,
+          los: pass.los,
+          maxElevation: pass.maxElevation,
+          duration: pass.duration,
+          path: path,
+          tleEpoch: pass._tleUsed.line1 ? parseTleEpoch(pass._tleUsed.line1)?.toISOString() : null,
+          passNumber: index + 1,
+        },
+      ],
+      exportAll: false,
+    };
+
+    try {
+      const result = await window.electronAPI.exportPassKml(passData);
+      if (result.success) {
+        showToast("success", `Pass #${index + 1} exported to KML`);
+      } else if (result.error !== "Export cancelled") {
+        showToast("error", `Export failed: ${result.error}`);
+      }
+    } catch (err) {
+      showToast("error", `Export error: ${err.message}`);
+    }
+  };
+
+  // Export all passes to KML
+  const exportAllPassesToKML = async () => {
+    if (accessResults.length === 0) {
+      showToast("error", "No passes to export. Calculate access first.");
+      return;
+    }
+
+    const passes = [];
+    const sat = satellites.find((s) => s.id === accessConfig.satelliteId);
+
+    for (let i = 0; i < accessResults.length; i++) {
+      const pass = accessResults[i];
+      if (!station?.location || !pass._tleUsed) continue;
+
+      const path = generatePassPath(
+        pass._tleUsed,
+        {
+          lat: station.location.lat,
+          lon: station.location.lon,
+          alt: station.location.alt || 0,
+        },
+        pass,
+        60
+      );
+
+      if (path.length === 0) continue;
+
+      passes.push({
+        satelliteId: accessConfig.satelliteId,
+        satelliteName: sat?.name || "Unknown Satellite",
+        aos: pass.aos,
+        los: pass.los,
+        maxElevation: pass.maxElevation,
+        duration: pass.duration,
+        path: path,
+        tleEpoch: pass._tleUsed.line1 ? parseTleEpoch(pass._tleUsed.line1)?.toISOString() : null,
+        passNumber: i + 1,
+      });
+    }
+
+    if (passes.length === 0) {
+      showToast("error", "Failed to generate pass data for export");
+      return;
+    }
+
+    const passData = {
+      groundStationName: station.name,
+      groundStationId: stationId,
+      location: station.location,
+      passes: passes,
+      exportAll: true,
+    };
+
+    try {
+      const result = await window.electronAPI.exportPassKml(passData);
+      if (result.success) {
+        showToast("success", `${passes.length} passes exported to KML`);
+      } else if (result.error !== "Export cancelled") {
+        showToast("error", `Export failed: ${result.error}`);
+      }
+    } catch (err) {
+      showToast("error", `Export error: ${err.message}`);
+    }
+  };
+
   // Initialize form when station changes
   useEffect(() => {
     if (station) {
@@ -1237,6 +1359,14 @@ const GroundStationPropertiesTab = ({ stationId }) => {
                             <Map className="w-3.5 h-3.5" />
                             <span>Add All to Map</span>
                           </button>
+                          <button
+                            onClick={exportAllPassesToKML}
+                            title="Export All Passes to KML (Google Earth)"
+                            className="flex items-center gap-1 px-2 py-1 text-xs text-cyan-400 hover:text-cyan-300 hover:bg-cyan-500/20 rounded transition-colors border border-cyan-500/30"
+                          >
+                            <Download className="w-3.5 h-3.5" />
+                            <span>Export All to KML</span>
+                          </button>
                           <div className="w-px h-4 bg-slate-700 mx-1" />
                           <button
                             onClick={exportToClipboard}
@@ -1278,6 +1408,9 @@ const GroundStationPropertiesTab = ({ stationId }) => {
                               <th className="text-center py-2 px-2 text-slate-400 font-medium w-8" title="Add to Map">
                                 <Map className="w-3.5 h-3.5 mx-auto" />
                               </th>
+                              <th className="text-center py-2 px-2 text-slate-400 font-medium w-8" title="Export to KML">
+                                <Download className="w-3.5 h-3.5 mx-auto" />
+                              </th>
                             </tr>
                           </thead>
                           <tbody>
@@ -1318,12 +1451,24 @@ const GroundStationPropertiesTab = ({ stationId }) => {
                                       <Plus className="w-3.5 h-3.5" />
                                     </button>
                                   </td>
+                                  <td className="py-2 px-2 text-center">
+                                    <button
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        exportPassToKML(pass, index);
+                                      }}
+                                      title="Export to KML"
+                                      className="p-1 text-cyan-400 hover:text-cyan-300 hover:bg-cyan-500/20 rounded transition-colors"
+                                    >
+                                      <Download className="w-3.5 h-3.5" />
+                                    </button>
+                                  </td>
                                 </tr>
 
                                 {/* Expanded Pass Details */}
                                 {expandedPasses[index] && (
                                   <tr>
-                                    <td colSpan={10} className="p-0">
+                                    <td colSpan={11} className="p-0">
                                       <div className="bg-slate-900/50 border-l-2 border-purple-500 mx-2 mb-2 rounded">
                                         <div className="px-3 py-2 border-b border-slate-700/50">
                                           <span className="text-xs font-medium text-purple-300">Pass #{index + 1} Details (5 Waypoints)</span>

@@ -98,4 +98,11 @@ contextBridge.exposeInMainWorld("electronAPI", {
    * @returns {Promise<{success, filePath?, error?}>}
    */
   exportOrbitKmz: (orbitData) => ipcRenderer.invoke("export-orbit-kmz", orbitData),
+
+  /**
+   * Export pass prediction to KML file for Google Earth
+   * @param {Object} passData - { groundStationName, groundStationId, location, passes, exportAll }
+   * @returns {Promise<{success, filePath?, error?}>}
+   */
+  exportPassKml: (passData) => ipcRenderer.invoke("export-pass-kml", passData),
 });
