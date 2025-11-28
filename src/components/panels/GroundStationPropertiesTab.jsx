@@ -34,6 +34,62 @@ import {
 import { useGroundStationStore, useSatelliteStore, useTabsStore, useTimeStore } from "../../stores";
 import { calculateSatellitePasses, calculatePassDetails, parseTleEpoch } from "../../services/satelliteCalculator";
 
+// Format date to YYYY-MM-DD HH:mm:ss
+const formatDateTime = (date, includeDate = true) => {
+  if (!date) return "N/A";
+  const d = new Date(date);
+  const pad = (n) => String(n).padStart(2, "0");
+  const datePart = `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+  const timePart = `${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+  return includeDate ? `${datePart} ${timePart}` : timePart;
+};
+
+// Convert datetime-local value to display format (YYYY-MM-DD HH:mm:ss)
+const datetimeLocalToDisplay = (value) => {
+  if (!value) return "";
+  // datetime-local format: "2025-01-15T10:30"
+  return value.replace("T", " ") + ":00";
+};
+
+// Custom DateTime Input Component with YYYY-MM-DD HH:mm:ss format
+const DateTimeInput = ({ value, onChange, label, className }) => {
+  const [displayValue, setDisplayValue] = useState(datetimeLocalToDisplay(value));
+
+  useEffect(() => {
+    setDisplayValue(datetimeLocalToDisplay(value));
+  }, [value]);
+
+  const handleChange = (e) => {
+    const newValue = e.target.value;
+    setDisplayValue(newValue);
+
+    // Parse and validate the input
+    const match = newValue.match(/^(\d{4})-(\d{2})-(\d{2})\s+(\d{2}):(\d{2})(?::(\d{2}))?$/);
+    if (match) {
+      const [, year, month, day, hour, minute] = match;
+      const dtLocal = `${year}-${month}-${day}T${hour}:${minute}`;
+      onChange(dtLocal);
+    }
+  };
+
+  const handleBlur = () => {
+    // On blur, try to format the value properly
+    if (value) {
+      setDisplayValue(datetimeLocalToDisplay(value));
+    }
+  };
+
+  return (
+    <div>
+      <label className="block text-xs text-slate-500 mb-1">{label}</label>
+      <input type="text" value={displayValue} onChange={handleChange} onBlur={handleBlur} placeholder="YYYY-MM-DD HH:mm:ss" className={className} />
+    </div>
+  );
+};
+
+// Max days for access analysis period
+const MAX_PERIOD_DAYS = 10;
+
 // Predefined colors for ground stations
 const PRESET_COLORS = [
   { name: "Orange", r: 1, g: 0.5, b: 0 },
@@ -1092,31 +1148,12 @@ const GroundStationPropertiesTab = ({ stationId }) => {
                                     {expandedPasses[index] ? <ChevronDown className="w-3.5 h-3.5 text-purple-400" /> : <ChevronRight className="w-3.5 h-3.5 text-slate-500" />}
                                   </td>
                                   <td className="py-2 px-2">{index + 1}</td>
-                                  <td className="py-2 px-2 whitespace-nowrap">
-                                    {new Date(pass.aos.time).toLocaleString("id-ID", {
-                                      day: "2-digit",
-                                      month: "2-digit",
-                                      year: "numeric",
-                                      hour: "2-digit",
-                                      minute: "2-digit",
-                                      second: "2-digit",
-                                    })}
-                                  </td>
+                                  <td className="py-2 px-2 whitespace-nowrap font-mono">{formatDateTime(pass.aos.time)}</td>
                                   <td className="py-2 px-2 text-center">{pass.aos.azimuth.toFixed(1)}°</td>
-                                  <td className="py-2 px-2 whitespace-nowrap">
-                                    {new Date(pass.maxElevation.time).toLocaleString("id-ID", {
-                                      hour: "2-digit",
-                                      minute: "2-digit",
-                                      second: "2-digit",
-                                    })}
-                                  </td>
+                                  <td className="py-2 px-2 whitespace-nowrap font-mono">{formatDateTime(pass.maxElevation.time, false)}</td>
                                   <td className="py-2 px-2 text-center font-medium">{pass.maxElevation.elevation.toFixed(1)}°</td>
-                                  <td className="py-2 px-2 whitespace-nowrap">
-                                    {new Date(pass.los.time).toLocaleString("id-ID", {
-                                      hour: "2-digit",
-                                      minute: "2-digit",
-                                      second: "2-digit",
-                                    })}
+                                  <td className="py-2 px-2 whitespace-nowrap font-mono">
+                                    {formatDateTime(pass.los.time, false)}
                                     {pass.los.partial && <span className="text-amber-400 ml-1">*</span>}
                                   </td>
                                   <td className="py-2 px-2 text-center">{pass.los.azimuth.toFixed(1)}°</td>
@@ -1171,16 +1208,7 @@ const GroundStationPropertiesTab = ({ stationId }) => {
                                                         {detail.label}
                                                       </span>
                                                     </td>
-                                                    <td className="py-1.5 px-2 font-mono whitespace-nowrap">
-                                                      {new Date(detail.time).toLocaleString("id-ID", {
-                                                        day: "2-digit",
-                                                        month: "2-digit",
-                                                        year: "numeric",
-                                                        hour: "2-digit",
-                                                        minute: "2-digit",
-                                                        second: "2-digit",
-                                                      })}
-                                                    </td>
+                                                    <td className="py-1.5 px-2 font-mono whitespace-nowrap">{formatDateTime(detail.time)}</td>
                                                     <td className="py-1.5 px-2 text-center">{detail.azimuth.toFixed(2)}°</td>
                                                     <td className="py-1.5 px-2 text-center">{detail.elevation.toFixed(2)}°</td>
                                                     <td className="py-1.5 px-2 text-center">{detail.range.toFixed(1)}</td>
@@ -1275,17 +1303,7 @@ const GroundStationPropertiesTab = ({ stationId }) => {
                         {/* Current TLE Epoch */}
                         <div className="text-xs">
                           <span className="text-slate-500">Epoch: </span>
-                          <span className="text-white font-mono">
-                            {currentTleEpoch
-                              ? currentTleEpoch.toLocaleString("id-ID", {
-                                  day: "2-digit",
-                                  month: "2-digit",
-                                  year: "numeric",
-                                  hour: "2-digit",
-                                  minute: "2-digit",
-                                })
-                              : "N/A"}
-                          </span>
+                          <span className="text-white font-mono">{formatDateTime(currentTleEpoch)}</span>
                         </div>
 
                         {/* TLE History Dropdown */}
@@ -1305,15 +1323,7 @@ const GroundStationPropertiesTab = ({ stationId }) => {
                                 <option value={-1}>Current TLE</option>
                                 {selectedSatellite.tleHistory.map((tle, idx) => {
                                   const epoch = parseTleEpoch(tle.line1);
-                                  const epochStr = epoch
-                                    ? epoch.toLocaleString("id-ID", {
-                                        day: "2-digit",
-                                        month: "2-digit",
-                                        year: "numeric",
-                                        hour: "2-digit",
-                                        minute: "2-digit",
-                                      })
-                                    : `TLE #${idx + 1}`;
+                                  const epochStr = epoch ? formatDateTime(epoch) : `TLE #${idx + 1}`;
                                   return (
                                     <option key={idx} value={idx}>
                                       📅 {epochStr}
@@ -1337,27 +1347,63 @@ const GroundStationPropertiesTab = ({ stationId }) => {
                     <div className="space-y-2">
                       <label className="flex items-center gap-2 text-xs text-slate-300 font-medium">
                         <Calendar className="w-3.5 h-3.5 text-green-400" />
-                        Time Period
+                        Time Period (max {MAX_PERIOD_DAYS} days)
                       </label>
                       <div className="space-y-2">
-                        <div>
-                          <label className="block text-xs text-slate-500 mb-1">Start (dd/mm/yyyy)</label>
-                          <input
-                            type="datetime-local"
-                            value={accessConfig.startDate}
-                            onChange={(e) => setAccessConfig((prev) => ({ ...prev, startDate: e.target.value }))}
-                            className="w-full px-2 py-1.5 bg-slate-800 border border-slate-600 rounded text-white text-xs focus:outline-none focus:ring-2 focus:ring-green-500/50"
-                          />
-                        </div>
-                        <div>
-                          <label className="block text-xs text-slate-500 mb-1">End (dd/mm/yyyy)</label>
-                          <input
-                            type="datetime-local"
-                            value={accessConfig.endDate}
-                            onChange={(e) => setAccessConfig((prev) => ({ ...prev, endDate: e.target.value }))}
-                            className="w-full px-2 py-1.5 bg-slate-800 border border-slate-600 rounded text-white text-xs focus:outline-none focus:ring-2 focus:ring-green-500/50"
-                          />
-                        </div>
+                        <DateTimeInput
+                          label="Start"
+                          value={accessConfig.startDate}
+                          onChange={(val) => {
+                            setAccessConfig((prev) => {
+                              // Auto-adjust end date if it exceeds max period
+                              const startMs = new Date(val).getTime();
+                              const endMs = new Date(prev.endDate).getTime();
+                              const maxMs = MAX_PERIOD_DAYS * 24 * 60 * 60 * 1000;
+
+                              if (endMs - startMs > maxMs) {
+                                const newEnd = new Date(startMs + maxMs).toISOString().slice(0, 16);
+                                return { ...prev, startDate: val, endDate: newEnd };
+                              }
+                              return { ...prev, startDate: val };
+                            });
+                          }}
+                          className="w-full px-2 py-1.5 bg-slate-800 border border-slate-600 rounded text-white text-xs focus:outline-none focus:ring-2 focus:ring-green-500/50 font-mono"
+                        />
+                        <DateTimeInput
+                          label="End"
+                          value={accessConfig.endDate}
+                          onChange={(val) => {
+                            setAccessConfig((prev) => {
+                              const startMs = new Date(prev.startDate).getTime();
+                              const endMs = new Date(val).getTime();
+                              const maxMs = MAX_PERIOD_DAYS * 24 * 60 * 60 * 1000;
+
+                              // Validate: end must be after start and within max period
+                              if (endMs <= startMs) {
+                                return prev; // Don't update if end is before start
+                              }
+                              if (endMs - startMs > maxMs) {
+                                // Limit to max period
+                                const newEnd = new Date(startMs + maxMs).toISOString().slice(0, 16);
+                                return { ...prev, endDate: newEnd };
+                              }
+                              return { ...prev, endDate: val };
+                            });
+                          }}
+                          className="w-full px-2 py-1.5 bg-slate-800 border border-slate-600 rounded text-white text-xs focus:outline-none focus:ring-2 focus:ring-green-500/50 font-mono"
+                        />
+                        {/* Period indicator */}
+                        {accessConfig.startDate && accessConfig.endDate && (
+                          <div className="text-xs text-slate-500">
+                            Period:{" "}
+                            {(() => {
+                              const diffMs = new Date(accessConfig.endDate).getTime() - new Date(accessConfig.startDate).getTime();
+                              const days = Math.floor(diffMs / (24 * 60 * 60 * 1000));
+                              const hours = Math.floor((diffMs % (24 * 60 * 60 * 1000)) / (60 * 60 * 1000));
+                              return `${days}d ${hours}h`;
+                            })()}
+                          </div>
+                        )}
                       </div>
                     </div>
 
