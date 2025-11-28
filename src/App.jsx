@@ -14,6 +14,9 @@ import { Globe2D } from './components/globe';
 // Sidebar components
 import { Sidebar } from './components/sidebar';
 
+// Panels
+import { PropertiesPanel } from './components/panels';
+
 // Stores
 import { useTimeStore, useSatelliteStore } from './stores';
 
@@ -46,6 +49,9 @@ export default function App() {
           {/* WorldWind Component */}
           <Globe2D onMouseMove={setCursorCoords} />
         </div>
+
+        {/* PROPERTIES PANEL - Bottom right, above bottom navbar */}
+        <PropertiesPanel sidebarWidth={288} />
       </div>
 
       {/* BOTTOM MENU */}

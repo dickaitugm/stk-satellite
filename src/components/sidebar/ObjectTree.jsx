@@ -10,7 +10,7 @@ import TreeNode from "./TreeNode";
 import ContextMenu from "./ContextMenu";
 import { GroundStationDialog, SatelliteDialog } from "../ui";
 
-import { useSatelliteStore, useGroundStationStore, useTargetAreaStore, useTimeStore } from "../../stores";
+import { useSatelliteStore, useGroundStationStore, useTargetAreaStore, useTimeStore, useTabsStore } from "../../stores";
 
 const ObjectTree = () => {
   // Stores
@@ -45,6 +45,9 @@ const ObjectTree = () => {
   const selectArea = useTargetAreaStore((state) => state.selectArea);
   const toggleAreaVisibility = useTargetAreaStore((state) => state.toggleVisibility);
   const removeTargetArea = useTargetAreaStore((state) => state.removeTargetArea);
+
+  // Tabs store for property panels
+  const addTab = useTabsStore((state) => state.addTab);
 
   // Context menu state
   const [contextMenu, setContextMenu] = useState(null);
@@ -223,7 +226,8 @@ const ObjectTree = () => {
     {
       label: "Properties",
       onClick: () => {
-        openEditSatDialog(sat);
+        // Open properties in tab panel instead of dialog
+        addTab("satellite", sat.id, sat.name);
       },
     },
     { separator: true },
@@ -254,7 +258,8 @@ const ObjectTree = () => {
     {
       label: "Properties",
       onClick: () => {
-        openEditGsDialog(gs);
+        // Open properties in tab panel instead of dialog
+        addTab("groundStation", gs.id, gs.name);
       },
     },
     { separator: true },
