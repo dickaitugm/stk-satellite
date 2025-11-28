@@ -1022,394 +1022,399 @@ const GroundStationPropertiesTab = ({ stationId }) => {
         {/* Right Column - Form Input */}
         <div className="flex-1 overflow-y-auto p-4">
           {selectedNode === "access" ? (
-            <div className="space-y-6">
-              <h3 className="text-sm font-medium text-slate-200 flex items-center gap-2">
+            <div className="h-full flex flex-col">
+              <h3 className="text-sm font-medium text-slate-200 flex items-center gap-2 mb-4">
                 <Eye className="w-4 h-4 text-purple-400" />
                 Access Analysis
               </h3>
 
-              {/* Access Configuration Form */}
-              <div className="space-y-4">
-                {/* Satellite Selection */}
-                <div>
-                  <label className="flex items-center gap-2 text-xs text-slate-300 font-medium mb-2">
-                    <Satellite className="w-3.5 h-3.5 text-blue-400" />
-                    Target Satellite
-                  </label>
-                  <select
-                    value={accessConfig.satelliteId}
-                    onChange={(e) =>
-                      setAccessConfig((prev) => ({
-                        ...prev,
-                        satelliteId: e.target.value,
-                        selectedTleIndex: -1, // Reset TLE selection when satellite changes
-                      }))
-                    }
-                    className="w-full px-3 py-2 bg-slate-800 border border-slate-600 rounded-lg text-white text-sm focus:outline-none focus:ring-2 focus:ring-purple-500/50"
-                  >
-                    <option value="">Select satellite...</option>
-                    {satellites.map((sat) => (
-                      <option key={sat.id} value={sat.id}>
-                        {sat.name}
-                      </option>
-                    ))}
-                  </select>
-                  <p className="text-xs text-slate-500 mt-1 flex items-center gap-1">
-                    <Info className="w-3 h-3" />
-                    Select a satellite to compute pass predictions
-                  </p>
-                </div>
-
-                {/* TLE Epoch Info & History Selection */}
-                {selectedSatellite && (
-                  <div className="p-3 bg-slate-800/50 rounded-lg border border-slate-700 space-y-3">
-                    <div className="flex items-center gap-2 text-xs text-slate-300 font-medium">
-                      <History className="w-3.5 h-3.5 text-amber-400" />
-                      TLE / Orbit Element
-                    </div>
-
-                    {/* Current TLE Epoch */}
-                    <div className="flex items-center justify-between text-xs">
-                      <span className="text-slate-400">Current TLE Epoch:</span>
-                      <span className="text-white font-mono">
-                        {currentTleEpoch
-                          ? currentTleEpoch.toLocaleString("id-ID", {
-                              year: "numeric",
-                              month: "short",
-                              day: "2-digit",
-                              hour: "2-digit",
-                              minute: "2-digit",
-                              second: "2-digit",
-                            })
-                          : "N/A"}
-                      </span>
-                    </div>
-
-                    {/* TLE History Dropdown */}
-                    {selectedSatellite.tleHistory?.length > 0 && (
-                      <div>
-                        <label className="block text-xs text-slate-400 mb-1.5">Use Historical TLE ({selectedSatellite.tleHistory.length} available)</label>
-                        <div className="relative">
-                          <select
-                            value={accessConfig.selectedTleIndex}
-                            onChange={(e) =>
-                              setAccessConfig((prev) => ({
-                                ...prev,
-                                selectedTleIndex: parseInt(e.target.value),
-                              }))
-                            }
-                            className="w-full px-3 py-2 bg-slate-900 border border-slate-600 rounded-lg text-white text-xs focus:outline-none focus:ring-2 focus:ring-amber-500/50 appearance-none cursor-pointer"
+              {/* 2 Column Layout: Results (3/4) | Form (1/4) */}
+              <div className="flex-1 flex gap-4 min-h-0">
+                {/* Left Column - Results (3/4 width) */}
+                <div className="flex-[3] overflow-y-auto pr-2">
+                  {/* Results Table */}
+                  {accessResults.length > 0 ? (
+                    <div className="space-y-3">
+                      <div className="flex items-center justify-between">
+                        <h4 className="text-xs font-medium text-slate-300">Pass Predictions ({accessResults.length} passes found)</h4>
+                        {/* Export Buttons */}
+                        <div className="flex items-center gap-1">
+                          <button
+                            onClick={exportToClipboard}
+                            title="Copy to Clipboard"
+                            className="p-1.5 text-slate-400 hover:text-white hover:bg-slate-700 rounded transition-colors"
                           >
-                            <option value={-1}>Use Current TLE (Latest)</option>
-                            {selectedSatellite.tleHistory.map((tle, idx) => {
-                              const epoch = parseTleEpoch(tle.line1);
-                              const epochStr = epoch
-                                ? epoch.toLocaleString("id-ID", {
-                                    year: "numeric",
-                                    month: "short",
-                                    day: "2-digit",
-                                    hour: "2-digit",
-                                    minute: "2-digit",
-                                  })
-                                : `TLE #${idx + 1}`;
-                              return (
-                                <option key={idx} value={idx}>
-                                  📅 {epochStr}
-                                </option>
-                              );
-                            })}
-                          </select>
-                          <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
+                            <Copy className="w-3.5 h-3.5" />
+                          </button>
+                          <button onClick={exportToCSV} title="Export CSV" className="p-1.5 text-slate-400 hover:text-green-400 hover:bg-slate-700 rounded transition-colors">
+                            <FileText className="w-3.5 h-3.5" />
+                          </button>
+                          <button onClick={exportToTXT} title="Export TXT" className="p-1.5 text-slate-400 hover:text-blue-400 hover:bg-slate-700 rounded transition-colors">
+                            <Download className="w-3.5 h-3.5" />
+                          </button>
                         </div>
-                        <p className="text-xs text-slate-500 mt-1 flex items-center gap-1">
-                          <Info className="w-3 h-3" />
-                          Historical TLEs may give less accurate predictions
-                        </p>
                       </div>
-                    )}
 
-                    {/* Show selected TLE epoch */}
-                    {accessConfig.selectedTleIndex >= 0 && selectedHistoryEpoch && (
-                      <div className="flex items-center justify-between text-xs p-2 bg-amber-900/20 rounded border border-amber-700/30">
-                        <span className="text-amber-400">Using Historical TLE:</span>
-                        <span className="text-amber-300 font-mono">
-                          {selectedHistoryEpoch.toLocaleString("id-ID", {
-                            year: "numeric",
-                            month: "short",
-                            day: "2-digit",
-                            hour: "2-digit",
-                            minute: "2-digit",
-                            second: "2-digit",
-                          })}
+                      {/* TLE Info Summary */}
+                      <div className="text-xs text-slate-500 p-2 bg-slate-800/30 rounded border border-slate-700/50">
+                        <span className="text-slate-400">TLE Epoch used: </span>
+                        <span className="font-mono text-slate-300">
+                          {selectedHistoryEpoch ? selectedHistoryEpoch.toISOString() : currentTleEpoch ? currentTleEpoch.toISOString() : "N/A"}
                         </span>
                       </div>
-                    )}
-                  </div>
-                )}
 
-                {/* Time Period */}
-                <div className="space-y-3">
-                  <label className="flex items-center gap-2 text-xs text-slate-300 font-medium">
-                    <Calendar className="w-3.5 h-3.5 text-green-400" />
-                    Time Period
-                  </label>
-                  <div className="grid grid-cols-2 gap-3">
-                    <div>
-                      <label className="block text-xs text-slate-500 mb-1">Start</label>
-                      <input
-                        type="datetime-local"
-                        value={accessConfig.startDate}
-                        onChange={(e) => setAccessConfig((prev) => ({ ...prev, startDate: e.target.value }))}
-                        className="w-full px-3 py-2 bg-slate-800 border border-slate-600 rounded-lg text-white text-sm focus:outline-none focus:ring-2 focus:ring-green-500/50"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-xs text-slate-500 mb-1">End</label>
-                      <input
-                        type="datetime-local"
-                        value={accessConfig.endDate}
-                        onChange={(e) => setAccessConfig((prev) => ({ ...prev, endDate: e.target.value }))}
-                        className="w-full px-3 py-2 bg-slate-800 border border-slate-600 rounded-lg text-white text-sm focus:outline-none focus:ring-2 focus:ring-green-500/50"
-                      />
-                    </div>
-                  </div>
-                </div>
-
-                {/* Min Elevation */}
-                <div>
-                  <label className="flex items-center gap-2 text-xs text-slate-300 font-medium mb-2">
-                    <Target className="w-3.5 h-3.5 text-orange-400" />
-                    Minimum Elevation (°)
-                  </label>
-                  <input
-                    type="number"
-                    value={accessConfig.minElevation}
-                    onChange={(e) => setAccessConfig((prev) => ({ ...prev, minElevation: parseFloat(e.target.value) || 0 }))}
-                    min="0"
-                    max="90"
-                    step="1"
-                    className="w-full px-3 py-2 bg-slate-800 border border-slate-600 rounded-lg text-white text-sm focus:outline-none focus:ring-2 focus:ring-orange-500/50"
-                  />
-                  <p className="text-xs text-slate-500 mt-1 flex items-center gap-1">
-                    <Info className="w-3 h-3" />
-                    Passes with max elevation below this will be excluded
-                  </p>
-                </div>
-
-                {/* Calculate Button */}
-                <button
-                  onClick={calculateAccess}
-                  disabled={!accessConfig.satelliteId || !accessConfig.startDate || !accessConfig.endDate || isCalculating}
-                  className={`w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium transition-all ${
-                    accessConfig.satelliteId && accessConfig.startDate && accessConfig.endDate && !isCalculating
-                      ? "bg-gradient-to-r from-purple-500 to-purple-600 text-white hover:from-purple-400 hover:to-purple-500 shadow-lg shadow-purple-500/20"
-                      : "bg-slate-700 text-slate-500 cursor-not-allowed"
-                  }`}
-                >
-                  {isCalculating ? (
-                    <>
-                      <Loader2 className="w-4 h-4 animate-spin" />
-                      Calculating...
-                    </>
-                  ) : (
-                    <>
-                      <Play className="w-4 h-4" />
-                      Calculate Access
-                    </>
-                  )}
-                </button>
-              </div>
-
-              {/* Results Table */}
-              {accessResults.length > 0 && (
-                <div className="space-y-3">
-                  <div className="flex items-center justify-between">
-                    <h4 className="text-xs font-medium text-slate-300">Pass Predictions ({accessResults.length} passes found)</h4>
-                    {/* Export Buttons */}
-                    <div className="flex items-center gap-1">
-                      <button onClick={exportToClipboard} title="Copy to Clipboard" className="p-1.5 text-slate-400 hover:text-white hover:bg-slate-700 rounded transition-colors">
-                        <Copy className="w-3.5 h-3.5" />
-                      </button>
-                      <button onClick={exportToCSV} title="Export CSV" className="p-1.5 text-slate-400 hover:text-green-400 hover:bg-slate-700 rounded transition-colors">
-                        <FileText className="w-3.5 h-3.5" />
-                      </button>
-                      <button onClick={exportToTXT} title="Export TXT" className="p-1.5 text-slate-400 hover:text-blue-400 hover:bg-slate-700 rounded transition-colors">
-                        <Download className="w-3.5 h-3.5" />
-                      </button>
-                    </div>
-                  </div>
-
-                  {/* TLE Info Summary */}
-                  <div className="text-xs text-slate-500 p-2 bg-slate-800/30 rounded border border-slate-700/50">
-                    <span className="text-slate-400">TLE Epoch used: </span>
-                    <span className="font-mono text-slate-300">
-                      {selectedHistoryEpoch ? selectedHistoryEpoch.toISOString() : currentTleEpoch ? currentTleEpoch.toISOString() : "N/A"}
-                    </span>
-                  </div>
-
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-xs">
-                      <thead>
-                        <tr className="border-b border-slate-700">
-                          <th className="text-left py-2 px-2 text-slate-400 font-medium w-6"></th>
-                          <th className="text-left py-2 px-2 text-slate-400 font-medium">#</th>
-                          <th className="text-left py-2 px-2 text-slate-400 font-medium">AOS Time</th>
-                          <th className="text-center py-2 px-2 text-slate-400 font-medium">AOS Az</th>
-                          <th className="text-left py-2 px-2 text-slate-400 font-medium">Max El Time</th>
-                          <th className="text-center py-2 px-2 text-slate-400 font-medium">Max El</th>
-                          <th className="text-left py-2 px-2 text-slate-400 font-medium">LOS Time</th>
-                          <th className="text-center py-2 px-2 text-slate-400 font-medium">LOS Az</th>
-                          <th className="text-center py-2 px-2 text-slate-400 font-medium">Duration</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {accessResults.map((pass, index) => (
-                          <React.Fragment key={index}>
-                            {/* Main Pass Row */}
-                            <tr
-                              onClick={() => togglePassExpansion(index, pass)}
-                              className={`border-b border-slate-800 cursor-pointer transition-colors ${expandedPasses[index] ? "bg-slate-800/70" : "hover:bg-slate-800/50"} ${
-                                pass.maxElevation?.elevation >= 45 ? "text-green-300" : pass.maxElevation?.elevation >= 20 ? "text-yellow-300" : "text-slate-300"
-                              }`}
-                            >
-                              <td className="py-2 px-2">
-                                {expandedPasses[index] ? <ChevronDown className="w-3.5 h-3.5 text-purple-400" /> : <ChevronRight className="w-3.5 h-3.5 text-slate-500" />}
-                              </td>
-                              <td className="py-2 px-2">{index + 1}</td>
-                              <td className="py-2 px-2 whitespace-nowrap">
-                                {new Date(pass.aos.time).toLocaleString("id-ID", {
-                                  month: "short",
-                                  day: "2-digit",
-                                  hour: "2-digit",
-                                  minute: "2-digit",
-                                  second: "2-digit",
-                                })}
-                              </td>
-                              <td className="py-2 px-2 text-center">{pass.aos.azimuth.toFixed(1)}°</td>
-                              <td className="py-2 px-2 whitespace-nowrap">
-                                {new Date(pass.maxElevation.time).toLocaleString("id-ID", {
-                                  hour: "2-digit",
-                                  minute: "2-digit",
-                                  second: "2-digit",
-                                })}
-                              </td>
-                              <td className="py-2 px-2 text-center font-medium">{pass.maxElevation.elevation.toFixed(1)}°</td>
-                              <td className="py-2 px-2 whitespace-nowrap">
-                                {new Date(pass.los.time).toLocaleString("id-ID", {
-                                  hour: "2-digit",
-                                  minute: "2-digit",
-                                  second: "2-digit",
-                                })}
-                                {pass.los.partial && <span className="text-amber-400 ml-1">*</span>}
-                              </td>
-                              <td className="py-2 px-2 text-center">{pass.los.azimuth.toFixed(1)}°</td>
-                              <td className="py-2 px-2 text-center">
-                                {Math.floor(pass.duration / 60)}m {Math.floor(pass.duration % 60)}s
-                              </td>
+                      <div className="overflow-x-auto">
+                        <table className="w-full text-xs">
+                          <thead>
+                            <tr className="border-b border-slate-700">
+                              <th className="text-left py-2 px-2 text-slate-400 font-medium w-6"></th>
+                              <th className="text-left py-2 px-2 text-slate-400 font-medium">#</th>
+                              <th className="text-left py-2 px-2 text-slate-400 font-medium">AOS Time</th>
+                              <th className="text-center py-2 px-2 text-slate-400 font-medium">AOS Az</th>
+                              <th className="text-left py-2 px-2 text-slate-400 font-medium">Max El Time</th>
+                              <th className="text-center py-2 px-2 text-slate-400 font-medium">Max El</th>
+                              <th className="text-left py-2 px-2 text-slate-400 font-medium">LOS Time</th>
+                              <th className="text-center py-2 px-2 text-slate-400 font-medium">LOS Az</th>
+                              <th className="text-center py-2 px-2 text-slate-400 font-medium">Duration</th>
                             </tr>
+                          </thead>
+                          <tbody>
+                            {accessResults.map((pass, index) => (
+                              <React.Fragment key={index}>
+                                {/* Main Pass Row */}
+                                <tr
+                                  onClick={() => togglePassExpansion(index, pass)}
+                                  className={`border-b border-slate-800 cursor-pointer transition-colors ${expandedPasses[index] ? "bg-slate-800/70" : "hover:bg-slate-800/50"} ${
+                                    pass.maxElevation?.elevation >= 45 ? "text-green-300" : pass.maxElevation?.elevation >= 20 ? "text-yellow-300" : "text-slate-300"
+                                  }`}
+                                >
+                                  <td className="py-2 px-2">
+                                    {expandedPasses[index] ? <ChevronDown className="w-3.5 h-3.5 text-purple-400" /> : <ChevronRight className="w-3.5 h-3.5 text-slate-500" />}
+                                  </td>
+                                  <td className="py-2 px-2">{index + 1}</td>
+                                  <td className="py-2 px-2 whitespace-nowrap">
+                                    {new Date(pass.aos.time).toLocaleString("id-ID", {
+                                      day: "2-digit",
+                                      month: "2-digit",
+                                      year: "numeric",
+                                      hour: "2-digit",
+                                      minute: "2-digit",
+                                      second: "2-digit",
+                                    })}
+                                  </td>
+                                  <td className="py-2 px-2 text-center">{pass.aos.azimuth.toFixed(1)}°</td>
+                                  <td className="py-2 px-2 whitespace-nowrap">
+                                    {new Date(pass.maxElevation.time).toLocaleString("id-ID", {
+                                      hour: "2-digit",
+                                      minute: "2-digit",
+                                      second: "2-digit",
+                                    })}
+                                  </td>
+                                  <td className="py-2 px-2 text-center font-medium">{pass.maxElevation.elevation.toFixed(1)}°</td>
+                                  <td className="py-2 px-2 whitespace-nowrap">
+                                    {new Date(pass.los.time).toLocaleString("id-ID", {
+                                      hour: "2-digit",
+                                      minute: "2-digit",
+                                      second: "2-digit",
+                                    })}
+                                    {pass.los.partial && <span className="text-amber-400 ml-1">*</span>}
+                                  </td>
+                                  <td className="py-2 px-2 text-center">{pass.los.azimuth.toFixed(1)}°</td>
+                                  <td className="py-2 px-2 text-center">
+                                    {Math.floor(pass.duration / 60)}m {Math.floor(pass.duration % 60)}s
+                                  </td>
+                                </tr>
 
-                            {/* Expanded Pass Details */}
-                            {expandedPasses[index] && (
-                              <tr>
-                                <td colSpan={9} className="p-0">
-                                  <div className="bg-slate-900/50 border-l-2 border-purple-500 mx-2 mb-2 rounded">
-                                    <div className="px-3 py-2 border-b border-slate-700/50">
-                                      <span className="text-xs font-medium text-purple-300">Pass #{index + 1} Details (5 Waypoints)</span>
-                                    </div>
-                                    <div className="p-2">
-                                      {passDetails[index] ? (
-                                        <table className="w-full text-xs">
-                                          <thead>
-                                            <tr className="text-slate-500">
-                                              <th className="text-left py-1 px-2">Point</th>
-                                              <th className="text-left py-1 px-2">Time (UTC)</th>
-                                              <th className="text-center py-1 px-2">Azimuth</th>
-                                              <th className="text-center py-1 px-2">Elevation</th>
-                                              <th className="text-center py-1 px-2">Range (km)</th>
-                                            </tr>
-                                          </thead>
-                                          <tbody>
-                                            {passDetails[index].map((detail, di) => (
-                                              <tr
-                                                key={di}
-                                                className={`border-t border-slate-800/50 ${detail.label === "Max El" ? "text-green-300 font-medium" : "text-slate-300"}`}
-                                              >
-                                                <td className="py-1.5 px-2">
-                                                  <span
-                                                    className={`inline-flex items-center gap-1 ${
-                                                      detail.label === "AOS"
-                                                        ? "text-blue-400"
-                                                        : detail.label === "LOS"
-                                                        ? "text-red-400"
-                                                        : detail.label === "Max El"
-                                                        ? "text-green-400"
-                                                        : "text-slate-400"
-                                                    }`}
-                                                  >
-                                                    {detail.label === "AOS" && "↗"}
-                                                    {detail.label === "1/2 Rise" && "⬆"}
-                                                    {detail.label === "Max El" && "◆"}
-                                                    {detail.label === "1/2 Set" && "⬇"}
-                                                    {detail.label === "LOS" && "↘"}
-                                                    {detail.label}
-                                                  </span>
-                                                </td>
-                                                <td className="py-1.5 px-2 font-mono whitespace-nowrap">
-                                                  {new Date(detail.time).toLocaleString("id-ID", {
-                                                    month: "short",
-                                                    day: "2-digit",
-                                                    hour: "2-digit",
-                                                    minute: "2-digit",
-                                                    second: "2-digit",
-                                                  })}
-                                                </td>
-                                                <td className="py-1.5 px-2 text-center">{detail.azimuth.toFixed(2)}°</td>
-                                                <td className="py-1.5 px-2 text-center">{detail.elevation.toFixed(2)}°</td>
-                                                <td className="py-1.5 px-2 text-center">{detail.range.toFixed(1)}</td>
-                                              </tr>
-                                            ))}
-                                          </tbody>
-                                        </table>
-                                      ) : (
-                                        <div className="flex items-center justify-center py-4 text-slate-500">
-                                          <Loader2 className="w-4 h-4 animate-spin mr-2" />
-                                          Loading details...
+                                {/* Expanded Pass Details */}
+                                {expandedPasses[index] && (
+                                  <tr>
+                                    <td colSpan={9} className="p-0">
+                                      <div className="bg-slate-900/50 border-l-2 border-purple-500 mx-2 mb-2 rounded">
+                                        <div className="px-3 py-2 border-b border-slate-700/50">
+                                          <span className="text-xs font-medium text-purple-300">Pass #{index + 1} Details (5 Waypoints)</span>
                                         </div>
-                                      )}
-                                    </div>
-                                  </div>
-                                </td>
-                              </tr>
-                            )}
-                          </React.Fragment>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-4 text-xs text-slate-500">
-                      <span className="flex items-center gap-1">
-                        <span className="w-2 h-2 rounded-full bg-green-400" /> Max El ≥ 45°
-                      </span>
-                      <span className="flex items-center gap-1">
-                        <span className="w-2 h-2 rounded-full bg-yellow-400" /> Max El ≥ 20°
-                      </span>
-                      <span className="flex items-center gap-1">
-                        <span className="w-2 h-2 rounded-full bg-slate-400" /> Max El &lt; 20°
-                      </span>
+                                        <div className="p-2">
+                                          {passDetails[index] ? (
+                                            <table className="w-full text-xs">
+                                              <thead>
+                                                <tr className="text-slate-500">
+                                                  <th className="text-left py-1 px-2">Point</th>
+                                                  <th className="text-left py-1 px-2">Time (UTC)</th>
+                                                  <th className="text-center py-1 px-2">Azimuth</th>
+                                                  <th className="text-center py-1 px-2">Elevation</th>
+                                                  <th className="text-center py-1 px-2">Range (km)</th>
+                                                </tr>
+                                              </thead>
+                                              <tbody>
+                                                {passDetails[index].map((detail, di) => (
+                                                  <tr
+                                                    key={di}
+                                                    className={`border-t border-slate-800/50 ${detail.label === "Max El" ? "text-green-300 font-medium" : "text-slate-300"}`}
+                                                  >
+                                                    <td className="py-1.5 px-2">
+                                                      <span
+                                                        className={`inline-flex items-center gap-1 ${
+                                                          detail.label === "AOS"
+                                                            ? "text-blue-400"
+                                                            : detail.label === "LOS"
+                                                            ? "text-red-400"
+                                                            : detail.label === "Max El"
+                                                            ? "text-green-400"
+                                                            : "text-slate-400"
+                                                        }`}
+                                                      >
+                                                        {detail.label === "AOS" && "↗"}
+                                                        {detail.label === "1/2 Rise" && "⬆"}
+                                                        {detail.label === "Max El" && "◆"}
+                                                        {detail.label === "1/2 Set" && "⬇"}
+                                                        {detail.label === "LOS" && "↘"}
+                                                        {detail.label}
+                                                      </span>
+                                                    </td>
+                                                    <td className="py-1.5 px-2 font-mono whitespace-nowrap">
+                                                      {new Date(detail.time).toLocaleString("id-ID", {
+                                                        day: "2-digit",
+                                                        month: "2-digit",
+                                                        year: "numeric",
+                                                        hour: "2-digit",
+                                                        minute: "2-digit",
+                                                        second: "2-digit",
+                                                      })}
+                                                    </td>
+                                                    <td className="py-1.5 px-2 text-center">{detail.azimuth.toFixed(2)}°</td>
+                                                    <td className="py-1.5 px-2 text-center">{detail.elevation.toFixed(2)}°</td>
+                                                    <td className="py-1.5 px-2 text-center">{detail.range.toFixed(1)}</td>
+                                                  </tr>
+                                                ))}
+                                              </tbody>
+                                            </table>
+                                          ) : (
+                                            <div className="flex items-center justify-center py-4 text-slate-500">
+                                              <Loader2 className="w-4 h-4 animate-spin mr-2" />
+                                              Loading details...
+                                            </div>
+                                          )}
+                                        </div>
+                                      </div>
+                                    </td>
+                                  </tr>
+                                )}
+                              </React.Fragment>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-4 text-xs text-slate-500">
+                          <span className="flex items-center gap-1">
+                            <span className="w-2 h-2 rounded-full bg-green-400" /> Max El ≥ 45°
+                          </span>
+                          <span className="flex items-center gap-1">
+                            <span className="w-2 h-2 rounded-full bg-yellow-400" /> Max El ≥ 20°
+                          </span>
+                          <span className="flex items-center gap-1">
+                            <span className="w-2 h-2 rounded-full bg-slate-400" /> Max El &lt; 20°
+                          </span>
+                        </div>
+                        <p className="text-xs text-slate-500 italic">Click row to expand details</p>
+                      </div>
                     </div>
-                    <p className="text-xs text-slate-500 italic">Click row to expand details</p>
+                  ) : (
+                    /* Empty State */
+                    <div className="h-full flex items-center justify-center">
+                      <div className="p-6 bg-slate-800/30 rounded-lg border border-slate-700/50 text-center max-w-sm">
+                        <Clock className="w-12 h-12 text-slate-600 mx-auto mb-3" />
+                        <p className="text-sm text-slate-400 mb-1">No Pass Results</p>
+                        <p className="text-xs text-slate-500">
+                          {accessConfig.satelliteId
+                            ? 'Configure the parameters and click "Calculate Access" to find satellite passes.'
+                            : "Select a satellite from the form on the right to get started."}
+                        </p>
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {/* Right Column - Form (1/4 width) */}
+                <div className="flex-1 min-w-[280px] max-w-[320px] border-l border-slate-700 pl-4 overflow-y-auto">
+                  <div className="space-y-4">
+                    {/* Satellite Selection */}
+                    <div>
+                      <label className="flex items-center gap-2 text-xs text-slate-300 font-medium mb-2">
+                        <Satellite className="w-3.5 h-3.5 text-blue-400" />
+                        Target Satellite
+                      </label>
+                      <select
+                        value={accessConfig.satelliteId}
+                        onChange={(e) =>
+                          setAccessConfig((prev) => ({
+                            ...prev,
+                            satelliteId: e.target.value,
+                            selectedTleIndex: -1,
+                          }))
+                        }
+                        className="w-full px-3 py-2 bg-slate-800 border border-slate-600 rounded-lg text-white text-sm focus:outline-none focus:ring-2 focus:ring-purple-500/50"
+                      >
+                        <option value="">Select satellite...</option>
+                        {satellites.map((sat) => (
+                          <option key={sat.id} value={sat.id}>
+                            {sat.name}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+
+                    {/* TLE Epoch Info & History Selection */}
+                    {selectedSatellite && (
+                      <div className="p-3 bg-slate-800/50 rounded-lg border border-slate-700 space-y-2">
+                        <div className="flex items-center gap-2 text-xs text-slate-300 font-medium">
+                          <History className="w-3.5 h-3.5 text-amber-400" />
+                          TLE / Orbit Element
+                        </div>
+
+                        {/* Current TLE Epoch */}
+                        <div className="text-xs">
+                          <span className="text-slate-500">Epoch: </span>
+                          <span className="text-white font-mono">
+                            {currentTleEpoch
+                              ? currentTleEpoch.toLocaleString("id-ID", {
+                                  day: "2-digit",
+                                  month: "2-digit",
+                                  year: "numeric",
+                                  hour: "2-digit",
+                                  minute: "2-digit",
+                                })
+                              : "N/A"}
+                          </span>
+                        </div>
+
+                        {/* TLE History Dropdown */}
+                        {selectedSatellite.tleHistory?.length > 0 && (
+                          <div>
+                            <div className="relative">
+                              <select
+                                value={accessConfig.selectedTleIndex}
+                                onChange={(e) =>
+                                  setAccessConfig((prev) => ({
+                                    ...prev,
+                                    selectedTleIndex: parseInt(e.target.value),
+                                  }))
+                                }
+                                className="w-full px-2 py-1.5 bg-slate-900 border border-slate-600 rounded text-white text-xs focus:outline-none focus:ring-2 focus:ring-amber-500/50 appearance-none cursor-pointer"
+                              >
+                                <option value={-1}>Current TLE</option>
+                                {selectedSatellite.tleHistory.map((tle, idx) => {
+                                  const epoch = parseTleEpoch(tle.line1);
+                                  const epochStr = epoch
+                                    ? epoch.toLocaleString("id-ID", {
+                                        day: "2-digit",
+                                        month: "2-digit",
+                                        year: "numeric",
+                                        hour: "2-digit",
+                                        minute: "2-digit",
+                                      })
+                                    : `TLE #${idx + 1}`;
+                                  return (
+                                    <option key={idx} value={idx}>
+                                      📅 {epochStr}
+                                    </option>
+                                  );
+                                })}
+                              </select>
+                              <ChevronDown className="absolute right-2 top-1/2 -translate-y-1/2 w-3 h-3 text-slate-400 pointer-events-none" />
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Show selected historical TLE */}
+                        {accessConfig.selectedTleIndex >= 0 && selectedHistoryEpoch && (
+                          <div className="text-xs p-1.5 bg-amber-900/20 rounded border border-amber-700/30 text-amber-300">Using historical TLE</div>
+                        )}
+                      </div>
+                    )}
+
+                    {/* Time Period */}
+                    <div className="space-y-2">
+                      <label className="flex items-center gap-2 text-xs text-slate-300 font-medium">
+                        <Calendar className="w-3.5 h-3.5 text-green-400" />
+                        Time Period
+                      </label>
+                      <div className="space-y-2">
+                        <div>
+                          <label className="block text-xs text-slate-500 mb-1">Start (dd/mm/yyyy)</label>
+                          <input
+                            type="datetime-local"
+                            value={accessConfig.startDate}
+                            onChange={(e) => setAccessConfig((prev) => ({ ...prev, startDate: e.target.value }))}
+                            className="w-full px-2 py-1.5 bg-slate-800 border border-slate-600 rounded text-white text-xs focus:outline-none focus:ring-2 focus:ring-green-500/50"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-xs text-slate-500 mb-1">End (dd/mm/yyyy)</label>
+                          <input
+                            type="datetime-local"
+                            value={accessConfig.endDate}
+                            onChange={(e) => setAccessConfig((prev) => ({ ...prev, endDate: e.target.value }))}
+                            className="w-full px-2 py-1.5 bg-slate-800 border border-slate-600 rounded text-white text-xs focus:outline-none focus:ring-2 focus:ring-green-500/50"
+                          />
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Min Elevation */}
+                    <div>
+                      <label className="flex items-center gap-2 text-xs text-slate-300 font-medium mb-2">
+                        <Target className="w-3.5 h-3.5 text-orange-400" />
+                        Min Elevation (°)
+                      </label>
+                      <input
+                        type="number"
+                        value={accessConfig.minElevation}
+                        onChange={(e) => setAccessConfig((prev) => ({ ...prev, minElevation: parseFloat(e.target.value) || 0 }))}
+                        min="0"
+                        max="90"
+                        step="1"
+                        className="w-full px-2 py-1.5 bg-slate-800 border border-slate-600 rounded text-white text-sm focus:outline-none focus:ring-2 focus:ring-orange-500/50"
+                      />
+                    </div>
+
+                    {/* Calculate Button */}
+                    <button
+                      onClick={calculateAccess}
+                      disabled={!accessConfig.satelliteId || !accessConfig.startDate || !accessConfig.endDate || isCalculating}
+                      className={`w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium transition-all ${
+                        accessConfig.satelliteId && accessConfig.startDate && accessConfig.endDate && !isCalculating
+                          ? "bg-gradient-to-r from-purple-500 to-purple-600 text-white hover:from-purple-400 hover:to-purple-500 shadow-lg shadow-purple-500/20"
+                          : "bg-slate-700 text-slate-500 cursor-not-allowed"
+                      }`}
+                    >
+                      {isCalculating ? (
+                        <>
+                          <Loader2 className="w-4 h-4 animate-spin" />
+                          Calculating...
+                        </>
+                      ) : (
+                        <>
+                          <Play className="w-4 h-4" />
+                          Calculate
+                        </>
+                      )}
+                    </button>
+
+                    {/* Ground Station Info */}
+                    <div className="p-3 bg-slate-800/30 rounded-lg border border-slate-700/50 space-y-1">
+                      <div className="flex items-center gap-2 text-xs text-slate-400 font-medium">
+                        <Radio className="w-3.5 h-3.5 text-orange-400" />
+                        Ground Station
+                      </div>
+                      <p className="text-sm text-white">{station?.name || "Unknown"}</p>
+                      <p className="text-xs text-slate-500">
+                        {station?.location?.lat?.toFixed(4)}°, {station?.location?.lon?.toFixed(4)}°
+                      </p>
+                    </div>
                   </div>
                 </div>
-              )}
-
-              {/* Empty State */}
-              {!isCalculating && accessResults.length === 0 && accessConfig.satelliteId && (
-                <div className="p-4 bg-slate-800/30 rounded-lg border border-slate-700/50 text-center">
-                  <Clock className="w-8 h-8 text-slate-600 mx-auto mb-2" />
-                  <p className="text-xs text-slate-500">No passes calculated yet. Click "Calculate Access" to find satellite passes.</p>
-                </div>
-              )}
+              </div>
             </div>
           ) : isBasicSection ? (
             renderBasicForm()
