@@ -524,6 +524,70 @@ export function calculatePassDetails(tle, groundStation, pass) {
 }
 
 /**
+ * Generate detailed path for pass visualization on map
+ * Creates 30-60 waypoints for smooth trajectory drawing
+ * @param {Object} tle - {line1, line2} TLE data
+ * @param {Object} groundStation - {lat, lon, alt} ground station location
+ * @param {Object} pass - Pass object with aos, los times
+ * @param {number} numPoints - Number of points (default: 60 for ~1 point per 5-10 seconds)
+ * @returns {Array} Array of {time, lat, lon, alt, azimuth, elevation, range}
+ */
+export function generatePassPath(tle, groundStation, pass, numPoints = 60) {
+  if (!tle?.line1 || !tle?.line2) return [];
+  if (!pass?.aos?.time || !pass?.los?.time) return [];
+
+  const satrec = satellite.twoline2satrec(tle.line1, tle.line2);
+  if (!satrec) return [];
+
+  const aosTime = pass.aos.time;
+  const losTime = pass.los.time;
+  const duration = losTime - aosTime;
+  const stepMs = duration / (numPoints - 1);
+
+  const path = [];
+
+  for (let i = 0; i < numPoints; i++) {
+    const time = aosTime + i * stepMs;
+    const date = new Date(time);
+
+    try {
+      // Get satellite position
+      const positionAndVelocity = satellite.propagate(satrec, date);
+      if (!positionAndVelocity.position) continue;
+
+      const gmst = satellite.gstime(date);
+      const positionGd = satellite.eciToGeodetic(positionAndVelocity.position, gmst);
+
+      // Calculate look angles from ground station
+      const positionEcf = satellite.eciToEcf(positionAndVelocity.position, gmst);
+      const lookAngles = satellite.ecfToLookAngles(
+        {
+          latitude: (groundStation.lat * Math.PI) / 180,
+          longitude: (groundStation.lon * Math.PI) / 180,
+          height: (groundStation.alt || 0) / 1000,
+        },
+        positionEcf
+      );
+
+      path.push({
+        time,
+        date: date.toISOString(),
+        lat: satellite.degreesLat(positionGd.latitude),
+        lon: satellite.degreesLong(positionGd.longitude),
+        alt: positionGd.height, // km
+        azimuth: (lookAngles.azimuth * 180) / Math.PI,
+        elevation: (lookAngles.elevation * 180) / Math.PI,
+        range: lookAngles.rangeSat,
+      });
+    } catch (error) {
+      console.error("Error calculating pass path point:", error);
+    }
+  }
+
+  return path;
+}
+
+/**
  * Parse TLE epoch from line 1
  * @param {string} line1 - TLE line 1
  * @returns {Date|null} Epoch date or null

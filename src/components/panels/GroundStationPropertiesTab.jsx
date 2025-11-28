@@ -30,9 +30,10 @@ import {
   Download,
   History,
   Info,
+  Map,
 } from "lucide-react";
 import { useGroundStationStore, useSatelliteStore, useTabsStore, useTimeStore } from "../../stores";
-import { calculateSatellitePasses, calculatePassDetails, parseTleEpoch } from "../../services/satelliteCalculator";
+import { calculateSatellitePasses, calculatePassDetails, parseTleEpoch, generatePassPath } from "../../services/satelliteCalculator";
 
 // Format date to YYYY-MM-DD HH:mm:ss
 const formatDateTime = (date, includeDate = true) => {
@@ -155,9 +156,15 @@ const GroundStationPropertiesTab = ({ stationId }) => {
   // Get station from store
   const station = useGroundStationStore((state) => state.groundStations.find((gs) => gs.id === stationId));
   const updateGroundStation = useGroundStationStore((state) => state.updateGroundStation);
+  const addPass = useGroundStationStore((state) => state.addPass);
+  const getAccessAnalysisCache = useGroundStationStore((state) => state.getAccessAnalysisCache);
+  const setAccessAnalysisCache = useGroundStationStore((state) => state.setAccessAnalysisCache);
   const satellites = useSatelliteStore((state) => state.satellites);
   const removeTab = useTabsStore((state) => state.removeTab);
   const currentTime = useTimeStore((state) => state.currentTime);
+
+  // Toast notification state
+  const [toast, setToast] = useState(null); // { type: 'success' | 'error', message: string }
 
   // Tree state
   const [expandedNodes, setExpandedNodes] = useState({
@@ -180,30 +187,56 @@ const GroundStationPropertiesTab = ({ stationId }) => {
   const [errors, setErrors] = useState({});
   const [hasChanges, setHasChanges] = useState(false);
 
-  // Access Analysis state
-  const [accessConfig, setAccessConfig] = useState({
-    satelliteId: "",
-    startDate: "",
-    endDate: "",
-    minElevation: 5,
-    selectedTleIndex: -1, // -1 means use current TLE
+  // Access Analysis state - initialized from cache if available
+  const cachedAnalysis = getAccessAnalysisCache(stationId);
+  const [accessConfig, setAccessConfig] = useState(() => {
+    if (cachedAnalysis?.config) {
+      return cachedAnalysis.config;
+    }
+    return {
+      satelliteId: "",
+      startDate: "",
+      endDate: "",
+      minElevation: 5,
+      selectedTleIndex: -1, // -1 means use current TLE
+    };
   });
-  const [accessResults, setAccessResults] = useState([]);
+  const [accessResults, setAccessResults] = useState(() => cachedAnalysis?.results || []);
   const [isCalculating, setIsCalculating] = useState(false);
-  const [expandedPasses, setExpandedPasses] = useState({}); // Track which passes are expanded
-  const [passDetails, setPassDetails] = useState({}); // Store calculated pass details
+  const [expandedPasses, setExpandedPasses] = useState(() => cachedAnalysis?.expandedPasses || {}); // Track which passes are expanded
+  const [passDetails, setPassDetails] = useState(() => cachedAnalysis?.passDetails || {}); // Store calculated pass details
 
-  // Initialize access config with current time (only once on mount)
+  // Save access analysis state to cache when it changes
   useEffect(() => {
-    const now = new Date(currentTime);
-    const startDate = now.toISOString().slice(0, 16);
-    const endDate = new Date(now.getTime() + 24 * 60 * 60 * 1000).toISOString().slice(0, 16); // +24 hours
-    setAccessConfig((prev) => ({
-      ...prev,
-      startDate,
-      endDate,
-    }));
+    if (accessConfig.satelliteId || accessResults.length > 0) {
+      setAccessAnalysisCache(stationId, {
+        config: accessConfig,
+        results: accessResults,
+        expandedPasses,
+        passDetails,
+      });
+    }
+  }, [stationId, accessConfig, accessResults, expandedPasses, passDetails, setAccessAnalysisCache]);
+
+  // Initialize access config with current time (only if no cache)
+  useEffect(() => {
+    if (!cachedAnalysis?.config?.startDate) {
+      const now = new Date(currentTime);
+      const startDate = now.toISOString().slice(0, 16);
+      const endDate = new Date(now.getTime() + 24 * 60 * 60 * 1000).toISOString().slice(0, 16); // +24 hours
+      setAccessConfig((prev) => ({
+        ...prev,
+        startDate,
+        endDate,
+      }));
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Show toast notification
+  const showToast = useCallback((type, message) => {
+    setToast({ type, message });
+    setTimeout(() => setToast(null), 3000);
   }, []);
 
   // Calculate Access (AOS/LOS)
@@ -288,6 +321,107 @@ const GroundStationPropertiesTab = ({ stationId }) => {
     },
     [passDetails, station]
   );
+
+  // Add pass to map for visualization
+  const addPassToMap = useCallback(
+    (pass, index) => {
+      if (!station?.location || !pass._tleUsed) return;
+
+      // Generate detailed path for visualization (60 waypoints)
+      const path = generatePassPath(
+        pass._tleUsed,
+        {
+          lat: station.location.lat,
+          lon: station.location.lon,
+          alt: station.location.alt || 0,
+        },
+        pass,
+        60 // 60 waypoints for smooth visualization
+      );
+
+      if (path.length === 0) {
+        showToast("error", `Failed to generate path for Pass #${index + 1}`);
+        return;
+      }
+
+      // Get satellite info
+      const sat = satellites.find((s) => s.id === accessConfig.satelliteId);
+
+      // Create pass data object
+      const passData = {
+        satelliteId: accessConfig.satelliteId,
+        satelliteName: sat?.name || "Unknown Satellite",
+        aos: pass.aos,
+        los: pass.los,
+        maxElevation: pass.maxElevation,
+        duration: pass.duration,
+        path: path,
+        color: sat?.color || { r: 0.7, g: 0.3, b: 0.9, a: 1 }, // Use satellite color or purple
+        tleEpoch: pass._tleUsed.line1 ? parseTleEpoch(pass._tleUsed.line1)?.toISOString() : null,
+        passNumber: index + 1,
+      };
+
+      // Add to store
+      addPass(stationId, passData);
+
+      // Show success toast for individual pass
+      showToast("success", `Pass #${index + 1} added to map`);
+      console.log(`✅ Pass #${index + 1} added to map for ${station.name}`);
+    },
+    [station, satellites, accessConfig.satelliteId, stationId, addPass, showToast]
+  );
+
+  // Add all passes to map
+  const addAllPassesToMap = useCallback(() => {
+    if (accessResults.length === 0) {
+      showToast("error", "No passes to add. Calculate access first.");
+      return;
+    }
+
+    let successCount = 0;
+    accessResults.forEach((pass, index) => {
+      // Generate path silently (no individual toast)
+      if (!station?.location || !pass._tleUsed) return;
+
+      const path = generatePassPath(
+        pass._tleUsed,
+        {
+          lat: station.location.lat,
+          lon: station.location.lon,
+          alt: station.location.alt || 0,
+        },
+        pass,
+        60
+      );
+
+      if (path.length === 0) return;
+
+      const sat = satellites.find((s) => s.id === accessConfig.satelliteId);
+      const passData = {
+        satelliteId: accessConfig.satelliteId,
+        satelliteName: sat?.name || "Unknown Satellite",
+        aos: pass.aos,
+        los: pass.los,
+        maxElevation: pass.maxElevation,
+        duration: pass.duration,
+        path: path,
+        color: sat?.color || { r: 0.7, g: 0.3, b: 0.9, a: 1 },
+        tleEpoch: pass._tleUsed.line1 ? parseTleEpoch(pass._tleUsed.line1)?.toISOString() : null,
+        passNumber: index + 1,
+      };
+
+      addPass(stationId, passData);
+      successCount++;
+    });
+
+    // Show success toast
+    if (successCount > 0) {
+      showToast("success", `${successCount} passes added to map successfully!`);
+    } else {
+      showToast("error", "Failed to add passes to map.");
+    }
+    console.log(`✅ ${successCount}/${accessResults.length} passes added to map`);
+  }, [accessResults, station, satellites, accessConfig.satelliteId, stationId, addPass, showToast]);
 
   // Get selected satellite and its TLE info
   const selectedSatellite = satellites.find((s) => s.id === accessConfig.satelliteId);
@@ -1093,8 +1227,17 @@ const GroundStationPropertiesTab = ({ stationId }) => {
                     <div className="space-y-3">
                       <div className="flex items-center justify-between">
                         <h4 className="text-xs font-medium text-slate-300">Pass Predictions ({accessResults.length} passes found)</h4>
-                        {/* Export Buttons */}
+                        {/* Export & Map Buttons */}
                         <div className="flex items-center gap-1">
+                          <button
+                            onClick={addAllPassesToMap}
+                            title="Add All Passes to Map"
+                            className="flex items-center gap-1 px-2 py-1 text-xs text-purple-400 hover:text-purple-300 hover:bg-purple-500/20 rounded transition-colors border border-purple-500/30"
+                          >
+                            <Map className="w-3.5 h-3.5" />
+                            <span>Add All to Map</span>
+                          </button>
+                          <div className="w-px h-4 bg-slate-700 mx-1" />
                           <button
                             onClick={exportToClipboard}
                             title="Copy to Clipboard"
@@ -1132,6 +1275,9 @@ const GroundStationPropertiesTab = ({ stationId }) => {
                               <th className="text-left py-2 px-2 text-slate-400 font-medium">LOS Time</th>
                               <th className="text-center py-2 px-2 text-slate-400 font-medium">LOS Az</th>
                               <th className="text-center py-2 px-2 text-slate-400 font-medium">Duration</th>
+                              <th className="text-center py-2 px-2 text-slate-400 font-medium w-8" title="Add to Map">
+                                <Map className="w-3.5 h-3.5 mx-auto" />
+                              </th>
                             </tr>
                           </thead>
                           <tbody>
@@ -1160,12 +1306,24 @@ const GroundStationPropertiesTab = ({ stationId }) => {
                                   <td className="py-2 px-2 text-center">
                                     {Math.floor(pass.duration / 60)}m {Math.floor(pass.duration % 60)}s
                                   </td>
+                                  <td className="py-2 px-2 text-center">
+                                    <button
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        addPassToMap(pass, index);
+                                      }}
+                                      title="Add to Map"
+                                      className="p-1 text-purple-400 hover:text-purple-300 hover:bg-purple-500/20 rounded transition-colors"
+                                    >
+                                      <Plus className="w-3.5 h-3.5" />
+                                    </button>
+                                  </td>
                                 </tr>
 
                                 {/* Expanded Pass Details */}
                                 {expandedPasses[index] && (
                                   <tr>
-                                    <td colSpan={9} className="p-0">
+                                    <td colSpan={10} className="p-0">
                                       <div className="bg-slate-900/50 border-l-2 border-purple-500 mx-2 mb-2 rounded">
                                         <div className="px-3 py-2 border-b border-slate-700/50">
                                           <span className="text-xs font-medium text-purple-300">Pass #{index + 1} Details (5 Waypoints)</span>
@@ -1469,6 +1627,42 @@ const GroundStationPropertiesTab = ({ stationId }) => {
           )}
         </div>
       </div>
+
+      {/* Toast Notification - Centered */}
+      {toast && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center pointer-events-none">
+          <div
+            className={`pointer-events-auto flex items-center gap-3 px-6 py-4 rounded-xl shadow-2xl transition-all duration-300 animate-in fade-in zoom-in ${
+              toast.type === "success"
+                ? "bg-green-600 text-white shadow-green-500/30"
+                : toast.type === "error"
+                ? "bg-red-600 text-white shadow-red-500/30"
+                : "bg-slate-700 text-white shadow-slate-500/30"
+            }`}
+          >
+            {toast.type === "success" ? (
+              <div className="w-10 h-10 rounded-full bg-white/20 flex items-center justify-center">
+                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                </svg>
+              </div>
+            ) : (
+              <div className="w-10 h-10 rounded-full bg-white/20 flex items-center justify-center">
+                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </div>
+            )}
+            <div className="flex flex-col">
+              <span className="text-sm font-bold">{toast.type === "success" ? "Success!" : "Error"}</span>
+              <span className="text-sm opacity-90">{toast.message}</span>
+            </div>
+            <button onClick={() => setToast(null)} className="ml-4 p-1.5 hover:bg-white/20 rounded-full transition-colors">
+              <X className="w-5 h-5" />
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

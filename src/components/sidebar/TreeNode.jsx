@@ -4,119 +4,102 @@
  */
 
 import React, { useState } from "react";
-import { ChevronRight, ChevronDown, Eye, EyeOff } from "lucide-react";
+import { ChevronRight, ChevronDown, Eye, EyeOff, Trash2 } from "lucide-react";
 
-const TreeNode = ({
-    item,
-    icon: Icon,
-    children,
-    level = 0,
-    isSelected,
-    onSelect,
-    onToggleVisibility,
-    onContextMenu,
-    renderLabel,
-}) => {
-    const [isExpanded, setIsExpanded] = useState(true);
-    const hasChildren = children && children.length > 0;
+const TreeNode = ({ item, icon: Icon, children, level = 0, isSelected, onSelect, onToggleVisibility, onContextMenu, onDelete, renderLabel }) => {
+  const [isExpanded, setIsExpanded] = useState(true);
+  const hasChildren = children && children.length > 0;
 
-    const handleClick = (e) => {
-        e.stopPropagation();
-        if (onSelect) {
-            onSelect(item.id);
-        }
-    };
+  const handleClick = (e) => {
+    e.stopPropagation();
+    if (onSelect) {
+      onSelect(item.id);
+    }
+  };
 
-    const handleExpandClick = (e) => {
-        e.stopPropagation();
-        setIsExpanded(!isExpanded);
-    };
+  const handleExpandClick = (e) => {
+    e.stopPropagation();
+    setIsExpanded(!isExpanded);
+  };
 
-    const handleContextMenu = (e) => {
-        e.preventDefault();
-        e.stopPropagation();
-        if (onContextMenu) {
-            onContextMenu(e, item);
-        }
-    };
+  const handleContextMenu = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (onContextMenu) {
+      onContextMenu(e, item);
+    }
+  };
 
-    const handleVisibilityClick = (e) => {
-        e.stopPropagation();
-        if (onToggleVisibility) {
-            // Support both callback styles: (id) => void or () => void
-            if (onToggleVisibility.length === 0) {
-                onToggleVisibility();
-            } else {
-                onToggleVisibility(item.id);
-            }
-        }
-    };
+  const handleVisibilityClick = (e) => {
+    e.stopPropagation();
+    if (onToggleVisibility) {
+      // Support both callback styles: (id) => void or () => void
+      if (onToggleVisibility.length === 0) {
+        onToggleVisibility();
+      } else {
+        onToggleVisibility(item.id);
+      }
+    }
+  };
 
-    return (
-        <div className="select-none">
-            <div
-                className={`flex items-center gap-1 py-1 px-1 rounded cursor-pointer transition-colors
+  return (
+    <div className="select-none">
+      <div
+        className={`flex items-center gap-1 py-1 px-1 rounded cursor-pointer transition-colors
           ${isSelected ? "bg-blue-500/20 text-blue-400" : "text-slate-300 hover:bg-slate-800"}
         `}
-                style={{ paddingLeft: `${level * 16 + 4}px` }}
-                onClick={handleClick}
-                onContextMenu={handleContextMenu}
-            >
-                {/* Expand/Collapse button */}
-                {hasChildren ? (
-                    <button
-                        onClick={handleExpandClick}
-                        className="p-0.5 hover:bg-slate-700 rounded"
-                    >
-                        {isExpanded ? (
-                            <ChevronDown className="w-3 h-3" />
-                        ) : (
-                            <ChevronRight className="w-3 h-3" />
-                        )}
-                    </button>
-                ) : (
-                    <span className="w-4" /> // Spacer
-                )}
+        style={{ paddingLeft: `${level * 16 + 4}px` }}
+        onClick={handleClick}
+        onContextMenu={handleContextMenu}
+      >
+        {/* Expand/Collapse button */}
+        {hasChildren ? (
+          <button onClick={handleExpandClick} className="p-0.5 hover:bg-slate-700 rounded">
+            {isExpanded ? <ChevronDown className="w-3 h-3" /> : <ChevronRight className="w-3 h-3" />}
+          </button>
+        ) : (
+          <span className="w-4" /> // Spacer
+        )}
 
-                {/* Icon */}
-                {Icon && (
-                    <Icon
-                        className="w-4 h-4 flex-shrink-0"
-                        style={{
-                            color: item.color
-                                ? `rgba(${Math.round(item.color.r * 255)}, ${Math.round(
-                                      item.color.g * 255
-                                  )}, ${Math.round(item.color.b * 255)}, 1)`
-                                : undefined,
-                        }}
-                    />
-                )}
+        {/* Icon */}
+        {Icon && (
+          <Icon
+            className="w-4 h-4 flex-shrink-0"
+            style={{
+              color: item.color ? `rgba(${Math.round(item.color.r * 255)}, ${Math.round(item.color.g * 255)}, ${Math.round(item.color.b * 255)}, 1)` : undefined,
+            }}
+          />
+        )}
 
-                {/* Label */}
-                <span className="flex-1 text-sm truncate">
-                    {renderLabel ? renderLabel(item) : item.name}
-                </span>
+        {/* Label */}
+        <span className="flex-1 text-sm truncate">{renderLabel ? renderLabel(item) : item.name}</span>
 
-                {/* Visibility toggle */}
-                {item.isVisible !== undefined && (
-                    <button
-                        onClick={handleVisibilityClick}
-                        className="p-0.5 hover:bg-slate-700 rounded opacity-60 hover:opacity-100"
-                        title={item.isVisible ? "Hide" : "Show"}
-                    >
-                        {item.isVisible ? (
-                            <Eye className="w-3 h-3 text-slate-400" />
-                        ) : (
-                            <EyeOff className="w-3 h-3 text-slate-600" />
-                        )}
-                    </button>
-                )}
-            </div>
+        {/* Visibility toggle */}
+        {item.isVisible !== undefined && (
+          <button onClick={handleVisibilityClick} className="p-0.5 hover:bg-slate-700 rounded opacity-60 hover:opacity-100" title={item.isVisible ? "Hide" : "Show"}>
+            {item.isVisible ? <Eye className="w-3 h-3 text-slate-400" /> : <EyeOff className="w-3 h-3 text-slate-600" />}
+          </button>
+        )}
 
-            {/* Children */}
-            {hasChildren && isExpanded && <div>{children}</div>}
-        </div>
-    );
+        {/* Delete button */}
+        {onDelete && (
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              onDelete();
+            }}
+            className="p-0.5 hover:bg-red-500/20 rounded opacity-60 hover:opacity-100"
+            title="Delete"
+          >
+            <Trash2 className="w-3 h-3 text-slate-500 hover:text-red-400" />
+          </button>
+        )}
+      </div>
+
+      {/* Children */}
+      {hasChildren && isExpanded && <div>{children}</div>}
+    </div>
+  );
 };
 
 export default TreeNode;

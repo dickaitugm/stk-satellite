@@ -4,7 +4,7 @@
  */
 
 import React, { useState } from "react";
-import { Satellite, Radio, Target, Plus, FolderOpen, Folder, Camera, Compass, Antenna, Edit, Circle, MapPin, Orbit, Settings2, Box, FileDown } from "lucide-react";
+import { Satellite, Radio, Target, Plus, FolderOpen, Folder, Camera, Compass, Antenna, Edit, Circle, MapPin, Orbit, Settings2, Box, FileDown, Clock, Trash2 } from "lucide-react";
 
 import TreeNode from "./TreeNode";
 import ContextMenu from "./ContextMenu";
@@ -30,6 +30,9 @@ const ObjectTree = () => {
   const addGroundStation = useGroundStationStore((state) => state.addGroundStation);
   const updateGroundStation = useGroundStationStore((state) => state.updateGroundStation);
   const getStationById = useGroundStationStore((state) => state.getStationById);
+  const togglePassVisibility = useGroundStationStore((state) => state.togglePassVisibility);
+  const removePass = useGroundStationStore((state) => state.removePass);
+  const clearPasses = useGroundStationStore((state) => state.clearPasses);
 
   // Toggle coverage visibility within a ground station
   const toggleCoverageVisibility = (gsId, covId) => {
@@ -548,6 +551,61 @@ const ObjectTree = () => {
                     />
                   );
                 })}
+
+                {/* Passes - Access Analysis Results */}
+                {gs.passes && gs.passes.length > 0 && (
+                  <>
+                    <div className="ml-6 mt-1 flex items-center justify-between pr-2">
+                      <span className="text-xs text-purple-400 font-medium flex items-center gap-1">
+                        <Clock className="w-3 h-3" />
+                        Passes ({gs.passes.length})
+                      </span>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          clearPasses(gs.id);
+                        }}
+                        className="p-0.5 hover:bg-red-500/20 rounded text-slate-500 hover:text-red-400 transition-colors"
+                        title="Clear all passes"
+                      >
+                        <Trash2 className="w-3 h-3" />
+                      </button>
+                    </div>
+                    {gs.passes.map((pass, passIndex) => {
+                      // Format pass label: "Pass #1 - SAT_NAME (AOS time)"
+                      const aosDate = new Date(pass.aos?.time);
+                      const aosTimeStr = aosDate.toLocaleTimeString("en-US", {
+                        hour: "2-digit",
+                        minute: "2-digit",
+                        hour12: false,
+                      });
+                      const passLabel = `#${passIndex + 1} ${pass.satelliteName || ""}`;
+                      const passSubLabel = `AOS ${aosTimeStr} - ${pass.maxElevation?.elevation?.toFixed(0) || "?"}°`;
+
+                      return (
+                        <TreeNode
+                          key={pass.id}
+                          item={{
+                            id: pass.id,
+                            name: passLabel,
+                            isVisible: pass.isVisible,
+                            color: pass.color || { r: 0.7, g: 0.3, b: 0.9, a: 1 }, // Purple default
+                          }}
+                          icon={Clock}
+                          level={2}
+                          onToggleVisibility={() => togglePassVisibility(gs.id, pass.id)}
+                          onDelete={() => removePass(gs.id, pass.id)}
+                          renderLabel={() => (
+                            <div className="flex flex-col leading-tight">
+                              <span className="text-slate-200">{passLabel}</span>
+                              <span className="text-xs text-slate-500">{passSubLabel}</span>
+                            </div>
+                          )}
+                        />
+                      );
+                    })}
+                  </>
+                )}
               </TreeNode>
             ))}
           </div>
