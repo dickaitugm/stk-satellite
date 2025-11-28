@@ -246,149 +246,166 @@ const GroundStationPropertiesTab = ({ stationId }) => {
     return -1;
   };
 
+  // Check if currently in Basic section
+  const isBasicSection = selectedNode === "basic" || selectedNode.startsWith("basic.");
+
+  // Render Basic form (all fields in one view)
+  const renderBasicForm = () => {
+    return (
+      <div className="space-y-6">
+        <h3 className="text-sm font-medium text-slate-200 flex items-center gap-2">
+          <Settings className="w-4 h-4 text-orange-400" />
+          Basic Properties
+        </h3>
+
+        {/* Station Name & Type */}
+        <div className="space-y-3">
+          <div className="flex items-center gap-2 text-xs text-slate-400">
+            <Radio className="w-3.5 h-3.5" />
+            Station Name
+          </div>
+          <input
+            type="text"
+            value={formData.name}
+            onChange={(e) => handleChange("name", e.target.value)}
+            placeholder="Enter station name"
+            className={`w-full px-3 py-2 bg-slate-800 border rounded-lg text-white text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/50 ${
+              errors.name ? "border-red-500" : "border-slate-600"
+            }`}
+          />
+          {errors.name && <p className="text-xs text-red-400 mt-1">{errors.name}</p>}
+          <div className="grid grid-cols-2 gap-2">
+            {STATION_TYPES.map((type) => (
+              <button
+                key={type.id}
+                onClick={() => handleChange("type", type.id)}
+                className={`flex items-center gap-2 px-3 py-2 rounded-lg text-xs transition-all ${
+                  formData.type === type.id
+                    ? "bg-blue-600/30 text-blue-300 border border-blue-500/50"
+                    : "bg-slate-800 text-slate-400 border border-slate-600 hover:border-slate-500"
+                }`}
+              >
+                <span>{type.icon}</span>
+                <span>{type.name}</span>
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Location */}
+        <div className="space-y-3">
+          <div className="flex items-center gap-2 text-xs text-slate-400">
+            <MapPin className="w-3.5 h-3.5" />
+            Location
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-xs text-slate-500 mb-1">Latitude (°)</label>
+              <input
+                type="number"
+                value={formData.lat}
+                onChange={(e) => handleChange("lat", e.target.value)}
+                placeholder="-90 to 90"
+                step="0.0001"
+                min="-90"
+                max="90"
+                className={`w-full px-3 py-2 bg-slate-800 border rounded-lg text-white text-sm focus:outline-none focus:ring-2 focus:ring-green-500/50 ${
+                  errors.lat ? "border-red-500" : "border-slate-600"
+                }`}
+              />
+              {errors.lat && <p className="text-xs text-red-400 mt-1">{errors.lat}</p>}
+            </div>
+            <div>
+              <label className="block text-xs text-slate-500 mb-1">Longitude (°)</label>
+              <input
+                type="number"
+                value={formData.lon}
+                onChange={(e) => handleChange("lon", e.target.value)}
+                placeholder="-180 to 180"
+                step="0.0001"
+                min="-180"
+                max="180"
+                className={`w-full px-3 py-2 bg-slate-800 border rounded-lg text-white text-sm focus:outline-none focus:ring-2 focus:ring-green-500/50 ${
+                  errors.lon ? "border-red-500" : "border-slate-600"
+                }`}
+              />
+              {errors.lon && <p className="text-xs text-red-400 mt-1">{errors.lon}</p>}
+            </div>
+          </div>
+          <div>
+            <label className="block text-xs text-slate-500 mb-1">Altitude (m)</label>
+            <input
+              type="number"
+              value={formData.alt}
+              onChange={(e) => handleChange("alt", e.target.value)}
+              placeholder="0"
+              step="1"
+              min="0"
+              className="w-full px-3 py-2 bg-slate-800 border border-slate-600 rounded-lg text-white text-sm focus:outline-none focus:ring-2 focus:ring-green-500/50"
+            />
+          </div>
+        </div>
+
+        {/* Color */}
+        <div className="space-y-3">
+          <div className="flex items-center gap-2 text-xs text-slate-400">
+            <Palette className="w-3.5 h-3.5" />
+            Station Color
+          </div>
+          <div className="grid grid-cols-4 gap-2">
+            {PRESET_COLORS.map((color, index) => (
+              <button
+                key={index}
+                onClick={() => handleChange("color", color)}
+                className={`flex items-center gap-2 px-3 py-2 rounded-lg border transition-all ${
+                  formData.color.name === color.name ? "border-blue-500 bg-blue-600/20 ring-1 ring-blue-500/50" : "border-slate-600 hover:border-slate-500"
+                }`}
+              >
+                <span
+                  className="w-5 h-5 rounded-full border border-slate-500"
+                  style={{
+                    backgroundColor: `rgb(${color.r * 255}, ${color.g * 255}, ${color.b * 255})`,
+                  }}
+                />
+                <span className="text-xs text-slate-300">{color.name}</span>
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Save/Cancel for Basic */}
+        <div className="flex items-center justify-end gap-2 pt-4 border-t border-slate-700">
+          {hasChanges && (
+            <span className="text-xs text-amber-400 flex items-center gap-1 mr-auto">
+              <span className="w-1.5 h-1.5 rounded-full bg-amber-400" />
+              Unsaved changes
+            </span>
+          )}
+          <button onClick={handleCancel} className="px-4 py-1.5 text-sm text-slate-400 hover:text-white transition-colors">
+            Cancel
+          </button>
+          <button
+            onClick={handleSave}
+            disabled={!hasChanges}
+            className={`flex items-center gap-1.5 px-4 py-1.5 text-sm rounded-lg transition-all font-medium ${
+              hasChanges
+                ? "bg-gradient-to-r from-orange-500 to-orange-600 text-white hover:from-orange-400 hover:to-orange-500 shadow-lg shadow-orange-500/20"
+                : "bg-slate-700 text-slate-500 cursor-not-allowed"
+            }`}
+          >
+            <Save className="w-4 h-4" />
+            Save
+          </button>
+        </div>
+      </div>
+    );
+  };
+
   // Render form content based on selected node
   const renderFormContent = () => {
     const coverageIndex = getCoverageIndex();
 
     switch (selectedNode) {
-      case "basic.name":
-        return (
-          <div className="space-y-4">
-            <h3 className="text-sm font-medium text-slate-200 flex items-center gap-2">
-              <Radio className="w-4 h-4 text-orange-400" />
-              Station Name
-            </h3>
-            <div>
-              <input
-                type="text"
-                value={formData.name}
-                onChange={(e) => handleChange("name", e.target.value)}
-                placeholder="Enter station name"
-                className={`w-full px-3 py-2 bg-slate-800 border rounded-lg text-white text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/50 ${
-                  errors.name ? "border-red-500" : "border-slate-600"
-                }`}
-              />
-              {errors.name && <p className="text-xs text-red-400 mt-1">{errors.name}</p>}
-            </div>
-            <div>
-              <label className="block text-xs text-slate-400 mb-2">Station Type</label>
-              <div className="grid grid-cols-2 gap-2">
-                {STATION_TYPES.map((type) => (
-                  <button
-                    key={type.id}
-                    onClick={() => handleChange("type", type.id)}
-                    className={`flex items-center gap-2 px-3 py-2 rounded-lg text-xs transition-all ${
-                      formData.type === type.id
-                        ? "bg-blue-600/30 text-blue-300 border border-blue-500/50"
-                        : "bg-slate-800 text-slate-400 border border-slate-600 hover:border-slate-500"
-                    }`}
-                  >
-                    <span>{type.icon}</span>
-                    <span>{type.name}</span>
-                  </button>
-                ))}
-              </div>
-            </div>
-          </div>
-        );
-
-      case "basic.location":
-        return (
-          <div className="space-y-4">
-            <h3 className="text-sm font-medium text-slate-200 flex items-center gap-2">
-              <MapPin className="w-4 h-4 text-green-400" />
-              Location
-            </h3>
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label className="block text-xs text-slate-400 mb-1">Latitude (°)</label>
-                <input
-                  type="number"
-                  value={formData.lat}
-                  onChange={(e) => handleChange("lat", e.target.value)}
-                  placeholder="-90 to 90"
-                  step="0.0001"
-                  min="-90"
-                  max="90"
-                  className={`w-full px-3 py-2 bg-slate-800 border rounded-lg text-white text-sm focus:outline-none focus:ring-2 focus:ring-green-500/50 ${
-                    errors.lat ? "border-red-500" : "border-slate-600"
-                  }`}
-                />
-                {errors.lat && <p className="text-xs text-red-400 mt-1">{errors.lat}</p>}
-              </div>
-              <div>
-                <label className="block text-xs text-slate-400 mb-1">Longitude (°)</label>
-                <input
-                  type="number"
-                  value={formData.lon}
-                  onChange={(e) => handleChange("lon", e.target.value)}
-                  placeholder="-180 to 180"
-                  step="0.0001"
-                  min="-180"
-                  max="180"
-                  className={`w-full px-3 py-2 bg-slate-800 border rounded-lg text-white text-sm focus:outline-none focus:ring-2 focus:ring-green-500/50 ${
-                    errors.lon ? "border-red-500" : "border-slate-600"
-                  }`}
-                />
-                {errors.lon && <p className="text-xs text-red-400 mt-1">{errors.lon}</p>}
-              </div>
-            </div>
-            <div>
-              <label className="block text-xs text-slate-400 mb-1">Altitude (m)</label>
-              <input
-                type="number"
-                value={formData.alt}
-                onChange={(e) => handleChange("alt", e.target.value)}
-                placeholder="0"
-                step="1"
-                min="0"
-                className="w-full px-3 py-2 bg-slate-800 border border-slate-600 rounded-lg text-white text-sm focus:outline-none focus:ring-2 focus:ring-green-500/50"
-              />
-            </div>
-          </div>
-        );
-
-      case "basic.color":
-        return (
-          <div className="space-y-4">
-            <h3 className="text-sm font-medium text-slate-200 flex items-center gap-2">
-              <Palette className="w-4 h-4 text-pink-400" />
-              Station Color
-            </h3>
-            <div className="grid grid-cols-4 gap-2">
-              {PRESET_COLORS.map((color, index) => (
-                <button
-                  key={index}
-                  onClick={() => handleChange("color", color)}
-                  className={`flex items-center gap-2 px-3 py-2 rounded-lg border transition-all ${
-                    formData.color.name === color.name ? "border-white bg-slate-700 ring-2 ring-white/30" : "border-slate-600 hover:border-slate-500"
-                  }`}
-                >
-                  <span
-                    className="w-5 h-5 rounded-full"
-                    style={{
-                      backgroundColor: `rgb(${color.r * 255}, ${color.g * 255}, ${color.b * 255})`,
-                    }}
-                  />
-                  <span className="text-xs text-slate-300">{color.name}</span>
-                </button>
-              ))}
-            </div>
-            <div className="p-3 bg-slate-800/50 rounded-lg border border-slate-700">
-              <p className="text-xs text-slate-400">Preview:</p>
-              <div className="flex items-center gap-2 mt-2">
-                <div
-                  className="w-8 h-8 rounded-lg"
-                  style={{
-                    backgroundColor: `rgb(${formData.color.r * 255}, ${formData.color.g * 255}, ${formData.color.b * 255})`,
-                  }}
-                />
-                <span className="text-sm text-white">{formData.name || "Station"}</span>
-              </div>
-            </div>
-          </div>
-        );
-
       case "coverages":
         return (
           <div className="space-y-4">
@@ -440,6 +457,31 @@ const GroundStationPropertiesTab = ({ stationId }) => {
                   </div>
                 </div>
               ))}
+            </div>
+
+            {/* Save/Cancel for Coverages */}
+            <div className="flex items-center justify-end gap-2 pt-4 border-t border-slate-700">
+              {hasChanges && (
+                <span className="text-xs text-amber-400 flex items-center gap-1 mr-auto">
+                  <span className="w-1.5 h-1.5 rounded-full bg-amber-400" />
+                  Unsaved changes
+                </span>
+              )}
+              <button onClick={handleCancel} className="px-4 py-1.5 text-sm text-slate-400 hover:text-white transition-colors">
+                Cancel
+              </button>
+              <button
+                onClick={handleSave}
+                disabled={!hasChanges}
+                className={`flex items-center gap-1.5 px-4 py-1.5 text-sm rounded-lg transition-all font-medium ${
+                  hasChanges
+                    ? "bg-gradient-to-r from-orange-500 to-orange-600 text-white hover:from-orange-400 hover:to-orange-500 shadow-lg shadow-orange-500/20"
+                    : "bg-slate-700 text-slate-500 cursor-not-allowed"
+                }`}
+              >
+                <Save className="w-4 h-4" />
+                Save
+              </button>
             </div>
           </div>
         );
@@ -555,19 +597,24 @@ const GroundStationPropertiesTab = ({ stationId }) => {
               {/* Color Selection */}
               <div>
                 <label className="block text-xs text-slate-400 mb-2">Coverage Color</label>
-                <div className="flex gap-2 flex-wrap">
+                <div className="grid grid-cols-4 gap-2">
                   {PRESET_COLORS.map((color, colorIdx) => (
                     <button
                       key={colorIdx}
                       onClick={() => handleCoverageChange(coverageIndex, "color", color)}
-                      className={`w-7 h-7 rounded-full border-2 transition-all hover:scale-110 ${
-                        coverage.color.name === color.name ? "border-white scale-110 ring-2 ring-white/30" : "border-slate-600/50"
+                      className={`flex items-center gap-2 px-2 py-2 rounded-lg border transition-all ${
+                        coverage.color.name === color.name ? "border-cyan-500 bg-cyan-600/20 ring-1 ring-cyan-500/50" : "border-slate-600 hover:border-slate-500"
                       }`}
-                      style={{
-                        backgroundColor: `rgb(${color.r * 255}, ${color.g * 255}, ${color.b * 255})`,
-                      }}
                       title={color.name}
-                    />
+                    >
+                      <span
+                        className="w-5 h-5 rounded-full border border-slate-500"
+                        style={{
+                          backgroundColor: `rgb(${color.r * 255}, ${color.g * 255}, ${color.b * 255})`,
+                        }}
+                      />
+                      <span className="text-xs text-slate-300">{color.name}</span>
+                    </button>
                   ))}
                 </div>
               </div>
@@ -580,6 +627,31 @@ const GroundStationPropertiesTab = ({ stationId }) => {
                   className={`relative w-10 h-5 rounded-full transition-colors ${coverage.isVisible ? "bg-cyan-500" : "bg-slate-600"}`}
                 >
                   <span className={`absolute top-0.5 left-0.5 w-4 h-4 rounded-full bg-white transition-transform ${coverage.isVisible ? "translate-x-5" : "translate-x-0"}`} />
+                </button>
+              </div>
+
+              {/* Save/Cancel for Coverage Detail */}
+              <div className="flex items-center justify-end gap-2 pt-4 border-t border-slate-700">
+                {hasChanges && (
+                  <span className="text-xs text-amber-400 flex items-center gap-1 mr-auto">
+                    <span className="w-1.5 h-1.5 rounded-full bg-amber-400" />
+                    Unsaved changes
+                  </span>
+                )}
+                <button onClick={handleCancel} className="px-4 py-1.5 text-sm text-slate-400 hover:text-white transition-colors">
+                  Cancel
+                </button>
+                <button
+                  onClick={handleSave}
+                  disabled={!hasChanges}
+                  className={`flex items-center gap-1.5 px-4 py-1.5 text-sm rounded-lg transition-all font-medium ${
+                    hasChanges
+                      ? "bg-gradient-to-r from-orange-500 to-orange-600 text-white hover:from-orange-400 hover:to-orange-500 shadow-lg shadow-orange-500/20"
+                      : "bg-slate-700 text-slate-500 cursor-not-allowed"
+                  }`}
+                >
+                  <Save className="w-4 h-4" />
+                  Save
                 </button>
               </div>
             </div>
@@ -698,38 +770,11 @@ const GroundStationPropertiesTab = ({ stationId }) => {
                 <p className="text-xs text-slate-500">Calculate AOS/LOS pass predictions for satellites over this ground station</p>
               </div>
             </div>
+          ) : isBasicSection ? (
+            renderBasicForm()
           ) : (
             renderFormContent()
           )}
-        </div>
-      </div>
-
-      {/* Footer with Save/Cancel Buttons */}
-      <div className="px-4 py-3 border-t border-slate-700 bg-slate-800/90 flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          {hasChanges && (
-            <span className="text-xs text-amber-400 flex items-center gap-1">
-              <span className="w-1.5 h-1.5 rounded-full bg-amber-400" />
-              Unsaved changes
-            </span>
-          )}
-        </div>
-        <div className="flex items-center gap-2">
-          <button onClick={handleCancel} className="px-4 py-1.5 text-sm text-slate-400 hover:text-white transition-colors">
-            Cancel
-          </button>
-          <button
-            onClick={handleSave}
-            disabled={!hasChanges}
-            className={`flex items-center gap-1.5 px-4 py-1.5 text-sm rounded-lg transition-all font-medium ${
-              hasChanges
-                ? "bg-gradient-to-r from-orange-500 to-orange-600 text-white hover:from-orange-400 hover:to-orange-500 shadow-lg shadow-orange-500/20"
-                : "bg-slate-700 text-slate-500 cursor-not-allowed"
-            }`}
-          >
-            <Save className="w-4 h-4" />
-            Save
-          </button>
         </div>
       </div>
     </div>
