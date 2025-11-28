@@ -474,3 +474,80 @@ export function calculateSatellitePasses(tle, groundStation, startTimestamp, end
 
   return passes;
 }
+
+/**
+ * Calculate detailed pass positions (AOS, 1/4, 1/2, 3/4, LOS points)
+ * @param {Object} tle - {line1, line2} TLE data
+ * @param {Object} groundStation - {lat, lon, alt} ground station location
+ * @param {Object} pass - Pass object with aos, los, maxElevation
+ * @returns {Array} Array of 5 position points with time, az, el, range
+ */
+export function calculatePassDetails(tle, groundStation, pass) {
+  if (!tle?.line1 || !tle?.line2) return [];
+  if (!pass?.aos?.time || !pass?.los?.time) return [];
+
+  const satrec = satellite.twoline2satrec(tle.line1, tle.line2);
+  if (!satrec) return [];
+
+  const aosTime = pass.aos.time;
+  const losTime = pass.los.time;
+  const maxElTime = pass.maxElevation?.time || (aosTime + losTime) / 2;
+
+  // Calculate 5 key points: AOS, 1/2 AOS-MAX, MAX, 1/2 MAX-LOS, LOS
+  const points = [
+    { label: "AOS", time: aosTime },
+    { label: "1/2 Rise", time: (aosTime + maxElTime) / 2 },
+    { label: "Max El", time: maxElTime },
+    { label: "1/2 Set", time: (maxElTime + losTime) / 2 },
+    { label: "LOS", time: losTime },
+  ];
+
+  const details = [];
+
+  for (const point of points) {
+    const date = new Date(point.time);
+    const lookAngles = calculateLookAngles(groundStation, satrec, date);
+
+    if (lookAngles) {
+      details.push({
+        label: point.label,
+        time: point.time,
+        date: date.toISOString(),
+        azimuth: lookAngles.azimuth,
+        elevation: lookAngles.elevation,
+        range: lookAngles.range,
+      });
+    }
+  }
+
+  return details;
+}
+
+/**
+ * Parse TLE epoch from line 1
+ * @param {string} line1 - TLE line 1
+ * @returns {Date|null} Epoch date or null
+ */
+export function parseTleEpoch(line1) {
+  if (!line1 || line1.length < 32) return null;
+
+  try {
+    // TLE line 1 format: epoch is at columns 18-32
+    // Format: YYDDD.DDDDDDDD where YY=year, DDD.DDDDDDDD=day of year with fraction
+    const epochStr = line1.substring(18, 32).trim();
+    const year = parseInt(epochStr.substring(0, 2));
+    const dayOfYear = parseFloat(epochStr.substring(2));
+
+    // Convert 2-digit year to 4-digit
+    const fullYear = year < 57 ? 2000 + year : 1900 + year;
+
+    // Calculate date from day of year
+    const date = new Date(Date.UTC(fullYear, 0, 1));
+    date.setTime(date.getTime() + (dayOfYear - 1) * 24 * 60 * 60 * 1000);
+
+    return date;
+  } catch (error) {
+    console.error("Error parsing TLE epoch:", error);
+    return null;
+  }
+}
