@@ -252,16 +252,16 @@ const GroundStationPropertiesTab = ({ stationId }) => {
   // Render Basic form (all fields in one view)
   const renderBasicForm = () => {
     return (
-      <div className="space-y-6">
-        <h3 className="text-sm font-medium text-slate-200 flex items-center gap-2">
+      <div className="space-y-2">
+        <h3 className="text-sm font-medium text-slate-200 flex items-center gap-4">
           <Settings className="w-4 h-4 text-orange-400" />
           Basic Properties
         </h3>
 
         {/* Station Name & Type */}
         <div className="space-y-3">
-          <div className="flex items-center gap-2 text-xs text-slate-400">
-            <Radio className="w-3.5 h-3.5" />
+          <div className="flex items-center gap-2 text-xs text-slate-300 font-medium">
+            <Radio className="w-3.5 h-3.5 text-orange-400" />
             Station Name
           </div>
           <input
@@ -274,28 +274,31 @@ const GroundStationPropertiesTab = ({ stationId }) => {
             }`}
           />
           {errors.name && <p className="text-xs text-red-400 mt-1">{errors.name}</p>}
-          <div className="grid grid-cols-2 gap-2">
-            {STATION_TYPES.map((type) => (
-              <button
-                key={type.id}
-                onClick={() => handleChange("type", type.id)}
-                className={`flex items-center gap-2 px-3 py-2 rounded-lg text-xs transition-all ${
-                  formData.type === type.id
-                    ? "bg-blue-600/30 text-blue-300 border border-blue-500/50"
-                    : "bg-slate-800 text-slate-400 border border-slate-600 hover:border-slate-500"
-                }`}
-              >
-                <span>{type.icon}</span>
-                <span>{type.name}</span>
-              </button>
-            ))}
+          <div>
+            <label className="block text-xs text-slate-500 mb-2">Station Type</label>
+            <div className="grid grid-cols-2 gap-2">
+              {STATION_TYPES.map((type) => (
+                <button
+                  key={type.id}
+                  onClick={() => handleChange("type", type.id)}
+                  className={`flex items-center gap-2 px-3 py-2 rounded-lg text-xs transition-all ${
+                    formData.type === type.id
+                      ? "bg-blue-600/30 text-blue-300 border border-blue-500/50"
+                      : "bg-slate-800 text-slate-400 border border-slate-600 hover:border-slate-500"
+                  }`}
+                >
+                  <span>{type.icon}</span>
+                  <span>{type.name}</span>
+                </button>
+              ))}
+            </div>
           </div>
         </div>
 
         {/* Location */}
-        <div className="space-y-3">
-          <div className="flex items-center gap-2 text-xs text-slate-400">
-            <MapPin className="w-3.5 h-3.5" />
+        <div className="space-y-3 pt-2">
+          <div className="flex items-center gap-2 text-xs text-slate-300 font-medium">
+            <MapPin className="w-3.5 h-3.5 text-green-400" />
             Location
           </div>
           <div className="grid grid-cols-2 gap-3">
@@ -347,9 +350,9 @@ const GroundStationPropertiesTab = ({ stationId }) => {
         </div>
 
         {/* Color */}
-        <div className="space-y-3">
-          <div className="flex items-center gap-2 text-xs text-slate-400">
-            <Palette className="w-3.5 h-3.5" />
+        <div className="space-y-3 pt-2">
+          <div className="flex items-center gap-2 text-xs text-slate-300 font-medium">
+            <Palette className="w-3.5 h-3.5 text-pink-400" />
             Station Color
           </div>
           <div className="grid grid-cols-4 gap-2">
