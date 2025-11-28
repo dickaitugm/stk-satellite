@@ -4,24 +4,7 @@
  */
 
 import React, { useState, useEffect } from "react";
-import {
-  Satellite,
-  Palette,
-  Orbit,
-  Camera,
-  Radio,
-  Plus,
-  Trash2,
-  ChevronDown,
-  ChevronUp,
-  Save,
-  Eye,
-  EyeOff,
-  RefreshCw,
-  Loader2,
-  CheckCircle,
-  AlertCircle,
-} from "lucide-react";
+import { Satellite, Palette, Orbit, Camera, Radio, Plus, Trash2, ChevronDown, ChevronUp, Save, Eye, EyeOff, RefreshCw, Loader2, CheckCircle, AlertCircle } from "lucide-react";
 import { useSatelliteStore } from "../../stores";
 
 // Preset colors for satellites
@@ -56,9 +39,7 @@ const AXIS_OPTIONS = [
 
 const SatellitePropertiesTab = ({ satelliteId }) => {
   // Get satellite from store
-  const satellite = useSatelliteStore((state) =>
-    state.satellites.find((sat) => sat.id === satelliteId)
-  );
+  const satellite = useSatelliteStore((state) => state.satellites.find((sat) => sat.id === satelliteId));
   const updateSatellite = useSatelliteStore((state) => state.updateSatellite);
   const positions = useSatelliteStore((state) => state.positions);
 
@@ -112,9 +93,7 @@ const SatellitePropertiesTab = ({ satelliteId }) => {
   const addPayload = (type) => {
     const newPayload = {
       id: `payload-${Date.now()}`,
-      name: type === "camera" 
-        ? `Camera ${formData.payloads.length + 1}` 
-        : `AIS ${formData.payloads.length + 1}`,
+      name: type === "camera" ? `Camera ${formData.payloads.length + 1}` : `AIS ${formData.payloads.length + 1}`,
       type,
       cameraType: type === "camera" ? "rgb" : undefined,
       axis: "+z",
@@ -133,9 +112,7 @@ const SatellitePropertiesTab = ({ satelliteId }) => {
   const updatePayload = (payloadId, field, value) => {
     setFormData((prev) => ({
       ...prev,
-      payloads: prev.payloads.map((p) =>
-        p.id === payloadId ? { ...p, [field]: value } : p
-      ),
+      payloads: prev.payloads.map((p) => (p.id === payloadId ? { ...p, [field]: value } : p)),
     }));
     setHasChanges(true);
   };
@@ -187,9 +164,7 @@ const SatellitePropertiesTab = ({ satelliteId }) => {
               }
             }
 
-            if (line2.startsWith("2 ") && 
-                (name.toUpperCase().includes(searchName) || 
-                 searchName.includes(name.toUpperCase().replace(/\s+/g, "")))) {
+            if (line2.startsWith("2 ") && (name.toUpperCase().includes(searchName) || searchName.includes(name.toUpperCase().replace(/\s+/g, "")))) {
               setFormData((prev) => ({
                 ...prev,
                 tleLine1: line1,
@@ -254,11 +229,7 @@ const SatellitePropertiesTab = ({ satelliteId }) => {
   };
 
   if (!satellite) {
-    return (
-      <div className="p-4 text-center text-slate-400">
-        Satellite not found
-      </div>
-    );
+    return <div className="p-4 text-center text-slate-400">Satellite not found</div>;
   }
 
   return (
@@ -291,11 +262,7 @@ const SatellitePropertiesTab = ({ satelliteId }) => {
               <Satellite className="w-3.5 h-3.5" />
               Basic Information
             </div>
-            {expandedSection === "basic" ? (
-              <ChevronUp className="w-3.5 h-3.5" />
-            ) : (
-              <ChevronDown className="w-3.5 h-3.5" />
-            )}
+            {expandedSection === "basic" ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
           </button>
 
           {expandedSection === "basic" && (
@@ -334,9 +301,7 @@ const SatellitePropertiesTab = ({ satelliteId }) => {
                       key={index}
                       onClick={() => handleChange("color", color)}
                       className={`w-4 h-4 rounded-full border-2 transition-all hover:scale-110 ${
-                        formData.color.name === color.name
-                          ? "border-white scale-110 ring-2 ring-white/30"
-                          : "border-slate-600/50"
+                        formData.color.name === color.name ? "border-white scale-110 ring-2 ring-white/30" : "border-slate-600/50"
                       }`}
                       style={{
                         backgroundColor: `rgb(${color.r * 255}, ${color.g * 255}, ${color.b * 255})`,
@@ -354,14 +319,10 @@ const SatellitePropertiesTab = ({ satelliteId }) => {
                 </span>
                 <button
                   onClick={() => handleChange("showCoverage", !formData.showCoverage)}
-                  className={`relative w-7 h-3.5 rounded-full transition-colors ${
-                    formData.showCoverage ? "bg-cyan-500" : "bg-slate-600"
-                  }`}
+                  className={`relative w-7 h-3.5 rounded-full transition-colors ${formData.showCoverage ? "bg-cyan-500" : "bg-slate-600"}`}
                 >
                   <span
-                    className={`absolute top-0.5 left-0.5 w-2.5 h-2.5 rounded-full bg-white transition-transform ${
-                      formData.showCoverage ? "translate-x-3.5" : "translate-x-0"
-                    }`}
+                    className={`absolute top-0.5 left-0.5 w-2.5 h-2.5 rounded-full bg-white transition-transform ${formData.showCoverage ? "translate-x-3.5" : "translate-x-0"}`}
                   />
                 </button>
               </div>
@@ -379,11 +340,7 @@ const SatellitePropertiesTab = ({ satelliteId }) => {
               <Orbit className="w-3.5 h-3.5" />
               Orbit Elements ({formData.orbitSource === "keplerian" ? "Keplerian" : "TLE"})
             </div>
-            {expandedSection === "orbit" ? (
-              <ChevronUp className="w-3.5 h-3.5" />
-            ) : (
-              <ChevronDown className="w-3.5 h-3.5" />
-            )}
+            {expandedSection === "orbit" ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
           </button>
 
           {expandedSection === "orbit" && (
@@ -395,24 +352,14 @@ const SatellitePropertiesTab = ({ satelliteId }) => {
                   disabled={loading}
                   className="flex items-center gap-1.5 px-2 py-1 text-xs bg-cyan-600/20 text-cyan-400 rounded-lg hover:bg-cyan-600/30 transition-colors disabled:opacity-50"
                 >
-                  {loading ? (
-                    <Loader2 className="w-3 h-3 animate-spin" />
-                  ) : (
-                    <RefreshCw className="w-3 h-3" />
-                  )}
+                  {loading ? <Loader2 className="w-3 h-3 animate-spin" /> : <RefreshCw className="w-3 h-3" />}
                   Refresh TLE
                 </button>
               )}
 
               {refreshStatus && (
-                <div className={`flex items-center gap-1.5 text-xs ${
-                  refreshStatus.type === "success" ? "text-green-400" : "text-red-400"
-                }`}>
-                  {refreshStatus.type === "success" ? (
-                    <CheckCircle className="w-3 h-3" />
-                  ) : (
-                    <AlertCircle className="w-3 h-3" />
-                  )}
+                <div className={`flex items-center gap-1.5 text-xs ${refreshStatus.type === "success" ? "text-green-400" : "text-red-400"}`}>
+                  {refreshStatus.type === "success" ? <CheckCircle className="w-3 h-3" /> : <AlertCircle className="w-3 h-3" />}
                   {refreshStatus.message}
                 </div>
               )}
@@ -455,14 +402,8 @@ const SatellitePropertiesTab = ({ satelliteId }) => {
             >
               <Camera className="w-3.5 h-3.5" />
               Payloads
-              <span className="text-xs text-slate-500 bg-slate-700 px-1.5 py-0.5 rounded-full">
-                {formData.payloads.length}
-              </span>
-              {expandedSection === "payloads" ? (
-                <ChevronUp className="w-3.5 h-3.5" />
-              ) : (
-                <ChevronDown className="w-3.5 h-3.5" />
-              )}
+              <span className="text-xs text-slate-500 bg-slate-700 px-1.5 py-0.5 rounded-full">{formData.payloads.length}</span>
+              {expandedSection === "payloads" ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
             </button>
             {expandedSection === "payloads" && (
               <div className="flex gap-1">
@@ -490,17 +431,10 @@ const SatellitePropertiesTab = ({ satelliteId }) => {
                 <p className="text-xs text-slate-500">No payloads configured</p>
               ) : (
                 formData.payloads.map((payload) => (
-                  <div
-                    key={payload.id}
-                    className="p-2 bg-slate-800/50 rounded-lg border border-slate-700/50"
-                  >
+                  <div key={payload.id} className="p-2 bg-slate-800/50 rounded-lg border border-slate-700/50">
                     <div className="flex items-center justify-between mb-2">
                       <div className="flex items-center gap-1.5">
-                        {payload.type === "camera" ? (
-                          <Camera className="w-3 h-3 text-blue-400" />
-                        ) : (
-                          <Radio className="w-3 h-3 text-green-400" />
-                        )}
+                        {payload.type === "camera" ? <Camera className="w-3 h-3 text-blue-400" /> : <Radio className="w-3 h-3 text-green-400" />}
                         <input
                           type="text"
                           value={payload.name}
@@ -508,10 +442,7 @@ const SatellitePropertiesTab = ({ satelliteId }) => {
                           className="bg-transparent text-xs text-white border-none focus:outline-none"
                         />
                       </div>
-                      <button
-                        onClick={() => removePayload(payload.id)}
-                        className="p-0.5 hover:bg-red-500/20 rounded text-slate-500 hover:text-red-400"
-                      >
+                      <button onClick={() => removePayload(payload.id)} className="p-0.5 hover:bg-red-500/20 rounded text-slate-500 hover:text-red-400">
                         <Trash2 className="w-3 h-3" />
                       </button>
                     </div>
@@ -526,7 +457,9 @@ const SatellitePropertiesTab = ({ satelliteId }) => {
                             className="w-full px-1.5 py-1 bg-slate-700 border border-slate-600 rounded text-white text-xs"
                           >
                             {CAMERA_TYPES.map((t) => (
-                              <option key={t.id} value={t.id}>{t.name}</option>
+                              <option key={t.id} value={t.id}>
+                                {t.name}
+                              </option>
                             ))}
                           </select>
                         </div>
@@ -538,7 +471,9 @@ const SatellitePropertiesTab = ({ satelliteId }) => {
                             className="w-full px-1.5 py-1 bg-slate-700 border border-slate-600 rounded text-white text-xs"
                           >
                             {AXIS_OPTIONS.map((a) => (
-                              <option key={a.id} value={a.id}>{a.name}</option>
+                              <option key={a.id} value={a.id}>
+                                {a.name}
+                              </option>
                             ))}
                           </select>
                         </div>
@@ -564,7 +499,9 @@ const SatellitePropertiesTab = ({ satelliteId }) => {
                             className="w-full px-1.5 py-1 bg-slate-700 border border-slate-600 rounded text-white text-xs"
                           >
                             {AXIS_OPTIONS.map((a) => (
-                              <option key={a.id} value={a.id}>{a.name}</option>
+                              <option key={a.id} value={a.id}>
+                                {a.name}
+                              </option>
                             ))}
                           </select>
                         </div>

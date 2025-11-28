@@ -4,19 +4,7 @@
  */
 
 import React, { useState, useEffect } from "react";
-import {
-  MapPin,
-  Radio,
-  Palette,
-  Target,
-  Plus,
-  Trash2,
-  Satellite,
-  Circle,
-  ChevronDown,
-  ChevronUp,
-  Save,
-} from "lucide-react";
+import { MapPin, Radio, Palette, Target, Plus, Trash2, Satellite, Circle, ChevronDown, ChevronUp, Save } from "lucide-react";
 import { useSatelliteStore, useGroundStationStore } from "../../stores";
 
 // Preset colors for ground stations
@@ -53,9 +41,7 @@ const createDefaultCoverage = (satellites = []) => ({
 
 const GroundStationPropertiesTab = ({ stationId }) => {
   // Get station from store
-  const station = useGroundStationStore((state) =>
-    state.groundStations.find((gs) => gs.id === stationId)
-  );
+  const station = useGroundStationStore((state) => state.groundStations.find((gs) => gs.id === stationId));
   const updateGroundStation = useGroundStationStore((state) => state.updateGroundStation);
   const satellites = useSatelliteStore((state) => state.satellites);
 
@@ -116,9 +102,7 @@ const GroundStationPropertiesTab = ({ stationId }) => {
   const handleCoverageChange = (index, field, value) => {
     setFormData((prev) => ({
       ...prev,
-      coverages: prev.coverages.map((cov, i) =>
-        i === index ? { ...cov, [field]: value } : cov
-      ),
+      coverages: prev.coverages.map((cov, i) => (i === index ? { ...cov, [field]: value } : cov)),
     }));
     setHasChanges(true);
   };
@@ -226,11 +210,7 @@ const GroundStationPropertiesTab = ({ stationId }) => {
   };
 
   if (!station) {
-    return (
-      <div className="p-4 text-center text-slate-400">
-        Ground station not found
-      </div>
-    );
+    return <div className="p-4 text-center text-slate-400">Ground station not found</div>;
   }
 
   return (
@@ -242,9 +222,7 @@ const GroundStationPropertiesTab = ({ stationId }) => {
           {/* Station Name & Type Row */}
           <div className="grid grid-cols-3 gap-2">
             <div className="col-span-2">
-              <label className="block text-xs font-medium text-slate-400 mb-1 uppercase tracking-wide">
-                Station Name
-              </label>
+              <label className="block text-xs font-medium text-slate-400 mb-1 uppercase tracking-wide">Station Name</label>
               <input
                 type="text"
                 value={formData.name}
@@ -254,14 +232,10 @@ const GroundStationPropertiesTab = ({ stationId }) => {
                   errors.name ? "border-red-500" : "border-slate-600"
                 }`}
               />
-              {errors.name && (
-                <p className="text-red-400 text-xs mt-1">{errors.name}</p>
-              )}
+              {errors.name && <p className="text-red-400 text-xs mt-1">{errors.name}</p>}
             </div>
             <div>
-              <label className="block text-xs font-medium text-slate-400 mb-1 uppercase tracking-wide">
-                Type
-              </label>
+              <label className="block text-xs font-medium text-slate-400 mb-1 uppercase tracking-wide">Type</label>
               <select
                 value={formData.type}
                 onChange={(e) => handleChange("type", e.target.value)}
@@ -284,9 +258,7 @@ const GroundStationPropertiesTab = ({ stationId }) => {
             </div>
             <div className="grid grid-cols-3 gap-2">
               <div>
-                <label className="block text-xs text-slate-500 mb-1">
-                  Lat (°)
-                </label>
+                <label className="block text-xs text-slate-500 mb-1">Lat (°)</label>
                 <input
                   type="number"
                   value={formData.lat}
@@ -299,9 +271,7 @@ const GroundStationPropertiesTab = ({ stationId }) => {
                 />
               </div>
               <div>
-                <label className="block text-xs text-slate-500 mb-1">
-                  Lon (°)
-                </label>
+                <label className="block text-xs text-slate-500 mb-1">Lon (°)</label>
                 <input
                   type="number"
                   value={formData.lon}
@@ -314,9 +284,7 @@ const GroundStationPropertiesTab = ({ stationId }) => {
                 />
               </div>
               <div>
-                <label className="block text-xs text-slate-500 mb-1">
-                  Alt (km)
-                </label>
+                <label className="block text-xs text-slate-500 mb-1">Alt (km)</label>
                 <input
                   type="number"
                   value={formData.alt}
@@ -341,9 +309,7 @@ const GroundStationPropertiesTab = ({ stationId }) => {
                   key={index}
                   onClick={() => handleChange("color", color)}
                   className={`w-5 h-5 rounded-full border-2 transition-all hover:scale-110 ${
-                    formData.color.name === color.name
-                      ? "border-white scale-110 ring-2 ring-white/30"
-                      : "border-slate-600/50"
+                    formData.color.name === color.name ? "border-white scale-110 ring-2 ring-white/30" : "border-slate-600/50"
                   }`}
                   style={{
                     backgroundColor: `rgb(${color.r * 255}, ${color.g * 255}, ${color.b * 255})`,
@@ -360,17 +326,10 @@ const GroundStationPropertiesTab = ({ stationId }) => {
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
               <Target className="w-3.5 h-3.5 text-cyan-400" />
-              <span className="text-xs font-medium text-slate-300">
-                Coverage Areas
-              </span>
-              <span className="text-xs text-slate-500 bg-slate-700 px-1.5 py-0.5 rounded-full">
-                {formData.coverages.length}
-              </span>
+              <span className="text-xs font-medium text-slate-300">Coverage Areas</span>
+              <span className="text-xs text-slate-500 bg-slate-700 px-1.5 py-0.5 rounded-full">{formData.coverages.length}</span>
             </div>
-            <button
-              onClick={addCoverage}
-              className="flex items-center gap-1 px-2 py-1 text-xs bg-cyan-600/20 text-cyan-400 rounded-lg hover:bg-cyan-600/30 transition-colors"
-            >
+            <button onClick={addCoverage} className="flex items-center gap-1 px-2 py-1 text-xs bg-cyan-600/20 text-cyan-400 rounded-lg hover:bg-cyan-600/30 transition-colors">
               <Plus className="w-3 h-3" />
               Add
             </button>
@@ -382,17 +341,13 @@ const GroundStationPropertiesTab = ({ stationId }) => {
               <div
                 key={coverage.id}
                 className={`border rounded-lg overflow-hidden transition-all ${
-                  expandedCoverage === index
-                    ? "border-cyan-500/50 bg-slate-800/50"
-                    : "border-slate-700 bg-slate-900/30"
+                  expandedCoverage === index ? "border-cyan-500/50 bg-slate-800/50" : "border-slate-700 bg-slate-900/30"
                 }`}
               >
                 {/* Coverage Header */}
                 <div
                   className="flex items-center gap-2 px-2.5 py-2 cursor-pointer hover:bg-slate-700/30"
-                  onClick={() =>
-                    setExpandedCoverage(expandedCoverage === index ? -1 : index)
-                  }
+                  onClick={() => setExpandedCoverage(expandedCoverage === index ? -1 : index)}
                 >
                   <div
                     className="w-2.5 h-2.5 rounded-full border border-slate-500"
@@ -411,9 +366,7 @@ const GroundStationPropertiesTab = ({ stationId }) => {
                     className="flex-1 bg-transparent text-xs text-white border-none focus:outline-none focus:ring-0"
                     placeholder="Coverage name"
                   />
-                  <span className="text-xs text-slate-500 px-1.5 py-0.5 bg-slate-700/50 rounded">
-                    {coverage.type === "satellite" ? "Sat" : "Manual"}
-                  </span>
+                  <span className="text-xs text-slate-500 px-1.5 py-0.5 bg-slate-700/50 rounded">{coverage.type === "satellite" ? "Sat" : "Manual"}</span>
                   {formData.coverages.length > 1 && (
                     <button
                       onClick={(e) => {
@@ -425,11 +378,7 @@ const GroundStationPropertiesTab = ({ stationId }) => {
                       <Trash2 className="w-3 h-3" />
                     </button>
                   )}
-                  {expandedCoverage === index ? (
-                    <ChevronUp className="w-3.5 h-3.5 text-slate-400" />
-                  ) : (
-                    <ChevronDown className="w-3.5 h-3.5 text-slate-400" />
-                  )}
+                  {expandedCoverage === index ? <ChevronUp className="w-3.5 h-3.5 text-slate-400" /> : <ChevronDown className="w-3.5 h-3.5 text-slate-400" />}
                 </div>
 
                 {/* Coverage Details */}
@@ -438,9 +387,7 @@ const GroundStationPropertiesTab = ({ stationId }) => {
                     {/* Coverage Type Toggle */}
                     <div className="flex gap-1.5 pt-2">
                       <button
-                        onClick={() =>
-                          handleCoverageChange(index, "type", "satellite")
-                        }
+                        onClick={() => handleCoverageChange(index, "type", "satellite")}
                         className={`flex-1 flex items-center justify-center gap-1.5 px-2 py-1.5 rounded-lg text-xs transition-all ${
                           coverage.type === "satellite"
                             ? "bg-blue-600/30 text-blue-300 border border-blue-500/50"
@@ -451,9 +398,7 @@ const GroundStationPropertiesTab = ({ stationId }) => {
                         Satellite
                       </button>
                       <button
-                        onClick={() =>
-                          handleCoverageChange(index, "type", "manual")
-                        }
+                        onClick={() => handleCoverageChange(index, "type", "manual")}
                         className={`flex-1 flex items-center justify-center gap-1.5 px-2 py-1.5 rounded-lg text-xs transition-all ${
                           coverage.type === "manual"
                             ? "bg-green-600/30 text-green-300 border border-green-500/50"
@@ -468,22 +413,12 @@ const GroundStationPropertiesTab = ({ stationId }) => {
                     {/* Satellite Selection */}
                     {coverage.type === "satellite" && (
                       <div>
-                        <label className="block text-xs text-slate-500 mb-1">
-                          Target Satellite
-                        </label>
+                        <label className="block text-xs text-slate-500 mb-1">Target Satellite</label>
                         <select
                           value={coverage.satelliteId || ""}
-                          onChange={(e) =>
-                            handleCoverageChange(
-                              index,
-                              "satelliteId",
-                              e.target.value
-                            )
-                          }
+                          onChange={(e) => handleCoverageChange(index, "satelliteId", e.target.value)}
                           className={`w-full px-2 py-1.5 bg-slate-800 border rounded-lg text-white text-xs focus:outline-none focus:ring-2 focus:ring-blue-500/50 ${
-                            errors[`cov-${index}-satellite`]
-                              ? "border-red-500"
-                              : "border-slate-600"
+                            errors[`cov-${index}-satellite`] ? "border-red-500" : "border-slate-600"
                           }`}
                         >
                           <option value="">Select satellite...</option>
@@ -500,51 +435,31 @@ const GroundStationPropertiesTab = ({ stationId }) => {
                     {coverage.type === "manual" && (
                       <div className="grid grid-cols-2 gap-2">
                         <div>
-                          <label className="block text-xs text-slate-500 mb-1">
-                            Min Elev (°)
-                          </label>
+                          <label className="block text-xs text-slate-500 mb-1">Min Elev (°)</label>
                           <input
                             type="number"
                             value={coverage.minElevation}
-                            onChange={(e) =>
-                              handleCoverageChange(
-                                index,
-                                "minElevation",
-                                e.target.value
-                              )
-                            }
+                            onChange={(e) => handleCoverageChange(index, "minElevation", e.target.value)}
                             placeholder="5"
                             step="1"
                             min="0"
                             max="90"
                             className={`w-full px-2 py-1.5 bg-slate-800 border rounded-lg text-white text-xs focus:outline-none focus:ring-2 focus:ring-green-500/50 ${
-                              errors[`cov-${index}-minElevation`]
-                                ? "border-red-500"
-                                : "border-slate-600"
+                              errors[`cov-${index}-minElevation`] ? "border-red-500" : "border-slate-600"
                             }`}
                           />
                         </div>
                         <div>
-                          <label className="block text-xs text-slate-500 mb-1">
-                            Max Range (km)
-                          </label>
+                          <label className="block text-xs text-slate-500 mb-1">Max Range (km)</label>
                           <input
                             type="number"
                             value={coverage.maxRange}
-                            onChange={(e) =>
-                              handleCoverageChange(
-                                index,
-                                "maxRange",
-                                e.target.value
-                              )
-                            }
+                            onChange={(e) => handleCoverageChange(index, "maxRange", e.target.value)}
                             placeholder="2500"
                             step="100"
                             min="0"
                             className={`w-full px-2 py-1.5 bg-slate-800 border rounded-lg text-white text-xs focus:outline-none focus:ring-2 focus:ring-green-500/50 ${
-                              errors[`cov-${index}-maxRange`]
-                                ? "border-red-500"
-                                : "border-slate-600"
+                              errors[`cov-${index}-maxRange`] ? "border-red-500" : "border-slate-600"
                             }`}
                           />
                         </div>
@@ -559,13 +474,9 @@ const GroundStationPropertiesTab = ({ stationId }) => {
                           {PRESET_COLORS.slice(0, 6).map((color, colorIdx) => (
                             <button
                               key={colorIdx}
-                              onClick={() =>
-                                handleCoverageChange(index, "color", color)
-                              }
+                              onClick={() => handleCoverageChange(index, "color", color)}
                               className={`w-4 h-4 rounded-full border transition-all hover:scale-110 ${
-                                coverage.color.name === color.name
-                                  ? "border-white scale-110"
-                                  : "border-slate-600/50"
+                                coverage.color.name === color.name ? "border-white scale-110" : "border-slate-600/50"
                               }`}
                               style={{
                                 backgroundColor: `rgb(${color.r * 255}, ${color.g * 255}, ${color.b * 255})`,
@@ -577,16 +488,8 @@ const GroundStationPropertiesTab = ({ stationId }) => {
                       <div className="flex items-center gap-1.5">
                         <span className="text-xs text-slate-500">Visible</span>
                         <button
-                          onClick={() =>
-                            handleCoverageChange(
-                              index,
-                              "isVisible",
-                              !coverage.isVisible
-                            )
-                          }
-                          className={`relative w-7 h-3.5 rounded-full transition-colors ${
-                            coverage.isVisible ? "bg-cyan-500" : "bg-slate-600"
-                          }`}
+                          onClick={() => handleCoverageChange(index, "isVisible", !coverage.isVisible)}
+                          className={`relative w-7 h-3.5 rounded-full transition-colors ${coverage.isVisible ? "bg-cyan-500" : "bg-slate-600"}`}
                         >
                           <span
                             className={`absolute top-0.5 left-0.5 w-2.5 h-2.5 rounded-full bg-white transition-transform ${

@@ -8,7 +8,7 @@ import { create } from "zustand";
 export const useTabsStore = create((set, get) => ({
   // Array of open tabs: { id, type: 'satellite' | 'groundStation', entityId, title }
   tabs: [],
-  
+
   // Currently active tab id
   activeTabId: null,
 
@@ -20,18 +20,16 @@ export const useTabsStore = create((set, get) => ({
    */
   addTab: (type, entityId, title) => {
     const { tabs } = get();
-    
+
     // Check if tab for this entity already exists
-    const existingTab = tabs.find(
-      (tab) => tab.type === type && tab.entityId === entityId
-    );
-    
+    const existingTab = tabs.find((tab) => tab.type === type && tab.entityId === entityId);
+
     if (existingTab) {
       // Focus existing tab instead of creating duplicate
       set({ activeTabId: existingTab.id });
       return existingTab.id;
     }
-    
+
     // Create new tab
     const newTab = {
       id: `tab-${type}-${entityId}-${Date.now()}`,
@@ -39,12 +37,12 @@ export const useTabsStore = create((set, get) => ({
       entityId,
       title,
     };
-    
+
     set({
       tabs: [...tabs, newTab],
       activeTabId: newTab.id,
     });
-    
+
     return newTab.id;
   },
 
@@ -55,11 +53,11 @@ export const useTabsStore = create((set, get) => ({
   removeTab: (tabId) => {
     const { tabs, activeTabId } = get();
     const tabIndex = tabs.findIndex((tab) => tab.id === tabId);
-    
+
     if (tabIndex === -1) return;
-    
+
     const newTabs = tabs.filter((tab) => tab.id !== tabId);
-    
+
     // If removing the active tab, select adjacent tab
     let newActiveTabId = activeTabId;
     if (activeTabId === tabId) {
@@ -73,7 +71,7 @@ export const useTabsStore = create((set, get) => ({
         newActiveTabId = newTabs[tabIndex].id;
       }
     }
-    
+
     set({
       tabs: newTabs,
       activeTabId: newActiveTabId,
@@ -96,9 +94,7 @@ export const useTabsStore = create((set, get) => ({
   updateTabTitle: (tabId, title) => {
     const { tabs } = get();
     set({
-      tabs: tabs.map((tab) =>
-        tab.id === tabId ? { ...tab, title } : tab
-      ),
+      tabs: tabs.map((tab) => (tab.id === tabId ? { ...tab, title } : tab)),
     });
   },
 
@@ -110,9 +106,7 @@ export const useTabsStore = create((set, get) => ({
    */
   getTabByEntity: (type, entityId) => {
     const { tabs } = get();
-    return tabs.find(
-      (tab) => tab.type === type && tab.entityId === entityId
-    ) || null;
+    return tabs.find((tab) => tab.type === type && tab.entityId === entityId) || null;
   },
 
   /**
@@ -130,12 +124,12 @@ export const useTabsStore = create((set, get) => ({
     const { tabs, activeTabId } = get();
     const newTabs = tabs.filter((tab) => tab.type !== type);
     const activeTab = tabs.find((tab) => tab.id === activeTabId);
-    
+
     let newActiveTabId = activeTabId;
     if (activeTab && activeTab.type === type) {
       newActiveTabId = newTabs.length > 0 ? newTabs[0].id : null;
     }
-    
+
     set({
       tabs: newTabs,
       activeTabId: newActiveTabId,
