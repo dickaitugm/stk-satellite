@@ -71,9 +71,11 @@ export default function App() {
     error: licenseError,
     isOffline,
     gracePeriod,
+    isFreeTier,
     verifyLicense,
     activateLicense,
     closeActivationDialog,
+    continueAsFree,
   } = useLicenseStore();
 
   // Version check store
@@ -120,6 +122,13 @@ export default function App() {
     });
   };
 
+  // Handle continue with free tier
+  const handleContinueFree = () => {
+    continueAsFree();
+    // Check for updates after continuing as free
+    checkForUpdates();
+  };
+
   // Show loading while verifying license
   if (isVerifying) {
     return <LoadingScreen message="Verifying license..." />;
@@ -152,6 +161,7 @@ export default function App() {
           onActivate={handleActivate}
           onClose={closeActivationDialog}
           canClose={verificationResult?.valid || false}
+          onContinueFree={handleContinueFree}
         />
       </div>
     );

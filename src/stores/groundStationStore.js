@@ -5,6 +5,7 @@
 
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
+import { useLicenseStore } from "./licenseStore";
 
 // Default ground stations
 const DEFAULT_GROUND_STATIONS = [
@@ -69,6 +70,12 @@ export const useGroundStationStore = create(
       getStationById: (id) => {
         return get().groundStations.find((gs) => gs.id === id);
       },
+      
+      // Check if can add more ground stations (license limit)
+      canAddGroundStation: () => {
+        const licenseStore = useLicenseStore.getState();
+        return licenseStore.canAddObject('groundStation', get().groundStations.length);
+      },
 
       // Access Analysis Cache Actions
       getAccessAnalysisCache: (gsId) => {
@@ -94,6 +101,17 @@ export const useGroundStationStore = create(
 
       // Actions
       addGroundStation: (station) => {
+        // Check license limit before adding
+        const licenseStore = useLicenseStore.getState();
+        if (!licenseStore.canAddObject('groundStation', get().groundStations.length)) {
+          console.warn('Ground station limit reached. Please upgrade your license.');
+          return { 
+            success: false, 
+            error: 'LIMIT_REACHED', 
+            message: `Free tier is limited to ${licenseStore.tierLimits.maxGroundStations} ground station(s). Please activate a license to add more.` 
+          };
+        }
+        
         console.log("Adding ground station:", station);
         set((state) => {
           const newStation = {
@@ -107,6 +125,7 @@ export const useGroundStationStore = create(
             groundStations: [...state.groundStations, newStation],
           };
         });
+        return { success: true };
       },
 
       removeGroundStation: (id) => {

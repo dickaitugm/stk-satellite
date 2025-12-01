@@ -6,6 +6,7 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import * as satellite from 'satellite.js';
+import { useLicenseStore } from './licenseStore';
 
 // Default TLE data
 const DEFAULT_SATELLITES = [
@@ -37,15 +38,31 @@ export const useSatelliteStore = create(
         return state.satellites.find(s => s.id === state.selectedSatelliteId);
       },
       
+      // Check if can add more satellites (license limit)
+      canAddSatellite: () => {
+        const licenseStore = useLicenseStore.getState();
+        return licenseStore.canAddObject('satellite', get().satellites.length);
+      },
+      
       // Actions
-      addSatellite: (satellite) => set((state) => ({
-        satellites: [...state.satellites, {
-          ...satellite,
-          id: satellite.id || `sat-${Date.now()}`,
-          isActive: true,
-          isVisible: true
-        }]
-      })),
+      addSatellite: (satellite) => {
+        // Check license limit before adding
+        const licenseStore = useLicenseStore.getState();
+        if (!licenseStore.canAddObject('satellite', get().satellites.length)) {
+          console.warn('Satellite limit reached. Please upgrade your license.');
+          return { success: false, error: 'LIMIT_REACHED', message: `Free tier is limited to ${licenseStore.tierLimits.maxSatellites} satellite(s). Please activate a license to add more.` };
+        }
+        
+        set((state) => ({
+          satellites: [...state.satellites, {
+            ...satellite,
+            id: satellite.id || `sat-${Date.now()}`,
+            isActive: true,
+            isVisible: true
+          }]
+        }));
+        return { success: true };
+      },
       
       removeSatellite: (id) => set((state) => ({
         satellites: state.satellites.filter(s => s.id !== id),
@@ -111,8 +128,20 @@ export const useSatelliteStore = create(
         const lines = tleText.trim().split('\n');
         const newSatellites = [];
         
+        // Check license limit
+        const licenseStore = useLicenseStore.getState();
+        const currentCount = get().satellites.length;
+        const maxAllowed = licenseStore.tierLimits.maxSatellites;
+        const availableSlots = Math.max(0, maxAllowed - currentCount);
+        
         for (let i = 0; i < lines.length; i += 3) {
           if (i + 2 >= lines.length) break;
+          
+          // Check if we've reached the limit
+          if (newSatellites.length >= availableSlots && availableSlots !== Infinity) {
+            console.warn(`Only imported ${newSatellites.length} satellite(s). Free tier limit reached.`);
+            break;
+          }
           
           const name = lines[i].trim();
           const line1 = lines[i + 1].trim();
@@ -138,7 +167,10 @@ export const useSatelliteStore = create(
           }));
         }
         
-        return newSatellites.length;
+        return { 
+          imported: newSatellites.length, 
+          limitReached: newSatellites.length >= availableSlots && availableSlots !== Infinity
+        };
       },
       
       // Reset to defaults

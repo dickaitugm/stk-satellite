@@ -4,6 +4,7 @@
  */
 
 import { create } from "zustand";
+import { FREE_TIER_LIMITS, LICENSED_LIMITS, getTierLimits } from "../utils/licenseConstants";
 
 export const useLicenseStore = create((set, get) => ({
   // State
@@ -15,6 +16,10 @@ export const useLicenseStore = create((set, get) => ({
   // License info
   licenseInfo: null,
   verificationResult: null,
+
+  // Free tier state
+  isFreeTier: false,
+  tierLimits: LICENSED_LIMITS, // Default to licensed limits
 
   // Error state
   error: null,
@@ -109,13 +114,14 @@ export const useLicenseStore = create((set, get) => ({
       const result = await window.electronAPI.activateLicense(licenseKey);
 
       if (result.success) {
-        // Activation successful
         set({
           isActivating: false,
           licenseInfo: result.data,
           showActivationDialog: false,
           showBlockedDialog: false,
           verificationResult: { valid: true, code: "VALID" },
+          isFreeTier: false,
+          tierLimits: LICENSED_LIMITS,
         });
         return { success: true, data: result.data };
       } else {
@@ -225,6 +231,51 @@ export const useLicenseStore = create((set, get) => ({
   },
 
   /**
+   * Continue with free tier (limited features)
+   */
+  continueAsFree: () => {
+    set({
+      isFreeTier: true,
+      tierLimits: FREE_TIER_LIMITS,
+      showActivationDialog: false,
+      showBlockedDialog: false,
+      verificationResult: { valid: true, code: "FREE_TIER" },
+    });
+  },
+
+  /**
+   * Check if a specific feature is available
+   */
+  isFeatureAvailable: (featureName) => {
+    const { tierLimits } = get();
+    return tierLimits.features[featureName] ?? false;
+  },
+
+  /**
+   * Check if can add more objects of a type
+   */
+  canAddObject: (objectType, currentCount) => {
+    const { tierLimits } = get();
+    switch (objectType) {
+      case "satellite":
+        return currentCount < tierLimits.maxSatellites;
+      case "groundStation":
+        return currentCount < tierLimits.maxGroundStations;
+      case "targetArea":
+        return currentCount < tierLimits.maxTargetAreas;
+      default:
+        return false;
+    }
+  },
+
+  /**
+   * Get upgrade message for blocked feature
+   */
+  getUpgradeMessage: (featureName) => {
+    return `This feature requires a license. Please activate your license to use ${featureName}.`;
+  },
+
+  /**
    * Reset store
    */
   reset: () => {
@@ -238,6 +289,8 @@ export const useLicenseStore = create((set, get) => ({
       error: null,
       isOffline: false,
       gracePeriod: null,
+      isFreeTier: false,
+      tierLimits: LICENSED_LIMITS,
     });
   },
 }));
