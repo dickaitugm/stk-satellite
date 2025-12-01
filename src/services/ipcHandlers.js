@@ -1,4 +1,4 @@
-import { ipcMain, dialog, app } from "electron";
+import { ipcMain, dialog, app, shell } from "electron";
 import fs from "fs";
 import path from "path";
 import {
@@ -12,6 +12,73 @@ import {
   clearCache,
 } from "./satelliteCalculator.js";
 import { colorToKml, generateGroundTrackKml, generatePassKml, generateMultiPassKml } from "./kmlGenerator.js";
+
+// ============================================
+// Version Check Configuration
+// ============================================
+const GITHUB_REPO = "dickaitugm/stk-satellite";
+const GRACE_PERIOD_DAYS = 7;
+
+/**
+ * Compare two version strings in format "year.major.minor"
+ * @param {string} current - Current version (e.g., "25.0.0")
+ * @param {string} latest - Latest version (e.g., "25.1.0")
+ * @returns {number} -1 if current < latest, 0 if equal, 1 if current > latest
+ */
+function compareVersions(current, latest) {
+  // Remove 'v' prefix if present
+  const cleanCurrent = current.replace(/^v/, "");
+  const cleanLatest = latest.replace(/^v/, "");
+
+  const currentParts = cleanCurrent.split(".").map(Number);
+  const latestParts = cleanLatest.split(".").map(Number);
+
+  for (let i = 0; i < 3; i++) {
+    const curr = currentParts[i] || 0;
+    const lat = latestParts[i] || 0;
+    if (curr < lat) return -1;
+    if (curr > lat) return 1;
+  }
+  return 0;
+}
+
+/**
+ * Get update check data file path
+ * @returns {string} Path to update-check.json in userData
+ */
+function getUpdateCheckFilePath() {
+  return path.join(app.getPath("userData"), "update-check.json");
+}
+
+/**
+ * Read update check data from file
+ * @returns {Object|null} Update check data or null if not exists
+ */
+function readUpdateCheckData() {
+  try {
+    const filePath = getUpdateCheckFilePath();
+    if (fs.existsSync(filePath)) {
+      const data = fs.readFileSync(filePath, "utf-8");
+      return JSON.parse(data);
+    }
+  } catch (error) {
+    console.error("Failed to read update check data:", error);
+  }
+  return null;
+}
+
+/**
+ * Write update check data to file
+ * @param {Object} data - Data to write
+ */
+function writeUpdateCheckData(data) {
+  try {
+    const filePath = getUpdateCheckFilePath();
+    fs.writeFileSync(filePath, JSON.stringify(data, null, 2), "utf-8");
+  } catch (error) {
+    console.error("Failed to write update check data:", error);
+  }
+}
 
 export function registerIpcHandlers() {
   // Fetch TLE from URL (bypasses CORS)
@@ -403,6 +470,128 @@ export function registerIpcHandlers() {
       return { success: true, filePath: result.filePath };
     } catch (error) {
       console.error("Failed to export pass KML:", error);
+      return { success: false, error: error.message };
+    }
+  });
+
+  // ============================================
+  // Version Check Handlers
+  // ============================================
+
+  /**
+   * Get current app version
+   */
+  ipcMain.handle("get-app-version", async () => {
+    return { success: true, version: app.getVersion() };
+  });
+
+  /**
+   * Check for updates from GitHub Releases
+   * Returns update info including grace period status
+   */
+  ipcMain.handle("check-for-updates", async () => {
+    try {
+      const currentVersion = app.getVersion();
+
+      // Fetch latest release from GitHub
+      const response = await fetch(`https://api.github.com/repos/${GITHUB_REPO}/releases/latest`, {
+        headers: {
+          Accept: "application/vnd.github.v3+json",
+          "User-Agent": "STK-Satellite-App",
+        },
+      });
+
+      // Handle 404 - no releases yet
+      if (response.status === 404) {
+        return {
+          success: true,
+          hasUpdate: false,
+          currentVersion,
+          latestVersion: currentVersion,
+          message: "No releases found",
+        };
+      }
+
+      if (!response.ok) {
+        throw new Error(`GitHub API error: ${response.status} ${response.statusText}`);
+      }
+
+      const release = await response.json();
+      const latestVersion = release.tag_name.replace(/^v/, "");
+      const releaseUrl = release.html_url;
+      const releaseNotes = release.body || "";
+      const publishedAt = release.published_at;
+
+      // Compare versions
+      const comparison = compareVersions(currentVersion, latestVersion);
+
+      if (comparison >= 0) {
+        // Current version is up to date or newer
+        // Clear any existing update check data
+        const filePath = getUpdateCheckFilePath();
+        if (fs.existsSync(filePath)) {
+          fs.unlinkSync(filePath);
+        }
+        return {
+          success: true,
+          hasUpdate: false,
+          currentVersion,
+          latestVersion,
+        };
+      }
+
+      // Update available - check grace period
+      let updateCheckData = readUpdateCheckData();
+      const now = new Date();
+
+      if (!updateCheckData || updateCheckData.latestVersion !== latestVersion) {
+        // New version detected for the first time, start grace period
+        updateCheckData = {
+          latestVersion,
+          firstDetected: now.toISOString(),
+        };
+        writeUpdateCheckData(updateCheckData);
+      }
+
+      // Calculate days elapsed since first detection
+      const firstDetected = new Date(updateCheckData.firstDetected);
+      const daysElapsed = Math.floor((now - firstDetected) / (1000 * 60 * 60 * 24));
+      const daysRemaining = Math.max(0, GRACE_PERIOD_DAYS - daysElapsed);
+      const isBlocked = daysElapsed >= GRACE_PERIOD_DAYS;
+
+      return {
+        success: true,
+        hasUpdate: true,
+        currentVersion,
+        latestVersion,
+        releaseUrl,
+        releaseNotes,
+        publishedAt,
+        daysRemaining,
+        isBlocked,
+        firstDetected: updateCheckData.firstDetected,
+      };
+    } catch (error) {
+      console.error("Failed to check for updates:", error);
+      // On error, allow app to continue (grace mode)
+      return {
+        success: false,
+        error: error.message,
+        hasUpdate: false,
+        currentVersion: app.getVersion(),
+      };
+    }
+  });
+
+  /**
+   * Open release page in default browser
+   */
+  ipcMain.handle("open-release-page", async (event, url) => {
+    try {
+      await shell.openExternal(url);
+      return { success: true };
+    } catch (error) {
+      console.error("Failed to open release page:", error);
       return { success: false, error: error.message };
     }
   });

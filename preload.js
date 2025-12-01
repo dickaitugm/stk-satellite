@@ -105,4 +105,27 @@ contextBridge.exposeInMainWorld("electronAPI", {
    * @returns {Promise<{success, filePath?, error?}>}
    */
   exportPassKml: (passData) => ipcRenderer.invoke("export-pass-kml", passData),
+
+  // ============================================
+  // Version Check APIs
+  // ============================================
+
+  /**
+   * Get current app version from package.json
+   * @returns {Promise<{success, version}>}
+   */
+  getAppVersion: () => ipcRenderer.invoke("get-app-version"),
+
+  /**
+   * Check for updates from GitHub Releases
+   * @returns {Promise<{success, hasUpdate, currentVersion, latestVersion, releaseUrl?, daysRemaining?, isBlocked?}>}
+   */
+  checkForUpdates: () => ipcRenderer.invoke("check-for-updates"),
+
+  /**
+   * Open release page in default browser
+   * @param {string} url - Release URL to open
+   * @returns {Promise<{success}>}
+   */
+  openReleasePage: (url) => ipcRenderer.invoke("open-release-page", url),
 });

@@ -3,7 +3,7 @@
  * Main application entry point - Layout orchestrator with tabbed content
  */
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 
 // Layout components
 import { TopNavbar, BottomNavbar } from "./components/layout";
@@ -17,8 +17,11 @@ import { Sidebar } from "./components/sidebar";
 // Panels
 import { PropertiesPanel } from "./components/panels";
 
+// UI components
+import { UpdateRequiredDialog } from "./components/ui";
+
 // Stores
-import { useSatelliteStore } from "./stores";
+import { useSatelliteStore, useVersionStore } from "./stores";
 
 /**
  * Main App Component
@@ -29,8 +32,44 @@ export default function App() {
   // Stores
   const satellites = useSatelliteStore((state) => state.satellites);
 
+  // Version check store
+  const {
+    showDialog,
+    updateInfo,
+    checkForUpdates,
+    dismissDialog,
+    openDownloadPage,
+  } = useVersionStore();
+
+  // Check for updates on mount
+  useEffect(() => {
+    checkForUpdates();
+  }, [checkForUpdates]);
+
+  // If blocked, only show update dialog
+  if (updateInfo.isBlocked && updateInfo.hasUpdate) {
+    return (
+      <div className="flex flex-col h-screen w-screen bg-slate-950 text-slate-200 overflow-hidden font-sans">
+        <UpdateRequiredDialog
+          isOpen={true}
+          updateInfo={updateInfo}
+          onDismiss={dismissDialog}
+          onDownload={openDownloadPage}
+        />
+      </div>
+    );
+  }
+
   return (
     <div className="flex flex-col h-screen w-screen bg-slate-950 text-slate-200 overflow-hidden font-sans">
+      {/* Update Dialog */}
+      <UpdateRequiredDialog
+        isOpen={showDialog}
+        updateInfo={updateInfo}
+        onDismiss={dismissDialog}
+        onDownload={openDownloadPage}
+      />
+
       {/* TOP MENU */}
       <TopNavbar />
 
