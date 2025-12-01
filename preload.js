@@ -128,4 +128,52 @@ contextBridge.exposeInMainWorld("electronAPI", {
    * @returns {Promise<{success}>}
    */
   openReleasePage: (url) => ipcRenderer.invoke("open-release-page", url),
+
+  // ============================================
+  // License Management APIs
+  // ============================================
+
+  /**
+   * Get hardware information for license activation
+   * @returns {Promise<{success, data: {fingerprint, hostname, platform, macAddress, localIp, publicIp}}>}
+   */
+  getHardwareInfo: () => ipcRenderer.invoke("get-hardware-info"),
+
+  /**
+   * Validate license key format
+   * @param {string} licenseKey - License key to validate
+   * @returns {Promise<{success, valid, error?, normalizedKey?}>}
+   */
+  validateLicenseKeyFormat: (licenseKey) => ipcRenderer.invoke("validate-license-key-format", licenseKey),
+
+  /**
+   * Activate a license key on this device
+   * @param {string} licenseKey - License key to activate
+   * @returns {Promise<{success, message?, data?, error?}>}
+   */
+  activateLicense: (licenseKey) => ipcRenderer.invoke("activate-license", licenseKey),
+
+  /**
+   * Verify current license
+   * @returns {Promise<{valid, code, license?, error?, isBlocked?, gracePeriod?}>}
+   */
+  verifyLicense: () => ipcRenderer.invoke("verify-license"),
+
+  /**
+   * Deactivate license from current device
+   * @returns {Promise<{success, message?, error?}>}
+   */
+  deactivateLicense: () => ipcRenderer.invoke("deactivate-license"),
+
+  /**
+   * Get current license info
+   * @returns {Promise<{success, data: {licenseKey, productName, userName, status, validUntil, activatedAt, lastVerified}}>}
+   */
+  getLicenseInfo: () => ipcRenderer.invoke("get-license-info"),
+
+  /**
+   * Get license status summary
+   * @returns {Promise<{success, isActivated, licenseInfo?, gracePeriod?, lastVerified?}>}
+   */
+  getLicenseStatus: () => ipcRenderer.invoke("get-license-status"),
 });

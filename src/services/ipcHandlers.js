@@ -12,6 +12,15 @@ import {
   clearCache,
 } from "./satelliteCalculator.js";
 import { colorToKml, generateGroundTrackKml, generatePassKml, generateMultiPassKml } from "./kmlGenerator.js";
+import {
+  activateLicense,
+  verifyLicense,
+  deactivateLicense,
+  getLicenseInfo,
+  getLicenseStatus,
+  getHardwareInfo,
+  validateLicenseKeyFormat,
+} from "./licenseService.js";
 
 // ============================================
 // Version Check Configuration
@@ -592,6 +601,101 @@ export function registerIpcHandlers() {
       return { success: true };
     } catch (error) {
       console.error("Failed to open release page:", error);
+      return { success: false, error: error.message };
+    }
+  });
+
+  // ============================================
+  // License Management Handlers
+  // ============================================
+
+  /**
+   * Get hardware information for license activation
+   */
+  ipcMain.handle("get-hardware-info", async () => {
+    try {
+      const info = await getHardwareInfo();
+      return { success: true, data: info };
+    } catch (error) {
+      console.error("Failed to get hardware info:", error);
+      return { success: false, error: error.message };
+    }
+  });
+
+  /**
+   * Validate license key format
+   */
+  ipcMain.handle("validate-license-key-format", async (event, licenseKey) => {
+    try {
+      const result = validateLicenseKeyFormat(licenseKey);
+      return { success: true, ...result };
+    } catch (error) {
+      console.error("Failed to validate license key:", error);
+      return { success: false, error: error.message };
+    }
+  });
+
+  /**
+   * Activate a license key
+   */
+  ipcMain.handle("activate-license", async (event, licenseKey) => {
+    try {
+      const result = await activateLicense(licenseKey);
+      return result;
+    } catch (error) {
+      console.error("Failed to activate license:", error);
+      return { success: false, error: error.message };
+    }
+  });
+
+  /**
+   * Verify current license
+   */
+  ipcMain.handle("verify-license", async () => {
+    try {
+      const result = await verifyLicense();
+      return result;
+    } catch (error) {
+      console.error("Failed to verify license:", error);
+      return { valid: false, error: error.message, code: "ERROR" };
+    }
+  });
+
+  /**
+   * Deactivate license from current device
+   */
+  ipcMain.handle("deactivate-license", async () => {
+    try {
+      const result = await deactivateLicense();
+      return result;
+    } catch (error) {
+      console.error("Failed to deactivate license:", error);
+      return { success: false, error: error.message };
+    }
+  });
+
+  /**
+   * Get current license info
+   */
+  ipcMain.handle("get-license-info", async () => {
+    try {
+      const info = getLicenseInfo();
+      return { success: true, data: info };
+    } catch (error) {
+      console.error("Failed to get license info:", error);
+      return { success: false, error: error.message };
+    }
+  });
+
+  /**
+   * Get license status summary
+   */
+  ipcMain.handle("get-license-status", async () => {
+    try {
+      const status = await getLicenseStatus();
+      return { success: true, ...status };
+    } catch (error) {
+      console.error("Failed to get license status:", error);
       return { success: false, error: error.message };
     }
   });
