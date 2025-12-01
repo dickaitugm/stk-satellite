@@ -71,11 +71,14 @@ function getLicenseFilePath() {
 }
 
 /**
- * Generate encryption key from device fingerprint
+ * Generate encryption key from stable device info
+ * Uses hostname + platform (stable across restarts)
+ * Note: Don't use dynamic fingerprint as it may change
  */
 function getEncryptionKey() {
-  const baseKey = deviceFingerprint || os.hostname() + os.platform();
-  return crypto.createHash("sha256").update(baseKey).digest();
+  // Use stable values that don't change between app restarts
+  const stableKey = os.hostname() + os.platform() + os.arch() + "stk-satellite-v1";
+  return crypto.createHash("sha256").update(stableKey).digest();
 }
 
 /**
@@ -278,15 +281,24 @@ async function saveLicenseData(data) {
   try {
     const filePath = getLicenseFilePath();
     const dirPath = path.dirname(filePath);
+    
+    console.log("Saving license to:", filePath);
 
     // Ensure directory exists
     if (!fs.existsSync(dirPath)) {
       fs.mkdirSync(dirPath, { recursive: true });
+      console.log("Created directory:", dirPath);
     }
 
     const encrypted = encryptData(data);
     fs.writeFileSync(filePath, encrypted, "utf8");
-    console.log("License data saved");
+    console.log("License data saved successfully");
+    
+    // Verify save was successful
+    if (fs.existsSync(filePath)) {
+      const stats = fs.statSync(filePath);
+      console.log("License file size:", stats.size, "bytes");
+    }
   } catch (error) {
     console.error("Failed to save license data:", error);
     throw new Error("Failed to save license data");
@@ -299,16 +311,30 @@ async function saveLicenseData(data) {
 function loadLicenseData() {
   try {
     const filePath = getLicenseFilePath();
+    console.log("Loading license from:", filePath);
 
     if (!fs.existsSync(filePath)) {
+      console.log("License file not found");
       return null;
     }
 
     const encrypted = fs.readFileSync(filePath, "utf8");
+    console.log("License file read, decrypting...");
+    
     const data = decryptData(encrypted);
 
     if (data) {
+      console.log("License data loaded successfully");
       licenseData = data;
+    } else {
+      console.log("Failed to decrypt license data - file may be corrupted");
+      // Delete corrupted file so user can re-activate
+      try {
+        fs.unlinkSync(filePath);
+        console.log("Corrupted license file deleted");
+      } catch (e) {
+        console.error("Failed to delete corrupted file:", e);
+      }
     }
 
     return data;
