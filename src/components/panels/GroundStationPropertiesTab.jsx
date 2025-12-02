@@ -117,10 +117,12 @@ const createDefaultCoverage = () => ({
   name: "Coverage 1",
   type: "manual",
   satelliteId: null,
-  minElevation: 5,
+  minElevation: 0,
   maxRange: 2500,
   color: PRESET_COLORS[0],
   isVisible: true,
+  showLabel: true,
+  labelSize: 10,
 });
 
 // Tree Item Component
@@ -678,7 +680,7 @@ const GroundStationPropertiesTab = ({ stationId }) => {
           name: "Default Coverage",
           type: "manual",
           satelliteId: null,
-          minElevation: station.antenna?.minElevation || 5,
+          minElevation: station.antenna?.minElevation ?? 0,
           maxRange: station.antenna?.maxRange || 2500,
           color: station.color || PRESET_COLORS[0],
           isVisible: station.showCoverage !== false,
@@ -741,6 +743,26 @@ const GroundStationPropertiesTab = ({ stationId }) => {
     }));
     setHasChanges(true);
     setSelectedNode("coverages");
+  };
+
+  // Copy coverage
+  const copyCoverage = (index) => {
+    const originalCoverage = formData.coverages[index];
+    const newCoverage = {
+      ...originalCoverage,
+      id: `cov-${Date.now()}`,
+      name: `${originalCoverage.name} (Copy)`,
+      // Use next color in preset list
+      color: PRESET_COLORS[(formData.coverages.length) % PRESET_COLORS.length],
+    };
+    setFormData((prev) => ({
+      ...prev,
+      coverages: [...prev.coverages, newCoverage],
+    }));
+    setHasChanges(true);
+    // Select the new copied coverage
+    setSelectedNode(`coverage.${formData.coverages.length}`);
+    showToast("success", `Coverage "${originalCoverage.name}" copied`);
   };
 
   // Validate form
@@ -1007,23 +1029,56 @@ const GroundStationPropertiesTab = ({ stationId }) => {
                   }`}
                 >
                   <div
-                    className="w-4 h-4 rounded-full border border-slate-500"
+                    className="w-4 h-4 rounded-full border border-slate-500 shrink-0"
                     style={{
                       backgroundColor: `rgb(${coverage.color.r * 255}, ${coverage.color.g * 255}, ${coverage.color.b * 255})`,
                     }}
                   />
-                  <div className="flex-1">
-                    <p className="text-sm text-white">{coverage.name}</p>
-                    <p className="text-xs text-slate-400">{coverage.type === "satellite" ? "Satellite Mode" : "Manual Mode"}</p>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm text-white truncate">{coverage.name}</p>
+                    <div className="flex items-center gap-2 text-xs text-slate-400">
+                      {coverage.type === "satellite" ? (
+                        <>
+                          <span className="flex items-center gap-1">
+                            <Satellite className="w-3 h-3 text-blue-400" />
+                            <span className="text-blue-300">{satellites.find(s => s.id === coverage.satelliteId)?.name || "No satellite"}</span>
+                          </span>
+                        </>
+                      ) : (
+                        <span className="flex items-center gap-1">
+                          <Circle className="w-3 h-3 text-green-400" />
+                          <span className="text-green-300">Manual</span>
+                        </span>
+                      )}
+                      <span className="text-slate-600">•</span>
+                      <span className="text-cyan-400">El ≥ {coverage.minElevation ?? 0}°</span>
+                      {coverage.type === "manual" && (
+                        <>
+                          <span className="text-slate-600">•</span>
+                          <span className="text-orange-400">{coverage.maxRange || 2500} km</span>
+                        </>
+                      )}
+                    </div>
                   </div>
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-1 shrink-0">
                     {coverage.isVisible ? <Eye className="w-4 h-4 text-green-400" /> : <Eye className="w-4 h-4 text-slate-600" />}
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        copyCoverage(index);
+                      }}
+                      title="Copy Coverage"
+                      className="p-1 hover:bg-cyan-500/20 rounded text-slate-500 hover:text-cyan-400 transition-colors"
+                    >
+                      <Copy className="w-4 h-4" />
+                    </button>
                     {formData.coverages.length > 1 && (
                       <button
                         onClick={(e) => {
                           e.stopPropagation();
                           removeCoverage(index);
                         }}
+                        title="Delete Coverage"
                         className="p-1 hover:bg-red-500/20 rounded text-slate-500 hover:text-red-400 transition-colors"
                       >
                         <Trash2 className="w-4 h-4" />
@@ -1134,40 +1189,74 @@ const GroundStationPropertiesTab = ({ stationId }) => {
                 </div>
               )}
 
-              {/* Manual Range Settings */}
+              {/* Min Elevation - untuk semua type coverage */}
+              <div>
+                <label className="block text-xs text-slate-400 mb-1">Min Elevation (°)</label>
+                <input
+                  type="number"
+                  value={coverage.minElevation}
+                  onChange={(e) => handleCoverageChange(coverageIndex, "minElevation", parseFloat(e.target.value) || 0)}
+                  placeholder="0"
+                  step="1"
+                  min="0"
+                  max="90"
+                  className={`w-full px-3 py-2 bg-slate-800 border rounded-lg text-white text-sm focus:outline-none focus:ring-2 focus:ring-cyan-500/50 ${
+                    errors[`cov-${coverageIndex}-minElevation`] ? "border-red-500" : "border-slate-600"
+                  }`}
+                />
+                <p className="text-xs text-slate-500 mt-1">
+                  {coverage.type === "satellite"
+                    ? "Coverage radius dihitung dari altitude satelit"
+                    : "Elevasi minimum untuk coverage manual"}
+                </p>
+              </div>
+
+              {/* Max Range - hanya untuk manual */}
               {coverage.type === "manual" && (
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label className="block text-xs text-slate-400 mb-1">Min Elevation (°)</label>
-                    <input
-                      type="number"
-                      value={coverage.minElevation}
-                      onChange={(e) => handleCoverageChange(coverageIndex, "minElevation", e.target.value)}
-                      placeholder="5"
-                      step="1"
-                      min="0"
-                      max="90"
-                      className={`w-full px-3 py-2 bg-slate-800 border rounded-lg text-white text-sm focus:outline-none focus:ring-2 focus:ring-green-500/50 ${
-                        errors[`cov-${coverageIndex}-minElevation`] ? "border-red-500" : "border-slate-600"
-                      }`}
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-xs text-slate-400 mb-1">Max Range (km)</label>
-                    <input
-                      type="number"
-                      value={coverage.maxRange}
-                      onChange={(e) => handleCoverageChange(coverageIndex, "maxRange", e.target.value)}
-                      placeholder="2500"
-                      step="100"
-                      min="0"
-                      className={`w-full px-3 py-2 bg-slate-800 border rounded-lg text-white text-sm focus:outline-none focus:ring-2 focus:ring-green-500/50 ${
-                        errors[`cov-${coverageIndex}-maxRange`] ? "border-red-500" : "border-slate-600"
-                      }`}
-                    />
-                  </div>
+                <div>
+                  <label className="block text-xs text-slate-400 mb-1">Max Range (km)</label>
+                  <input
+                    type="number"
+                    value={coverage.maxRange}
+                    onChange={(e) => handleCoverageChange(coverageIndex, "maxRange", e.target.value)}
+                    placeholder="2500"
+                    step="100"
+                    min="0"
+                    className={`w-full px-3 py-2 bg-slate-800 border rounded-lg text-white text-sm focus:outline-none focus:ring-2 focus:ring-green-500/50 ${
+                      errors[`cov-${coverageIndex}-maxRange`] ? "border-red-500" : "border-slate-600"
+                    }`}
+                  />
                 </div>
               )}
+
+              {/* Label Settings */}
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <label className="text-xs text-slate-400">Show Label on Globe</label>
+                  <button
+                    onClick={() => handleCoverageChange(coverageIndex, "showLabel", !(coverage.showLabel ?? true))}
+                    className={`relative w-10 h-5 rounded-full transition-colors ${(coverage.showLabel ?? true) ? "bg-cyan-500" : "bg-slate-600"}`}
+                  >
+                    <span className={`absolute top-0.5 left-0.5 w-4 h-4 rounded-full bg-white transition-transform ${(coverage.showLabel ?? true) ? "translate-x-5" : "translate-x-0"}`} />
+                  </button>
+                </div>
+                {(coverage.showLabel ?? true) && (
+                  <div>
+                    <label className="block text-xs text-slate-400 mb-1">Label Size (px)</label>
+                    <input
+                      type="number"
+                      value={coverage.labelSize ?? 10}
+                      onChange={(e) => handleCoverageChange(coverageIndex, "labelSize", parseInt(e.target.value) || 10)}
+                      placeholder="10"
+                      step="1"
+                      min="6"
+                      max="24"
+                      className="w-full px-3 py-2 bg-slate-800 border border-slate-600 rounded-lg text-white text-sm focus:outline-none focus:ring-2 focus:ring-cyan-500/50"
+                    />
+                    <p className="text-xs text-slate-500 mt-1">Ukuran font label di globe (6-24 px)</p>
+                  </div>
+                )}
+              </div>
 
               {/* Color Selection */}
               <div>

@@ -307,7 +307,7 @@ const Globe2D = ({ onMouseMove }) => {
 
               if (satPosition?.alt) {
                 // Calculate coverage radius based on satellite altitude and min elevation
-                maxRange = calculateCoverageRadius(satPosition.alt, coverage.minElevation || 5);
+                maxRange = calculateCoverageRadius(satPosition.alt, coverage.minElevation ?? 0);
               }
             }
 
@@ -328,23 +328,42 @@ const Globe2D = ({ onMouseMove }) => {
             const coveragePolygon = new WorldWind.SurfacePolygon(boundaryLocations, polygonAttributes);
             gsLayer.addRenderable(coveragePolygon);
 
-            // Add range label at the edge of the circle (north point)
-            const labelPosition = new WorldWind.Position(
-              gs.location.lat + maxRange / 111, // Approximate degrees latitude
-              gs.location.lon,
-              0
-            );
+            // Only show label if enabled (default true)
+            if (coverage.showLabel ?? true) {
+              // Build label text with coverage info (compact with newline)
+              let labelText = `${Math.round(maxRange)} km`;
+              if (coverage.type === "satellite" && coverage.satelliteId) {
+                const satState = useSatelliteStore.getState();
+                const trackedSat = satState.satellites.find((s) => s.id === coverage.satelliteId);
+                const satName = trackedSat?.name || "Sat";
+                // Truncate satellite name if too long
+                const shortName = satName.length > 12 ? satName.substring(0, 10) + ".." : satName;
+                labelText = `${shortName}\nEl≥${coverage.minElevation ?? 0}° ${Math.round(maxRange)}km`;
+              } else {
+                const shortName = coverage.name.length > 12 ? coverage.name.substring(0, 10) + ".." : coverage.name;
+                labelText = `${shortName}\nEl≥${coverage.minElevation ?? 0}° ${Math.round(maxRange)}km`;
+              }
 
-            const labelAttributes = new WorldWind.PlacemarkAttributes(null);
-            labelAttributes.imageSource = WorldWind.configuration.baseUrl + "images/white-dot.png";
-            labelAttributes.imageScale = 0.05;
-            labelAttributes.labelAttributes.color = new WorldWind.Color(finalColor.r ?? 1, finalColor.g ?? 0.5, finalColor.b ?? 0, 1);
-            labelAttributes.labelAttributes.offset = new WorldWind.Offset(WorldWind.OFFSET_FRACTION, 0.5, WorldWind.OFFSET_FRACTION, 0);
+              // Add range label at the edge of the circle (north point)
+              const labelPosition = new WorldWind.Position(
+                gs.location.lat + maxRange / 111, // Approximate degrees latitude
+                gs.location.lon,
+                0
+              );
 
-            const rangeLabel = new WorldWind.Placemark(labelPosition, false, labelAttributes);
-            rangeLabel.label = `${Math.round(maxRange)} km`;
-            rangeLabel.altitudeMode = WorldWind.CLAMP_TO_GROUND;
-            gsLayer.addRenderable(rangeLabel);
+              const labelSize = coverage.labelSize ?? 10;
+              const labelAttributes = new WorldWind.PlacemarkAttributes(null);
+              labelAttributes.imageSource = WorldWind.configuration.baseUrl + "images/white-dot.png";
+              labelAttributes.imageScale = 0.03;
+              labelAttributes.labelAttributes.color = new WorldWind.Color(finalColor.r ?? 1, finalColor.g ?? 0.5, finalColor.b ?? 0, 1);
+              labelAttributes.labelAttributes.font = new WorldWind.Font(labelSize);
+              labelAttributes.labelAttributes.offset = new WorldWind.Offset(WorldWind.OFFSET_FRACTION, 0.5, WorldWind.OFFSET_FRACTION, 0);
+
+              const rangeLabel = new WorldWind.Placemark(labelPosition, false, labelAttributes);
+              rangeLabel.label = labelText;
+              rangeLabel.altitudeMode = WorldWind.CLAMP_TO_GROUND;
+              gsLayer.addRenderable(rangeLabel);
+            }
           });
         }
       });
@@ -480,7 +499,8 @@ const Globe2D = ({ onMouseMove }) => {
     }
 
     // Generate new coverage circle (using fewer points for performance)
-    const radiusKm = calculateCoverageRadius(pos.alt);
+    // Use 0° elevation for satellite's own coverage visualization
+    const radiusKm = calculateCoverageRadius(pos.alt, 0);
     const center = { latitude: pos.lat, longitude: pos.lon };
     const circleCoords = geodesicCircleCoords(center, radiusKm, PERF_CONFIG.COVERAGE_CIRCLE_POINTS);
 

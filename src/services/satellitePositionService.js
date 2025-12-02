@@ -140,8 +140,8 @@ export async function getCoverageCircle(id, position) {
             return null;
         }
 
-        // First calculate radius
-        const radiusResult = await window.electronAPI.calculateCoverageRadius(position.alt);
+        // First calculate radius (using 0° elevation for satellite's own footprint)
+        const radiusResult = await window.electronAPI.calculateCoverageRadius(position.alt, 0);
         if (!radiusResult.success) return cached?.coords || null;
 
         // Then generate circle

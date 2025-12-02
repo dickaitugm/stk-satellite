@@ -180,17 +180,42 @@ export function generateOrbitPathsBatch(satellites, startTimestamp, numPoints = 
 }
 
 /**
- * Calculate coverage radius using curved Earth formula
- * This is a simple calculation but included here for completeness
- *
+ * Calculate coverage radius using curved Earth formula with elevation constraint
+ * 
  * @param {number} altitudeKm - Satellite altitude in km
+ * @param {number} minElevationDeg - Minimum elevation angle in degrees (default: 0)
  * @returns {number} Coverage radius in km
  */
-export function calculateCoverageRadius(altitudeKm) {
+export function calculateCoverageRadius(altitudeKm, minElevationDeg = 0) {
   const EARTH_RADIUS_KM = 6371;
-  const cosTheta = EARTH_RADIUS_KM / (EARTH_RADIUS_KM + altitudeKm);
-  const theta = Math.acos(cosTheta);
-  return EARTH_RADIUS_KM * theta;
+  const Re = EARTH_RADIUS_KM;
+  const h = altitudeKm;
+  const elevRad = (minElevationDeg * Math.PI) / 180;
+  
+  if (minElevationDeg <= 0) {
+    // Simple horizon case (0° elevation)
+    const cosTheta = Re / (Re + h);
+    const theta = Math.acos(cosTheta);
+    return Re * theta;
+  }
+  
+  // For elevation > 0, calculate the central angle where satellite
+  // appears at the specified elevation above horizon
+  const cosElev = Math.cos(elevRad);
+  const sinLambda = (Re * cosElev) / (Re + h);
+  
+  if (sinLambda > 1) {
+    return 0; // Satellite too low for this elevation
+  }
+  
+  const lambda = Math.asin(sinLambda);
+  const theta = (Math.PI / 2) - elevRad - lambda;
+  
+  if (theta <= 0) {
+    return 0;
+  }
+  
+  return Re * theta;
 }
 
 /**

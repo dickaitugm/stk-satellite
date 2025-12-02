@@ -57,9 +57,10 @@ contextBridge.exposeInMainWorld("electronAPI", {
   /**
    * Calculate coverage radius from altitude
    * @param {number} altitudeKm - Satellite altitude in km
+   * @param {number} minElevationDeg - Minimum elevation angle in degrees (default 0)
    * @returns {Promise<{success, radius}>}
    */
-  calculateCoverageRadius: (altitudeKm) => ipcRenderer.invoke("calculate-coverage-radius", altitudeKm),
+  calculateCoverageRadius: (altitudeKm, minElevationDeg = 0) => ipcRenderer.invoke("calculate-coverage-radius", altitudeKm, minElevationDeg),
 
   /**
    * Clear satellite cache (when TLE is updated)

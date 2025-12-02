@@ -198,10 +198,11 @@ export function registerIpcHandlers() {
    * Calculate coverage radius from altitude
    *
    * @param {number} altitudeKm - Satellite altitude in km
+   * @param {number} minElevationDeg - Minimum elevation angle in degrees (default 0)
    */
-  ipcMain.handle("calculate-coverage-radius", async (event, altitudeKm) => {
+  ipcMain.handle("calculate-coverage-radius", async (event, altitudeKm, minElevationDeg = 0) => {
     try {
-      const radius = calculateCoverageRadius(altitudeKm);
+      const radius = calculateCoverageRadius(altitudeKm, minElevationDeg);
       return { success: true, radius };
     } catch (error) {
       console.error("Failed to calculate coverage radius:", error);

@@ -14,7 +14,8 @@ const SatelliteInfoPanel = ({
   period = '~97.4 min',
   isLoading 
 }) => {
-  const coverageRadius = calculateCoverageRadius(satellitePosition.alt);
+  // Calculate coverage at 0° elevation (horizon) for max theoretical coverage
+  const coverageRadius = calculateCoverageRadius(satellitePosition.alt, 0);
   
   return (
     <div className={`absolute top-2 right-2 bg-black/50 backdrop-blur-sm p-2 rounded border border-white/10 text-xs text-white transition-opacity duration-1000 ${!isLoading ? 'opacity-100' : 'opacity-0'}`}>
