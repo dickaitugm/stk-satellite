@@ -20,7 +20,9 @@ const DEFAULT_SATELLITES = [
     },
     color: { r: 0, g: 1, b: 1, a: 0.8 }, // Cyan
     isActive: true,
-    isVisible: true
+    isVisible: true,
+    showCoverage: true,
+    objects: [] // Sensor/payload objects
   }
 ];
 
