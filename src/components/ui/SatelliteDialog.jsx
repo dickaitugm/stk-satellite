@@ -102,6 +102,81 @@ const TLE_SOURCES = [
     },
 ];
 
+// Orbit presets for quick configuration
+const ORBIT_PRESETS = [
+    {
+        id: "custom",
+        name: "Custom",
+        description: "Define your own orbit",
+        values: null,
+    },
+    {
+        id: "leo-equatorial",
+        name: "LEO Equatorial (600km)",
+        description: "Low Earth Orbit, near equator",
+        values: {
+            semiMajorAxis: "6978.137", // 6378.137 + 600
+            eccentricity: "0.001",
+            inclination: "5",
+            raan: "0",
+            argOfPerigee: "0",
+            meanAnomaly: "0",
+        },
+    },
+    {
+        id: "leo-polar",
+        name: "LEO Polar (700km)",
+        description: "Sun-synchronous polar orbit",
+        values: {
+            semiMajorAxis: "7078.137", // 6378.137 + 700
+            eccentricity: "0.001",
+            inclination: "98.2",
+            raan: "0",
+            argOfPerigee: "0",
+            meanAnomaly: "0",
+        },
+    },
+    {
+        id: "iss",
+        name: "ISS-like (400km)",
+        description: "International Space Station orbit",
+        values: {
+            semiMajorAxis: "6778.137", // 6378.137 + 400
+            eccentricity: "0.0001",
+            inclination: "51.6",
+            raan: "0",
+            argOfPerigee: "0",
+            meanAnomaly: "0",
+        },
+    },
+    {
+        id: "meo",
+        name: "MEO (20,200km)",
+        description: "GPS satellite orbit",
+        values: {
+            semiMajorAxis: "26578.137",
+            eccentricity: "0.01",
+            inclination: "55",
+            raan: "0",
+            argOfPerigee: "0",
+            meanAnomaly: "0",
+        },
+    },
+    {
+        id: "geo",
+        name: "GEO (35,786km)",
+        description: "Geostationary orbit",
+        values: {
+            semiMajorAxis: "42164.137",
+            eccentricity: "0.0001",
+            inclination: "0",
+            raan: "0",
+            argOfPerigee: "0",
+            meanAnomaly: "0",
+        },
+    },
+];
+
 // Camera types
 const CAMERA_TYPES = [
     { id: "rgb", name: "Digital RGB", description: "Standard RGB camera" },
@@ -124,6 +199,34 @@ const PAYLOAD_TYPES = [
     { id: "camera", name: "Camera", icon: Camera, description: "Imaging payload" },
     { id: "ais", name: "AIS Receiver", icon: Radio, description: "Ship tracking" },
 ];
+
+// Constants for orbital calculations
+const EARTH_RADIUS_KM = 6378.137;
+const EARTH_MU = 398600.4418; // km³/s²
+
+// Helper function to calculate Mean Motion from Semi-major Axis
+const calculateMeanMotion = (semiMajorAxisKm) => {
+    const a = parseFloat(semiMajorAxisKm);
+    if (isNaN(a) || a <= 0) return null;
+    // n = sqrt(μ/a³) in rad/s, convert to rev/day
+    const nRadPerSec = Math.sqrt(EARTH_MU / Math.pow(a, 3));
+    const nRevPerDay = (nRadPerSec * 86400) / (2 * Math.PI);
+    return nRevPerDay;
+};
+
+// Helper function to calculate orbital period
+const calculateOrbitalPeriod = (semiMajorAxisKm) => {
+    const n = calculateMeanMotion(semiMajorAxisKm);
+    if (!n) return null;
+    return (24 * 60) / n; // minutes
+};
+
+// Helper function to calculate altitude from semi-major axis
+const calculateAltitude = (semiMajorAxisKm) => {
+    const a = parseFloat(semiMajorAxisKm);
+    if (isNaN(a)) return null;
+    return a - EARTH_RADIUS_KM;
+};
 
 // Virtualized TLE History Picker Component
 const ITEMS_PER_PAGE = 50;
@@ -290,9 +393,10 @@ const SatelliteDialog = ({
         tleHistory: [], // Array of {epoch, line1, line2}
         selectedTleIndex: 0,
         // Keplerian elements
-        semiMajorAxis: "6878.137", // km (LEO default)
-        eccentricity: "0.0001",
-        inclination: "51.6", // degrees (ISS-like)
+        orbitPreset: "custom", // Preset orbit selection
+        semiMajorAxis: "6978.137", // km (600km altitude default)
+        eccentricity: "0.001",
+        inclination: "5", // degrees (near-equatorial)
         raan: "0", // Right Ascension of Ascending Node
         argOfPerigee: "0", // Argument of Perigee
         meanAnomaly: "0",
@@ -1238,7 +1342,82 @@ const SatelliteDialog = ({
                                                     Keplerian Elements
                                                 </h5>
 
+                                                {/* Orbit Preset Selector */}
+                                                <div>
+                                                    <label className="block text-xs text-slate-400 mb-1">
+                                                        Orbit Preset
+                                                    </label>
+                                                    <select
+                                                        value={formData.orbitPreset}
+                                                        onChange={(e) => {
+                                                            const preset = ORBIT_PRESETS.find(p => p.id === e.target.value);
+                                                            if (preset && preset.values) {
+                                                                setFormData(prev => ({
+                                                                    ...prev,
+                                                                    orbitPreset: e.target.value,
+                                                                    ...preset.values
+                                                                }));
+                                                            } else {
+                                                                handleChange("orbitPreset", e.target.value);
+                                                            }
+                                                        }}
+                                                        className="w-full px-3 py-2 bg-slate-800 border border-slate-600 rounded-lg text-white text-sm focus:outline-none focus:border-cyan-500"
+                                                    >
+                                                        {ORBIT_PRESETS.map(preset => (
+                                                            <option key={preset.id} value={preset.id}>
+                                                                {preset.name} - {preset.description}
+                                                            </option>
+                                                        ))}
+                                                    </select>
+                                                </div>
+
+                                                {/* Calculated Orbital Info */}
+                                                <div className="grid grid-cols-3 gap-2 p-2 bg-cyan-900/20 rounded-lg border border-cyan-800/30">
+                                                    <div className="text-center">
+                                                        <p className="text-xs text-slate-500">Altitude</p>
+                                                        <p className="text-sm font-medium text-cyan-400">
+                                                            {calculateAltitude(formData.semiMajorAxis)?.toFixed(1) || "—"} km
+                                                        </p>
+                                                    </div>
+                                                    <div className="text-center">
+                                                        <p className="text-xs text-slate-500">Period</p>
+                                                        <p className="text-sm font-medium text-cyan-400">
+                                                            {calculateOrbitalPeriod(formData.semiMajorAxis)?.toFixed(1) || "—"} min
+                                                        </p>
+                                                    </div>
+                                                    <div className="text-center">
+                                                        <p className="text-xs text-slate-500">Mean Motion</p>
+                                                        <p className="text-sm font-medium text-cyan-400">
+                                                            {calculateMeanMotion(formData.semiMajorAxis)?.toFixed(4) || "—"} rev/day
+                                                        </p>
+                                                    </div>
+                                                </div>
+
                                                 <div className="grid grid-cols-2 gap-3">
+                                                    {/* Altitude (convenience input) */}
+                                                    <div>
+                                                        <label className="block text-xs text-slate-400 mb-1">
+                                                            Altitude (km)
+                                                        </label>
+                                                        <input
+                                                            type="number"
+                                                            step="1"
+                                                            value={calculateAltitude(formData.semiMajorAxis)?.toFixed(1) || ""}
+                                                            onChange={(e) => {
+                                                                const alt = parseFloat(e.target.value);
+                                                                if (!isNaN(alt)) {
+                                                                    handleChange("semiMajorAxis", (EARTH_RADIUS_KM + alt).toFixed(3));
+                                                                    handleChange("orbitPreset", "custom");
+                                                                }
+                                                            }}
+                                                            placeholder="e.g. 600"
+                                                            className="w-full px-3 py-2 bg-slate-800 border border-slate-600 rounded-lg text-white text-sm focus:outline-none focus:border-cyan-500"
+                                                        />
+                                                        <p className="text-xs text-slate-500 mt-0.5">
+                                                            Auto-calculates Semi-major Axis
+                                                        </p>
+                                                    </div>
+
                                                     {/* Semi-major axis */}
                                                     <div>
                                                         <label className="block text-xs text-slate-400 mb-1">
