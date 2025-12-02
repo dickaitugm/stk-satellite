@@ -118,10 +118,33 @@ export const useSatelliteStore = create(
         const gmst = satellite.gstime(date);
         const positionGd = satellite.eciToGeodetic(positionAndVelocity.position, gmst);
         
+        // Calculate heading/track from velocity vector if available
+        let heading = 0;
+        if (positionAndVelocity.velocity) {
+          const vel = positionAndVelocity.velocity;
+          // Convert ECI velocity to local ENU (East-North-Up) frame
+          const lat = positionGd.latitude;
+          const lon = satellite.degreesLong(positionGd.longitude) * Math.PI / 180;
+          
+          // Rotate velocity from ECI to ECEF
+          const vxEcef = vel.x * Math.cos(gmst) + vel.y * Math.sin(gmst);
+          const vyEcef = -vel.x * Math.sin(gmst) + vel.y * Math.cos(gmst);
+          const vzEcef = vel.z;
+          
+          // Rotate from ECEF to local ENU
+          const vEast = -vxEcef * Math.sin(lon) + vyEcef * Math.cos(lon);
+          const vNorth = -vxEcef * Math.sin(lat) * Math.cos(lon) - vyEcef * Math.sin(lat) * Math.sin(lon) + vzEcef * Math.cos(lat);
+          
+          // Calculate heading (0 = North, 90 = East)
+          heading = Math.atan2(vEast, vNorth) * 180 / Math.PI;
+          if (heading < 0) heading += 360;
+        }
+        
         return {
           lat: satellite.degreesLat(positionGd.latitude),
           lon: satellite.degreesLong(positionGd.longitude),
-          alt: positionGd.height
+          alt: positionGd.height,
+          heading: heading
         };
       },
       

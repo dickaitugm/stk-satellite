@@ -22,7 +22,7 @@ import { useSatelliteStore, useGroundStationStore, useTimeStore, useScenarioStor
 // Utils
 import { LAYER_OPTIONS, STABILITY_THRESHOLD, CALC_TARGET, BORDER_SENSOR_INTERVAL_MS } from "../../utils/constants";
 import { calculateOptimalRange } from "../../utils/rangeCalculator";
-import { calculateCoverageRadius, geodesicCircleCoords } from "../../utils/geodesic";
+import { calculateCoverageRadius, geodesicCircleCoords, generateSwathCoords } from "../../utils/geodesic";
 
 // Sub-components
 import BorderSensors from "./BorderSensors";
@@ -596,12 +596,20 @@ const Globe2D = ({ onMouseMove }) => {
             placemark.altitudeMode = WorldWind.CLAMP_TO_GROUND;
             satelliteLayerRef.current.addRenderable(placemark);
 
+            // Calculate satellite heading from velocity or track angle
+            // Use track angle if available, otherwise use a default
+            const satHeading = pos.heading || pos.track || 0;
+
             // Create swath polygons for each sensor object
             const objectSwaths = {};
             satObjects.forEach((obj) => {
-              if (obj.isVisible !== false && obj.showSwath !== false && obj.scanWidth > 0) {
-                const swathRadius = obj.scanWidth / 2; // scanWidth is full width, so radius is half
-                const swathCoords = geodesicCircleCoords({ latitude: pos.lat, longitude: pos.lon }, swathRadius, 48);
+              if (obj.isVisible !== false && obj.showSwath !== false && (obj.scanWidth > 0 || obj.swathWidth > 0)) {
+                // Use generateSwathCoords for shape-aware swath generation
+                const swathCoords = generateSwathCoords(
+                  { latitude: pos.lat, longitude: pos.lon },
+                  obj,
+                  satHeading
+                );
                 const swathLocations = swathCoords.map((coord) => new WorldWind.Location(coord.latitude, coord.longitude));
 
                 const swathAttributes = new WorldWind.ShapeAttributes(null);
@@ -626,13 +634,20 @@ const Globe2D = ({ onMouseMove }) => {
             satelliteRenderablesRef.current[sat.id].coveragePolygon.boundaries = boundaryLocations;
             satelliteRenderablesRef.current[sat.id].placemark.position = new WorldWind.Position(pos.lat, pos.lon, 0);
 
+            // Calculate satellite heading for swath orientation
+            const satHeading = pos.heading || pos.track || 0;
+
             // Update sensor object swaths
             const existingSwaths = satelliteRenderablesRef.current[sat.id].objectSwaths || {};
             
             satObjects.forEach((obj) => {
-              if (obj.isVisible !== false && obj.showSwath !== false && obj.scanWidth > 0) {
-                const swathRadius = obj.scanWidth / 2;
-                const swathCoords = geodesicCircleCoords({ latitude: pos.lat, longitude: pos.lon }, swathRadius, 48);
+              if (obj.isVisible !== false && obj.showSwath !== false && (obj.scanWidth > 0 || obj.swathWidth > 0)) {
+                // Use generateSwathCoords for shape-aware swath generation
+                const swathCoords = generateSwathCoords(
+                  { latitude: pos.lat, longitude: pos.lon },
+                  obj,
+                  satHeading
+                );
                 const swathLocations = swathCoords.map((coord) => new WorldWind.Location(coord.latitude, coord.longitude));
 
                 if (existingSwaths[obj.id]) {

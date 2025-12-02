@@ -170,6 +170,15 @@ export const PAYLOAD_TYPES = [
   { id: "ais", name: "AIS Receiver", description: "Ship tracking" },
 ];
 
+// Swath shape types
+export const SWATH_SHAPES = [
+  { id: "circle", name: "Circle", description: "Circular coverage area" },
+  { id: "rectangle", name: "Rectangle", description: "Rectangular swath (width × length)" },
+  { id: "ellipse", name: "Ellipse", description: "Elliptical coverage area" },
+  { id: "cone", name: "Cone/Sector", description: "Cone or sector shape" },
+  { id: "polygon", name: "Custom Polygon", description: "User-defined polygon vertices" },
+];
+
 // Constants for orbital calculations
 export const EARTH_RADIUS_KM = 6378.137;
 export const EARTH_MU = 398600.4418; // km³/s²
@@ -233,13 +242,21 @@ export const createDefaultObject = (index = 1, presetColor = null) => ({
   name: `Object ${index}`,
   type: "sensor",
   axis: "+z",
-  // Scanning parameters
-  scanWidth: 100,
-  scanLength: 0,
-  scanAngle: 0,
+  // Swath shape configuration
+  swathShape: "rectangle", // circle, rectangle, ellipse, cone, polygon
+  // Scanning parameters (for rectangle: width=cross-track, length=along-track)
+  scanWidth: 100,   // Cross-track width (km)
+  scanLength: 100,  // Along-track length (km) - for rectangle/ellipse
+  scanAngle: 0,     // Off-nadir angle (degrees)
+  // Cone/Sector parameters
+  coneAngle: 30,    // Half-cone angle (degrees)
+  sectorStart: 0,   // Sector start angle (degrees, 0=forward)
+  sectorEnd: 360,   // Sector end angle (degrees)
   // Field of view
   fovCrossTrack: 30,
   fovAlongTrack: 30,
+  // Polygon vertices (for custom polygon) - offsets in km from nadir
+  polygonVertices: [],
   // Visual settings
   color: presetColor || PRESET_COLORS[0],
   isVisible: true,

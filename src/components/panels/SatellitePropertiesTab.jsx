@@ -38,6 +38,7 @@ import {
   ORBIT_SOURCE_TYPES,
   TLE_SOURCES,
   ORBIT_PRESETS,
+  SWATH_SHAPES,
   EARTH_RADIUS_KM,
   EARTH_MU,
   calculateMeanMotion,
@@ -1323,34 +1324,228 @@ const SatellitePropertiesTab = ({ satelliteId }) => {
           <div className="space-y-3">
             <div className="flex items-center gap-2 text-xs text-slate-300 font-medium">
               <Scan className="w-3.5 h-3.5 text-green-400" />
-              Scanning Parameters
+              Swath Configuration
             </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label className="block text-xs text-slate-500 mb-1">Swath Width (km)</label>
-                <input
-                  type="number"
-                  value={selectedObject.scanWidth}
-                  onChange={(e) => updateObject(selectedObject.id, "scanWidth", parseFloat(e.target.value) || 0)}
-                  className="w-full px-3 py-2 bg-slate-800 border border-slate-600 rounded-lg text-white text-sm focus:outline-none focus:ring-2 focus:ring-green-500/50"
-                  min="0"
-                  step="10"
-                />
-              </div>
-              <div>
-                <label className="block text-xs text-slate-500 mb-1">Off-Nadir Angle (°)</label>
-                <input
-                  type="number"
-                  value={selectedObject.scanAngle}
-                  onChange={(e) => updateObject(selectedObject.id, "scanAngle", parseFloat(e.target.value) || 0)}
-                  className="w-full px-3 py-2 bg-slate-800 border border-slate-600 rounded-lg text-white text-sm focus:outline-none focus:ring-2 focus:ring-green-500/50"
-                  min="-60"
-                  max="60"
-                  step="1"
-                />
+
+            {/* Swath Shape Selection */}
+            <div>
+              <label className="block text-xs text-slate-500 mb-1">Swath Shape</label>
+              <div className="grid grid-cols-2 gap-2">
+                {SWATH_SHAPES.map((shape) => (
+                  <button
+                    key={shape.id}
+                    onClick={() => updateObject(selectedObject.id, "swathShape", shape.id)}
+                    className={`px-2 py-1.5 rounded-lg text-xs transition-all text-left ${
+                      (selectedObject.swathShape || "rectangle") === shape.id
+                        ? "bg-green-600/30 text-green-300 border border-green-500/50"
+                        : "bg-slate-800 text-slate-400 border border-slate-600 hover:border-slate-500"
+                    }`}
+                  >
+                    <div className="font-medium">{shape.name}</div>
+                    <div className="text-xs text-slate-500 truncate">{shape.description}</div>
+                  </button>
+                ))}
               </div>
             </div>
-            <p className="text-xs text-slate-500">Swath width defines the ground coverage. Off-nadir tilts the sensor from vertical.</p>
+
+            {/* Shape-specific parameters */}
+            {/* Circle: only width (diameter) */}
+            {(selectedObject.swathShape === "circle" || !selectedObject.swathShape) && selectedObject.swathShape !== "rectangle" && selectedObject.swathShape !== "ellipse" && selectedObject.swathShape !== "cone" && selectedObject.swathShape !== "polygon" && (
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs text-slate-500 mb-1">Diameter (km)</label>
+                  <input
+                    type="number"
+                    value={selectedObject.scanWidth || 100}
+                    onChange={(e) => updateObject(selectedObject.id, "scanWidth", parseFloat(e.target.value) || 0)}
+                    className="w-full px-3 py-2 bg-slate-800 border border-slate-600 rounded-lg text-white text-sm focus:outline-none focus:ring-2 focus:ring-green-500/50"
+                    min="0"
+                    step="10"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs text-slate-500 mb-1">Off-Nadir (°)</label>
+                  <input
+                    type="number"
+                    value={selectedObject.scanAngle || 0}
+                    onChange={(e) => updateObject(selectedObject.id, "scanAngle", parseFloat(e.target.value) || 0)}
+                    className="w-full px-3 py-2 bg-slate-800 border border-slate-600 rounded-lg text-white text-sm focus:outline-none focus:ring-2 focus:ring-green-500/50"
+                    min="-60"
+                    max="60"
+                    step="1"
+                  />
+                </div>
+              </div>
+            )}
+
+            {/* Rectangle: width x length */}
+            {selectedObject.swathShape === "rectangle" && (
+              <div className="space-y-2">
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-xs text-slate-500 mb-1">Width / Cross-track (km)</label>
+                    <input
+                      type="number"
+                      value={selectedObject.scanWidth || 100}
+                      onChange={(e) => updateObject(selectedObject.id, "scanWidth", parseFloat(e.target.value) || 0)}
+                      className="w-full px-3 py-2 bg-slate-800 border border-slate-600 rounded-lg text-white text-sm focus:outline-none focus:ring-2 focus:ring-green-500/50"
+                      min="0"
+                      step="10"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs text-slate-500 mb-1">Length / Along-track (km)</label>
+                    <input
+                      type="number"
+                      value={selectedObject.scanLength || 100}
+                      onChange={(e) => updateObject(selectedObject.id, "scanLength", parseFloat(e.target.value) || 0)}
+                      className="w-full px-3 py-2 bg-slate-800 border border-slate-600 rounded-lg text-white text-sm focus:outline-none focus:ring-2 focus:ring-green-500/50"
+                      min="0"
+                      step="10"
+                    />
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-xs text-slate-500 mb-1">Off-Nadir Angle (°)</label>
+                  <input
+                    type="number"
+                    value={selectedObject.scanAngle || 0}
+                    onChange={(e) => updateObject(selectedObject.id, "scanAngle", parseFloat(e.target.value) || 0)}
+                    className="w-full px-3 py-2 bg-slate-800 border border-slate-600 rounded-lg text-white text-sm focus:outline-none focus:ring-2 focus:ring-green-500/50"
+                    min="-60"
+                    max="60"
+                    step="1"
+                  />
+                </div>
+                <p className="text-xs text-slate-500">Rectangle swath oriented along satellite track direction.</p>
+              </div>
+            )}
+
+            {/* Ellipse: width x length */}
+            {selectedObject.swathShape === "ellipse" && (
+              <div className="space-y-2">
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-xs text-slate-500 mb-1">Width / Semi-minor (km)</label>
+                    <input
+                      type="number"
+                      value={selectedObject.scanWidth || 100}
+                      onChange={(e) => updateObject(selectedObject.id, "scanWidth", parseFloat(e.target.value) || 0)}
+                      className="w-full px-3 py-2 bg-slate-800 border border-slate-600 rounded-lg text-white text-sm focus:outline-none focus:ring-2 focus:ring-green-500/50"
+                      min="0"
+                      step="10"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs text-slate-500 mb-1">Length / Semi-major (km)</label>
+                    <input
+                      type="number"
+                      value={selectedObject.scanLength || 100}
+                      onChange={(e) => updateObject(selectedObject.id, "scanLength", parseFloat(e.target.value) || 0)}
+                      className="w-full px-3 py-2 bg-slate-800 border border-slate-600 rounded-lg text-white text-sm focus:outline-none focus:ring-2 focus:ring-green-500/50"
+                      min="0"
+                      step="10"
+                    />
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-xs text-slate-500 mb-1">Off-Nadir Angle (°)</label>
+                  <input
+                    type="number"
+                    value={selectedObject.scanAngle || 0}
+                    onChange={(e) => updateObject(selectedObject.id, "scanAngle", parseFloat(e.target.value) || 0)}
+                    className="w-full px-3 py-2 bg-slate-800 border border-slate-600 rounded-lg text-white text-sm focus:outline-none focus:ring-2 focus:ring-green-500/50"
+                    min="-60"
+                    max="60"
+                    step="1"
+                  />
+                </div>
+              </div>
+            )}
+
+            {/* Cone/Sector: cone angle + sector range */}
+            {selectedObject.swathShape === "cone" && (
+              <div className="space-y-2">
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-xs text-slate-500 mb-1">Cone Radius (km)</label>
+                    <input
+                      type="number"
+                      value={selectedObject.scanWidth || 100}
+                      onChange={(e) => updateObject(selectedObject.id, "scanWidth", parseFloat(e.target.value) || 0)}
+                      className="w-full px-3 py-2 bg-slate-800 border border-slate-600 rounded-lg text-white text-sm focus:outline-none focus:ring-2 focus:ring-green-500/50"
+                      min="0"
+                      step="10"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs text-slate-500 mb-1">Half-Cone Angle (°)</label>
+                    <input
+                      type="number"
+                      value={selectedObject.coneAngle || 30}
+                      onChange={(e) => updateObject(selectedObject.id, "coneAngle", parseFloat(e.target.value) || 0)}
+                      className="w-full px-3 py-2 bg-slate-800 border border-slate-600 rounded-lg text-white text-sm focus:outline-none focus:ring-2 focus:ring-green-500/50"
+                      min="0"
+                      max="90"
+                      step="1"
+                    />
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-xs text-slate-500 mb-1">Sector Start (°)</label>
+                    <input
+                      type="number"
+                      value={selectedObject.sectorStart || 0}
+                      onChange={(e) => updateObject(selectedObject.id, "sectorStart", parseFloat(e.target.value) || 0)}
+                      className="w-full px-3 py-2 bg-slate-800 border border-slate-600 rounded-lg text-white text-sm focus:outline-none focus:ring-2 focus:ring-green-500/50"
+                      min="0"
+                      max="360"
+                      step="5"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs text-slate-500 mb-1">Sector End (°)</label>
+                    <input
+                      type="number"
+                      value={selectedObject.sectorEnd || 360}
+                      onChange={(e) => updateObject(selectedObject.id, "sectorEnd", parseFloat(e.target.value) || 0)}
+                      className="w-full px-3 py-2 bg-slate-800 border border-slate-600 rounded-lg text-white text-sm focus:outline-none focus:ring-2 focus:ring-green-500/50"
+                      min="0"
+                      max="360"
+                      step="5"
+                    />
+                  </div>
+                </div>
+                <p className="text-xs text-slate-500">Sector angles: 0°=forward, 90°=right, 180°=back, 270°=left</p>
+              </div>
+            )}
+
+            {/* Polygon: custom vertices */}
+            {selectedObject.swathShape === "polygon" && (
+              <div className="space-y-2">
+                <div className="p-3 bg-slate-800/50 rounded-lg border border-slate-700">
+                  <p className="text-xs text-slate-400 mb-2">
+                    Define polygon vertices as offsets from nadir (km). Format: X,Y pairs where X=cross-track, Y=along-track.
+                  </p>
+                  <textarea
+                    value={(selectedObject.polygonVertices || []).map(v => `${v.x},${v.y}`).join('\n')}
+                    onChange={(e) => {
+                      const lines = e.target.value.split('\n').filter(l => l.trim());
+                      const vertices = lines.map(line => {
+                        const [x, y] = line.split(',').map(v => parseFloat(v.trim()) || 0);
+                        return { x, y };
+                      }).filter(v => !isNaN(v.x) && !isNaN(v.y));
+                      updateObject(selectedObject.id, "polygonVertices", vertices);
+                    }}
+                    placeholder="0,50&#10;25,25&#10;25,-25&#10;0,-50&#10;-25,-25&#10;-25,25"
+                    className="w-full px-3 py-2 bg-slate-900 border border-slate-600 rounded-lg text-white text-xs font-mono focus:outline-none focus:ring-2 focus:ring-green-500/50"
+                    rows={5}
+                  />
+                  <p className="text-xs text-slate-500 mt-1">Each line: X,Y (e.g., "50,100" = 50km right, 100km forward)</p>
+                </div>
+              </div>
+            )}
           </div>
 
           {/* Field of View */}
