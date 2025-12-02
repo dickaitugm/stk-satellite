@@ -31,202 +31,22 @@ import {
     Eye,
     EyeOff,
 } from "lucide-react";
-
-// Preset colors for satellites
-const PRESET_COLORS = [
-    { name: "Cyan", r: 0, g: 1, b: 1 },
-    { name: "Green", r: 0.2, g: 0.8, b: 0.2 },
-    { name: "Yellow", r: 1, g: 0.9, b: 0.2 },
-    { name: "Orange", r: 1, g: 0.5, b: 0 },
-    { name: "Red", r: 1, g: 0.2, b: 0.2 },
-    { name: "Purple", r: 0.7, g: 0.3, b: 0.9 },
-    { name: "Blue", r: 0.2, g: 0.5, b: 1 },
-    { name: "Pink", r: 1, g: 0.4, b: 0.7 },
-    { name: "White", r: 1, g: 1, b: 1 },
-];
-
-// Orbit element source types
-const ORBIT_SOURCE_TYPES = [
-    {
-        id: "tle-url",
-        name: "TLE from URL",
-        icon: Link,
-        description: "Fetch TLE from online source",
-    },
-    {
-        id: "tle-url-history",
-        name: "TLE History URL",
-        icon: FileText,
-        description: "URL with multiple TLE epochs",
-    },
-    {
-        id: "tle-manual",
-        name: "Manual TLE",
-        icon: FileText,
-        description: "Enter TLE lines manually",
-    },
-    {
-        id: "keplerian",
-        name: "Keplerian Elements",
-        icon: Globe,
-        description: "Enter orbital elements manually",
-    },
-];
-
-// Common TLE sources
-const TLE_SOURCES = [
-    {
-        id: "celestrak",
-        name: "CelesTrak",
-        urlTemplate: "https://celestrak.org/NORAD/elements/gp.php?NAME={SATELLITE_NAME}&FORMAT=TLE",
-        description: "CelesTrak GP data",
-    },
-    {
-        id: "celestrak-catnr",
-        name: "CelesTrak (NORAD ID)",
-        urlTemplate: "https://celestrak.org/NORAD/elements/gp.php?CATNR={NORAD_ID}&FORMAT=TLE",
-        description: "CelesTrak by catalog number",
-    },
-    {
-        id: "space-track",
-        name: "Space-Track.org",
-        urlTemplate:
-            "https://www.space-track.org/basicspacedata/query/class/tle_latest/NORAD_CAT_ID/{NORAD_ID}/format/tle",
-        description: "Space-Track API (requires auth)",
-    },
-    {
-        id: "custom",
-        name: "Custom URL",
-        urlTemplate: "",
-        description: "Enter custom URL",
-    },
-];
-
-// Orbit presets for quick configuration
-const ORBIT_PRESETS = [
-    {
-        id: "custom",
-        name: "Custom",
-        description: "Define your own orbit",
-        values: null,
-    },
-    {
-        id: "leo-equatorial",
-        name: "LEO Equatorial (600km)",
-        description: "Low Earth Orbit, near equator",
-        values: {
-            semiMajorAxis: "6978.137", // 6378.137 + 600
-            eccentricity: "0.001",
-            inclination: "5",
-            raan: "0",
-            argOfPerigee: "0",
-            meanAnomaly: "0",
-        },
-    },
-    {
-        id: "leo-polar",
-        name: "LEO Polar (700km)",
-        description: "Sun-synchronous polar orbit",
-        values: {
-            semiMajorAxis: "7078.137", // 6378.137 + 700
-            eccentricity: "0.001",
-            inclination: "98.2",
-            raan: "0",
-            argOfPerigee: "0",
-            meanAnomaly: "0",
-        },
-    },
-    {
-        id: "iss",
-        name: "ISS-like (400km)",
-        description: "International Space Station orbit",
-        values: {
-            semiMajorAxis: "6778.137", // 6378.137 + 400
-            eccentricity: "0.0001",
-            inclination: "51.6",
-            raan: "0",
-            argOfPerigee: "0",
-            meanAnomaly: "0",
-        },
-    },
-    {
-        id: "meo",
-        name: "MEO (20,200km)",
-        description: "GPS satellite orbit",
-        values: {
-            semiMajorAxis: "26578.137",
-            eccentricity: "0.01",
-            inclination: "55",
-            raan: "0",
-            argOfPerigee: "0",
-            meanAnomaly: "0",
-        },
-    },
-    {
-        id: "geo",
-        name: "GEO (35,786km)",
-        description: "Geostationary orbit",
-        values: {
-            semiMajorAxis: "42164.137",
-            eccentricity: "0.0001",
-            inclination: "0",
-            raan: "0",
-            argOfPerigee: "0",
-            meanAnomaly: "0",
-        },
-    },
-];
-
-// Camera types
-const CAMERA_TYPES = [
-    { id: "rgb", name: "Digital RGB", description: "Standard RGB camera" },
-    { id: "multispectral", name: "Multispectral", description: "Multi-band imaging" },
-    { id: "sar", name: "SAR", description: "Synthetic Aperture Radar" },
-];
-
-// Axis options for payload mounting
-const AXIS_OPTIONS = [
-    { id: "+x", name: "+X", description: "Positive X axis" },
-    { id: "-x", name: "-X", description: "Negative X axis" },
-    { id: "+y", name: "+Y", description: "Positive Y axis" },
-    { id: "-y", name: "-Y", description: "Negative Y axis" },
-    { id: "+z", name: "+Z (Nadir)", description: "Positive Z axis (Nadir)" },
-    { id: "-z", name: "-Z (Zenith)", description: "Negative Z axis (Zenith)" },
-];
-
-// Payload types
-const PAYLOAD_TYPES = [
-    { id: "camera", name: "Camera", icon: Camera, description: "Imaging payload" },
-    { id: "ais", name: "AIS Receiver", icon: Radio, description: "Ship tracking" },
-];
-
-// Constants for orbital calculations
-const EARTH_RADIUS_KM = 6378.137;
-const EARTH_MU = 398600.4418; // km³/s²
-
-// Helper function to calculate Mean Motion from Semi-major Axis
-const calculateMeanMotion = (semiMajorAxisKm) => {
-    const a = parseFloat(semiMajorAxisKm);
-    if (isNaN(a) || a <= 0) return null;
-    // n = sqrt(μ/a³) in rad/s, convert to rev/day
-    const nRadPerSec = Math.sqrt(EARTH_MU / Math.pow(a, 3));
-    const nRevPerDay = (nRadPerSec * 86400) / (2 * Math.PI);
-    return nRevPerDay;
-};
-
-// Helper function to calculate orbital period
-const calculateOrbitalPeriod = (semiMajorAxisKm) => {
-    const n = calculateMeanMotion(semiMajorAxisKm);
-    if (!n) return null;
-    return (24 * 60) / n; // minutes
-};
-
-// Helper function to calculate altitude from semi-major axis
-const calculateAltitude = (semiMajorAxisKm) => {
-    const a = parseFloat(semiMajorAxisKm);
-    if (isNaN(a)) return null;
-    return a - EARTH_RADIUS_KM;
-};
+import {
+    PRESET_COLORS,
+    AXIS_OPTIONS,
+    ORBIT_SOURCE_TYPES,
+    TLE_SOURCES,
+    ORBIT_PRESETS,
+    CAMERA_TYPES,
+    PAYLOAD_TYPES,
+    EARTH_RADIUS_KM,
+    EARTH_MU,
+    calculateMeanMotion,
+    calculateOrbitalPeriod,
+    calculateAltitude,
+    keplerianToTLE,
+    extractNoradId,
+} from "../../utils/satelliteConstants";
 
 // Virtualized TLE History Picker Component
 const ITEMS_PER_PAGE = 50;
@@ -846,40 +666,6 @@ const SatelliteDialog = ({
         onClose();
     };
 
-    // Extract NORAD ID from TLE line 1
-    const extractNoradId = (line1) => {
-        if (!line1 || line1.length < 7) return "";
-        return line1.substring(2, 7).trim();
-    };
-
-    // Convert Keplerian elements to TLE (simplified)
-    const keplerianToTLE = (kep, name) => {
-        // This is a simplified conversion - real conversion requires more complex calculations
-        const epochDate = new Date(kep.epoch);
-        const year = epochDate.getFullYear() % 100;
-        const startOfYear = new Date(epochDate.getFullYear(), 0, 1);
-        const dayOfYear = (epochDate - startOfYear) / 86400000 + 1;
-
-        const epochStr = `${year.toString().padStart(2, "0")}${dayOfYear
-            .toFixed(8)
-            .padStart(12, "0")}`;
-
-        // Mean motion (revs/day) from semi-major axis
-        const mu = 398600.4418; // km³/s²
-        const n = (Math.sqrt(mu / Math.pow(kep.semiMajorAxis, 3)) * 86400) / (2 * Math.PI);
-
-        const line1 = `1 99999U 00000A   ${epochStr}  .00000000  00000-0  00000-0 0    0`;
-        const line2 = `2 99999 ${kep.inclination.toFixed(4).padStart(8)} ${kep.raan
-            .toFixed(4)
-            .padStart(8)} ${(kep.eccentricity * 10000000)
-            .toFixed(0)
-            .padStart(7, "0")} ${kep.argOfPerigee.toFixed(4).padStart(8)} ${kep.meanAnomaly
-            .toFixed(4)
-            .padStart(8)} ${n.toFixed(8).padStart(11)}    0`;
-
-        return { line1, line2 };
-    };
-
     if (!isOpen) return null;
 
     // Get selected payload for editing
@@ -1122,7 +908,9 @@ const SatelliteDialog = ({
                                             </h5>
                                             <div className="grid grid-cols-2 gap-2">
                                                 {ORBIT_SOURCE_TYPES.map((source) => {
-                                                    const Icon = source.icon;
+                                                    // Map iconName to actual icon component
+                                                    const iconMap = { Link, FileText, Globe };
+                                                    const Icon = iconMap[source.iconName] || Globe;
                                                     return (
                                                         <button
                                                             key={source.id}
