@@ -570,13 +570,16 @@ const Globe2D = ({ onMouseMove }) => {
           const circleCoords = updateCoverageIfNeeded(sat.id, pos);
           const boundaryLocations = circleCoords.map((coord) => new WorldWind.Location(coord.latitude, coord.longitude));
 
+          // Get satellite objects (sensor/payload configurations)
+          const satObjects = sat.objects || [];
+
           // Get or create renderables for this satellite
           if (!satelliteRenderablesRef.current[sat.id]) {
-            // Create coverage polygon
+            // Create main coverage polygon (satellite footprint)
             const polygonAttributes = new WorldWind.ShapeAttributes(null);
-            polygonAttributes.interiorColor = new WorldWind.Color(sat.color?.r ?? 0, sat.color?.g ?? 1, sat.color?.b ?? 0, 0.2);
-            polygonAttributes.outlineColor = new WorldWind.Color(sat.color?.r ?? 0, sat.color?.g ?? 1, sat.color?.b ?? 0, 0.8);
-            polygonAttributes.outlineWidth = 1.5;
+            polygonAttributes.interiorColor = new WorldWind.Color(sat.color?.r ?? 0, sat.color?.g ?? 1, sat.color?.b ?? 0, 0.15);
+            polygonAttributes.outlineColor = new WorldWind.Color(sat.color?.r ?? 0, sat.color?.g ?? 1, sat.color?.b ?? 0, 0.6);
+            polygonAttributes.outlineWidth = 1;
 
             const coveragePolygon = new WorldWind.SurfacePolygon(boundaryLocations, polygonAttributes);
             satelliteLayerRef.current.addRenderable(coveragePolygon);
@@ -593,14 +596,75 @@ const Globe2D = ({ onMouseMove }) => {
             placemark.altitudeMode = WorldWind.CLAMP_TO_GROUND;
             satelliteLayerRef.current.addRenderable(placemark);
 
+            // Create swath polygons for each sensor object
+            const objectSwaths = {};
+            satObjects.forEach((obj) => {
+              if (obj.isVisible !== false && obj.showSwath !== false && obj.scanWidth > 0) {
+                const swathRadius = obj.scanWidth / 2; // scanWidth is full width, so radius is half
+                const swathCoords = geodesicCircleCoords({ latitude: pos.lat, longitude: pos.lon }, swathRadius, 48);
+                const swathLocations = swathCoords.map((coord) => new WorldWind.Location(coord.latitude, coord.longitude));
+
+                const swathAttributes = new WorldWind.ShapeAttributes(null);
+                const objColor = obj.color || sat.color || { r: 0, g: 1, b: 0 };
+                swathAttributes.interiorColor = new WorldWind.Color(objColor.r ?? 0, objColor.g ?? 1, objColor.b ?? 0, 0.25);
+                swathAttributes.outlineColor = new WorldWind.Color(objColor.r ?? 0, objColor.g ?? 1, objColor.b ?? 0, 0.9);
+                swathAttributes.outlineWidth = 2;
+
+                const swathPolygon = new WorldWind.SurfacePolygon(swathLocations, swathAttributes);
+                satelliteLayerRef.current.addRenderable(swathPolygon);
+                objectSwaths[obj.id] = swathPolygon;
+              }
+            });
+
             satelliteRenderablesRef.current[sat.id] = {
               coveragePolygon,
               placemark,
+              objectSwaths,
             };
           } else {
             // Update existing renderables - EVERY FRAME for smooth visual
             satelliteRenderablesRef.current[sat.id].coveragePolygon.boundaries = boundaryLocations;
             satelliteRenderablesRef.current[sat.id].placemark.position = new WorldWind.Position(pos.lat, pos.lon, 0);
+
+            // Update sensor object swaths
+            const existingSwaths = satelliteRenderablesRef.current[sat.id].objectSwaths || {};
+            
+            satObjects.forEach((obj) => {
+              if (obj.isVisible !== false && obj.showSwath !== false && obj.scanWidth > 0) {
+                const swathRadius = obj.scanWidth / 2;
+                const swathCoords = geodesicCircleCoords({ latitude: pos.lat, longitude: pos.lon }, swathRadius, 48);
+                const swathLocations = swathCoords.map((coord) => new WorldWind.Location(coord.latitude, coord.longitude));
+
+                if (existingSwaths[obj.id]) {
+                  // Update existing swath
+                  existingSwaths[obj.id].boundaries = swathLocations;
+                  existingSwaths[obj.id].enabled = true;
+                } else {
+                  // Create new swath for this object
+                  const swathAttributes = new WorldWind.ShapeAttributes(null);
+                  const objColor = obj.color || sat.color || { r: 0, g: 1, b: 0 };
+                  swathAttributes.interiorColor = new WorldWind.Color(objColor.r ?? 0, objColor.g ?? 1, objColor.b ?? 0, 0.25);
+                  swathAttributes.outlineColor = new WorldWind.Color(objColor.r ?? 0, objColor.g ?? 1, objColor.b ?? 0, 0.9);
+                  swathAttributes.outlineWidth = 2;
+
+                  const swathPolygon = new WorldWind.SurfacePolygon(swathLocations, swathAttributes);
+                  satelliteLayerRef.current.addRenderable(swathPolygon);
+                  existingSwaths[obj.id] = swathPolygon;
+                }
+              } else if (existingSwaths[obj.id]) {
+                // Hide swath if object is not visible or showSwath is false
+                existingSwaths[obj.id].enabled = false;
+              }
+            });
+
+            // Hide swaths for removed objects
+            Object.keys(existingSwaths).forEach((objId) => {
+              if (!satObjects.find((o) => o.id === objId)) {
+                existingSwaths[objId].enabled = false;
+              }
+            });
+
+            satelliteRenderablesRef.current[sat.id].objectSwaths = existingSwaths;
           }
 
           // Update coverage visibility based on satellite's showCoverage property
@@ -674,6 +738,51 @@ const Globe2D = ({ onMouseMove }) => {
       };
     }
   }, [isLoading, updateSatelliteMarker, satellites.length]);
+
+  // Detect changes in satellite objects and refresh renderables
+  useEffect(() => {
+    if (wwdRef.current && satelliteLayerRef.current && !isLoading) {
+      // Create a hash of satellite objects to detect changes
+      const objectsHash = satellites.map((s) => ({
+        id: s.id,
+        objectsCount: s.objects?.length || 0,
+        objectsData: JSON.stringify(s.objects || []),
+        color: JSON.stringify(s.color),
+        showCoverage: s.showCoverage,
+      }));
+
+      // Check if any satellite's objects have changed
+      satellites.forEach((sat) => {
+        const existing = satelliteRenderablesRef.current[sat.id];
+        if (existing) {
+          const currentObjectIds = Object.keys(existing.objectSwaths || {});
+          const newObjectIds = (sat.objects || []).filter((o) => o.isVisible !== false && o.showSwath !== false).map((o) => o.id);
+
+          // If objects changed significantly, clear the cached renderables to force recreation
+          const objectsChanged =
+            currentObjectIds.length !== newObjectIds.length ||
+            !currentObjectIds.every((id) => newObjectIds.includes(id)) ||
+            !newObjectIds.every((id) => currentObjectIds.includes(id));
+
+          if (objectsChanged) {
+            console.log(`🔄 Satellite ${sat.name} objects changed, refreshing renderables...`);
+
+            // Remove old swaths from layer
+            if (existing.objectSwaths) {
+              Object.values(existing.objectSwaths).forEach((swath) => {
+                satelliteLayerRef.current.removeRenderable(swath);
+              });
+            }
+
+            // Clear cache to force recreation
+            existing.objectSwaths = {};
+          }
+        }
+      });
+
+      wwdRef.current?.redraw();
+    }
+  }, [satellites, isLoading]);
 
   // Refresh orbit paths when mode changes (simulation <-> realtime)
   useEffect(() => {
