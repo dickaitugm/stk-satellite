@@ -32,6 +32,7 @@ import {
   Download,
   Radar,
   Circle,
+  Copy,
 } from "lucide-react";
 import { useSatelliteStore } from "../../stores";
 import {
@@ -226,6 +227,31 @@ const SatellitePropertiesTab = ({ satelliteId }) => {
     setSelectedNode(`objects.${newObject.id}`);
     // Expand objects section
     setExpandedNodes((prev) => ({ ...prev, objects: true }));
+  };
+
+  // Copy/duplicate an existing object
+  const copyObject = (objectToCopy) => {
+    const sensorCount = getSensorObjectsCount();
+    const copiedObject = {
+      ...objectToCopy,
+      id: `obj-${Date.now()}`,
+      name: `${objectToCopy.name} (Copy)`,
+    };
+    
+    const newObjects = [...formData.objects, copiedObject];
+    
+    setFormData((prev) => ({
+      ...prev,
+      objects: newObjects,
+    }));
+    
+    // Instantly save to store
+    updateSatellite(satelliteId, { objects: newObjects });
+    
+    // Select the new copied object
+    setSelectedNode(`objects.${copiedObject.id}`);
+    setExpandedNodes((prev) => ({ ...prev, objects: true }));
+    showToast("success", `Object "${objectToCopy.name}" copied`);
   };
 
   // Update object - visibility changes are saved instantly
@@ -1317,6 +1343,16 @@ const SatellitePropertiesTab = ({ satelliteId }) => {
                       className="p-1 hover:bg-slate-700 rounded transition-colors"
                     >
                       {obj.isVisible ? <Eye className="w-4 h-4 text-green-400" /> : <EyeOff className="w-4 h-4 text-slate-600" />}
+                    </button>
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        copyObject(obj);
+                      }}
+                      title="Copy Object"
+                      className="p-1 hover:bg-blue-500/20 rounded text-slate-500 hover:text-blue-400 transition-colors"
+                    >
+                      <Copy className="w-4 h-4" />
                     </button>
                     <button
                       onClick={(e) => {
