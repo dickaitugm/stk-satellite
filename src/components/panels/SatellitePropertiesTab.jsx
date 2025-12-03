@@ -4,7 +4,7 @@
  * 2-Column Layout: Left (Object Tree) | Right (Form Input)
  */
 
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
 import {
   ChevronDown,
   ChevronRight,
@@ -33,6 +33,9 @@ import {
   Radar,
   Circle,
   Copy,
+  Clock,
+  Search,
+  Calendar,
 } from "lucide-react";
 import { useSatelliteStore } from "../../stores";
 import {
@@ -57,6 +60,166 @@ import {
   getTleForTime,
 } from "../../utils/satelliteConstants";
 import { calculateCoverageRadius } from "../../utils/geodesic";
+
+// Virtualized TLE History Picker Component with Search & Lazy Loading
+const ITEMS_PER_PAGE = 50;
+
+const TleHistoryPicker = ({ tleHistory, selectedIndex, onSelect, orbitSource }) => {
+  const [displayCount, setDisplayCount] = useState(ITEMS_PER_PAGE);
+  const [searchTerm, setSearchTerm] = useState("");
+  const [isOpen, setIsOpen] = useState(false);
+  const listRef = useRef(null);
+  const containerRef = useRef(null);
+
+  // Filter TLEs based on search term (search by date)
+  const filteredTLEs = searchTerm
+    ? tleHistory.filter((tle) => {
+        const dateStr = new Date(tle.epoch).toLocaleString().toLowerCase();
+        return dateStr.includes(searchTerm.toLowerCase());
+      })
+    : tleHistory;
+
+  // Reset display count when search changes
+  useEffect(() => {
+    setDisplayCount(ITEMS_PER_PAGE);
+  }, [searchTerm]);
+
+  // Handle scroll to load more
+  const handleScroll = useCallback(
+    (e) => {
+      const { scrollTop, scrollHeight, clientHeight } = e.target;
+      if (scrollHeight - scrollTop - clientHeight < 100) {
+        setDisplayCount((prev) => Math.min(prev + ITEMS_PER_PAGE, filteredTLEs.length));
+      }
+    },
+    [filteredTLEs.length]
+  );
+
+  // Close dropdown when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (e) => {
+      if (containerRef.current && !containerRef.current.contains(e.target)) {
+        setIsOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  const selectedTle = tleHistory[selectedIndex];
+  const displayedTLEs = filteredTLEs.slice(0, displayCount);
+
+  // Calculate age for display
+  const getAgeLabel = (epoch) => {
+    const ageInDays = Math.floor((Date.now() - new Date(epoch).getTime()) / (1000 * 60 * 60 * 24));
+    if (ageInDays === 0) return "today";
+    if (ageInDays === 1) return "1d ago";
+    return `${ageInDays}d ago`;
+  };
+
+  return (
+    <div ref={containerRef} className="relative">
+      <div className="flex items-center justify-between mb-1">
+        <label className="block text-xs text-slate-400">
+          <Clock className="w-3 h-3 inline mr-1" />
+          TLE History ({tleHistory.length.toLocaleString()})
+        </label>
+        {orbitSource === "tle-url" && (
+          <span className="text-[10px] text-cyan-400 bg-cyan-500/10 px-1.5 py-0.5 rounded">
+            Auto-select by sim time
+          </span>
+        )}
+      </div>
+
+      {/* Selected value display / trigger */}
+      <button
+        type="button"
+        onClick={() => setIsOpen(!isOpen)}
+        className="w-full px-3 py-2 bg-slate-800 border border-slate-600 rounded-lg text-white text-sm text-left focus:outline-none focus:border-cyan-500 flex items-center justify-between"
+      >
+        <span className="truncate">
+          {selectedTle ? (
+            <>
+              <Calendar className="w-3 h-3 inline mr-2 text-cyan-400" />
+              {new Date(selectedTle.epoch).toLocaleString()} ({getAgeLabel(selectedTle.epoch)})
+            </>
+          ) : (
+            "Select TLE..."
+          )}
+        </span>
+        <ChevronDown className={`w-4 h-4 text-slate-400 transition-transform ${isOpen ? "rotate-180" : ""}`} />
+      </button>
+
+      {/* Dropdown */}
+      {isOpen && (
+        <div className="absolute z-50 mt-1 w-full bg-slate-800 border border-slate-600 rounded-lg shadow-xl overflow-hidden">
+          {/* Search input */}
+          <div className="p-2 border-b border-slate-700">
+            <div className="relative">
+              <Search className="absolute left-2 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
+              <input
+                type="text"
+                placeholder="Search by date..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="w-full pl-8 pr-3 py-1.5 bg-slate-900 border border-slate-600 rounded text-white text-sm focus:outline-none focus:border-cyan-500"
+                autoFocus
+              />
+            </div>
+            <div className="text-xs text-slate-500 mt-1">
+              Showing {displayedTLEs.length.toLocaleString()} of {filteredTLEs.length.toLocaleString()}
+            </div>
+          </div>
+
+          {/* Virtualized list */}
+          <div ref={listRef} onScroll={handleScroll} className="max-h-60 overflow-y-auto">
+            {displayedTLEs.map((tle, idx) => {
+              const originalIndex = tleHistory.indexOf(tle);
+              const isSelected = originalIndex === selectedIndex;
+              const ageInDays = Math.floor((Date.now() - new Date(tle.epoch).getTime()) / (1000 * 60 * 60 * 24));
+              return (
+                <button
+                  key={originalIndex}
+                  type="button"
+                  onClick={() => {
+                    onSelect(originalIndex);
+                    setIsOpen(false);
+                    setSearchTerm("");
+                  }}
+                  className={`w-full px-3 py-2 text-left text-sm hover:bg-slate-700 flex items-center gap-2 ${
+                    isSelected ? "bg-cyan-500/20 text-cyan-400" : "text-slate-300"
+                  }`}
+                >
+                  <Calendar className="w-3 h-3 flex-shrink-0" />
+                  <span className="truncate flex-1">{new Date(tle.epoch).toLocaleString()}</span>
+                  <span
+                    className={`text-[10px] px-1.5 py-0.5 rounded ${
+                      ageInDays > 14
+                        ? "bg-red-900/30 text-red-400"
+                        : ageInDays > 7
+                        ? "bg-yellow-900/30 text-yellow-400"
+                        : "bg-green-900/30 text-green-400"
+                    }`}
+                  >
+                    {getAgeLabel(tle.epoch)}
+                  </span>
+                  {originalIndex === 0 && <span className="text-[10px]">🆕</span>}
+                </button>
+              );
+            })}
+
+            {/* Load more indicator */}
+            {displayCount < filteredTLEs.length && (
+              <div className="px-3 py-2 text-xs text-slate-500 text-center">
+                Scroll for more... ({filteredTLEs.length - displayCount} remaining)
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
 
 // Tree Item Component
 const TreeItem = ({ icon: Icon, label, isSelected, isExpanded, hasChildren, onClick, onToggle, level = 0 }) => {
@@ -1040,23 +1203,53 @@ const SatellitePropertiesTab = ({ satelliteId }) => {
                 </div>
               )}
 
-              {/* TLE History selection */}
-              {formData.orbitSource === "tle-url-history" && formData.tleHistory.length > 0 && (
-                <div>
-                  <label className="block text-xs text-slate-400 mb-1">
-                    Select TLE Epoch ({formData.tleHistory.length} available)
-                  </label>
-                  <select
-                    value={formData.selectedTleIndex}
-                    onChange={(e) => selectTleFromHistory(parseInt(e.target.value))}
-                    className="w-full px-3 py-2 bg-slate-800 border border-slate-600 rounded-lg text-white text-sm focus:outline-none focus:border-cyan-500"
-                  >
-                    {formData.tleHistory.map((tle, idx) => (
-                      <option key={idx} value={idx}>
-                        {new Date(tle.epoch).toLocaleString()}
-                      </option>
-                    ))}
-                  </select>
+              {/* TLE History selection - Show for both tle-url and tle-url-history */}
+              {(formData.orbitSource === "tle-url-history" || formData.orbitSource === "tle-url") && formData.tleHistory.length > 0 && (
+                <div className="space-y-2">
+                  {/* TLE History Picker with Search & Lazy Loading */}
+                  <TleHistoryPicker
+                    tleHistory={formData.tleHistory}
+                    selectedIndex={formData.selectedTleIndex || 0}
+                    onSelect={selectTleFromHistory}
+                    orbitSource={formData.orbitSource}
+                  />
+                  
+                  {/* Current TLE Info Box */}
+                  {formData.tleLine1 && formData.tleLine1.startsWith("1 ") && (() => {
+                    try {
+                      const epochStr = formData.tleLine1.substring(18, 32).trim();
+                      const epochYear = parseInt(epochStr.substring(0, 2));
+                      const epochDayFull = parseFloat(epochStr.substring(2));
+                      const epochDayInt = Math.floor(epochDayFull);
+                      const epochDayFrac = epochDayFull - epochDayInt;
+                      const totalSecondsFloat = epochDayFrac * 86400;
+                      const hours = Math.floor(totalSecondsFloat / 3600);
+                      const minutes = Math.floor((totalSecondsFloat % 3600) / 60);
+                      const fullYear = epochYear > 56 ? 1900 + epochYear : 2000 + epochYear;
+                      const epochDate = new Date(Date.UTC(fullYear, 0, epochDayInt, hours, minutes));
+                      const ageInDays = Math.floor((Date.now() - epochDate.getTime()) / (1000 * 60 * 60 * 24));
+                      
+                      return (
+                        <div className={`p-2 rounded-lg border ${ageInDays > 14 ? 'bg-red-900/20 border-red-800/30' : ageInDays > 7 ? 'bg-yellow-900/20 border-yellow-800/30' : 'bg-green-900/20 border-green-800/30'}`}>
+                          <div className="flex items-center justify-between text-[10px]">
+                            <span className="text-slate-400">Active TLE Age:</span>
+                            <span className={`font-medium ${ageInDays > 14 ? 'text-red-400' : ageInDays > 7 ? 'text-yellow-400' : 'text-green-400'}`}>
+                              {ageInDays === 0 ? 'Fresh (today)' : ageInDays === 1 ? '1 day old' : `${ageInDays} days old`}
+                              {ageInDays > 14 && ' ⚠️ Consider updating'}
+                            </span>
+                          </div>
+                        </div>
+                      );
+                    } catch (e) {
+                      return null;
+                    }
+                  })()}
+                  
+                  {formData.orbitSource === "tle-url" && (
+                    <p className="text-[10px] text-slate-500 italic">
+                      💡 During simulation, the system auto-selects the best TLE based on simulation time for accurate backdated propagation.
+                    </p>
+                  )}
                 </div>
               )}
             </div>

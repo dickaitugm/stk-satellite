@@ -1261,6 +1261,7 @@ const Globe2D = ({ onMouseMove }) => {
           satellitePosition={currentSatellitePosition}
           noradId={getSelectedSatellite()?.noradId || "-"}
           period="~97.4 min"
+          satellite={getSelectedSatellite()}
           isLoading={isLoading}
         />
 
