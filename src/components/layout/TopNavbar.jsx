@@ -343,14 +343,14 @@ const TopNavbar = () => {
           >
             <div className="flex items-center gap-1 px-2 py-1 bg-amber-600/20 border border-amber-600/30 rounded text-amber-400 text-[10px] cursor-help">
               <AlertTriangle className="w-3.5 h-3.5" />
-              <span className="hidden sm:inline">TLE &gt;10d</span>
+              <span className="hidden sm:inline">TLE &gt;10d: </span>
               <span className="font-bold">{tleWarnings.length}</span>
             </div>
             {/* Tooltip with details */}
             <div className="absolute top-full right-0 mt-1 w-64 bg-slate-800 border border-amber-600/30 rounded-lg shadow-xl p-2 z-50 hidden group-hover:block">
               <div className="text-xs text-amber-400 font-medium mb-1">⚠️ TLE Age Warning</div>
               <div className="text-[10px] text-slate-300 mb-2">
-                The following satellites have TLE data more than 10 days old compared to simulation time. Accuracy may be degraded.
+                The following satellites have TLE data more than 10 days from simulation time (old or ahead). Accuracy may be degraded.
               </div>
               <div className="space-y-1 max-h-32 overflow-y-auto">
                 {tleWarnings.map(w => (

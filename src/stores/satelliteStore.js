@@ -215,8 +215,8 @@ export const useSatelliteStore = create(
           tle: bestTle,
           epoch: bestEpoch,
           ageDays: ageDays,
-          isOld: ageDays !== null && ageDays > 10, // Warning threshold: 10 days
-          isFuture: ageMs !== null && ageMs < 0, // TLE is from future
+          isOld: ageDays !== null && ageDays > 10, // Warning threshold: 10 days (both past and future)
+          isFuture: ageMs !== null && ageMs < 0, // TLE is from future (simulation time is before TLE epoch)
         };
       },
       
