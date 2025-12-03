@@ -482,7 +482,8 @@ const Globe2D = ({ onMouseMove }) => {
   );
 
   // Check and update coverage circle (throttled)
-  const updateCoverageIfNeeded = useCallback((satelliteId, pos) => {
+  // Now uses coverage object from satellite.objects if available
+  const updateCoverageIfNeeded = useCallback((satelliteId, pos, coverageObject = null) => {
     const now = Date.now();
     const lastUpdate = lastCoverageUpdateRef.current[satelliteId] || 0;
     const cached = coverageCacheRef.current[satelliteId];
@@ -498,9 +499,17 @@ const Globe2D = ({ onMouseMove }) => {
       return cached.coords;
     }
 
-    // Generate new coverage circle (using fewer points for performance)
-    // Use 0° elevation for satellite's own coverage visualization
-    const radiusKm = calculateCoverageRadius(pos.alt, 0);
+    // Calculate radius based on coverage mode
+    let radiusKm;
+    if (coverageObject && coverageObject.coverageMode === "manual") {
+      // Manual mode: use fixed radius
+      radiusKm = coverageObject.manualRadius || 500;
+    } else {
+      // Auto mode: calculate from altitude and elevation angle
+      const minElevation = coverageObject?.minElevationAngle ?? 0;
+      radiusKm = calculateCoverageRadius(pos.alt, minElevation);
+    }
+
     const center = { latitude: pos.lat, longitude: pos.lon };
     const circleCoords = geodesicCircleCoords(center, radiusKm, PERF_CONFIG.COVERAGE_CIRCLE_POINTS);
 
@@ -566,22 +575,44 @@ const Globe2D = ({ onMouseMove }) => {
             }
           }
 
-          // Coverage circle - THROTTLED with caching
-          const circleCoords = updateCoverageIfNeeded(sat.id, pos);
-          const boundaryLocations = circleCoords.map((coord) => new WorldWind.Location(coord.latitude, coord.longitude));
-
           // Get satellite objects (sensor/payload configurations)
           const satObjects = sat.objects || [];
+          
+          // Find the default coverage object
+          const coverageObject = satObjects.find(obj => obj.isDefaultCoverage);
+          
+          // Coverage circle - THROTTLED with caching
+          // Pass coverage object to use its settings (auto/manual mode, elevation angle, etc.)
+          const circleCoords = updateCoverageIfNeeded(sat.id, pos, coverageObject);
+          const boundaryLocations = circleCoords.map((coord) => new WorldWind.Location(coord.latitude, coord.longitude));
+
+          // Get coverage visibility and colors from coverage object
+          const showCoverage = coverageObject ? coverageObject.isVisible !== false : sat.showCoverage !== false;
+          const coverageColor = coverageObject?.color || sat.color || { r: 0, g: 1, b: 0 };
+          const fillOpacity = coverageObject?.fillOpacity ?? 0.15;
+          const outlineOpacity = coverageObject?.outlineOpacity ?? 0.6;
+          const outlineWidth = coverageObject?.outlineWidth ?? 1;
 
           // Get or create renderables for this satellite
           if (!satelliteRenderablesRef.current[sat.id]) {
             // Create main coverage polygon (satellite footprint)
             const polygonAttributes = new WorldWind.ShapeAttributes(null);
-            polygonAttributes.interiorColor = new WorldWind.Color(sat.color?.r ?? 0, sat.color?.g ?? 1, sat.color?.b ?? 0, 0.15);
-            polygonAttributes.outlineColor = new WorldWind.Color(sat.color?.r ?? 0, sat.color?.g ?? 1, sat.color?.b ?? 0, 0.6);
-            polygonAttributes.outlineWidth = 1;
+            polygonAttributes.interiorColor = new WorldWind.Color(
+              coverageColor.r ?? 0, 
+              coverageColor.g ?? 1, 
+              coverageColor.b ?? 0, 
+              fillOpacity
+            );
+            polygonAttributes.outlineColor = new WorldWind.Color(
+              coverageColor.r ?? 0, 
+              coverageColor.g ?? 1, 
+              coverageColor.b ?? 0, 
+              outlineOpacity
+            );
+            polygonAttributes.outlineWidth = outlineWidth;
 
             const coveragePolygon = new WorldWind.SurfacePolygon(boundaryLocations, polygonAttributes);
+            coveragePolygon.enabled = showCoverage;
             satelliteLayerRef.current.addRenderable(coveragePolygon);
 
             // Create placemark
@@ -600,9 +631,12 @@ const Globe2D = ({ onMouseMove }) => {
             // Use track angle if available, otherwise use a default
             const satHeading = pos.heading || pos.track || 0;
 
-            // Create swath polygons for each sensor object
+            // Create swath polygons for each sensor object (skip coverage object - it's rendered separately)
             const objectSwaths = {};
             satObjects.forEach((obj) => {
+              // Skip default coverage object - it's handled by the main coverage polygon
+              if (obj.isDefaultCoverage) return;
+              
               if (obj.isVisible !== false && obj.showSwath !== false && (obj.scanWidth > 0 || obj.swathWidth > 0)) {
                 // Use generateSwathCoords for shape-aware swath generation
                 const swathCoords = generateSwathCoords(
@@ -632,6 +666,7 @@ const Globe2D = ({ onMouseMove }) => {
           } else {
             // Update existing renderables - EVERY FRAME for smooth visual
             satelliteRenderablesRef.current[sat.id].coveragePolygon.boundaries = boundaryLocations;
+            satelliteRenderablesRef.current[sat.id].coveragePolygon.enabled = showCoverage;
             satelliteRenderablesRef.current[sat.id].placemark.position = new WorldWind.Position(pos.lat, pos.lon, 0);
 
             // Calculate satellite heading for swath orientation
@@ -641,6 +676,9 @@ const Globe2D = ({ onMouseMove }) => {
             const existingSwaths = satelliteRenderablesRef.current[sat.id].objectSwaths || {};
             
             satObjects.forEach((obj) => {
+              // Skip default coverage object
+              if (obj.isDefaultCoverage) return;
+              
               if (obj.isVisible !== false && obj.showSwath !== false && (obj.scanWidth > 0 || obj.swathWidth > 0)) {
                 // Use generateSwathCoords for shape-aware swath generation
                 const swathCoords = generateSwathCoords(
@@ -680,11 +718,6 @@ const Globe2D = ({ onMouseMove }) => {
             });
 
             satelliteRenderablesRef.current[sat.id].objectSwaths = existingSwaths;
-          }
-
-          // Update coverage visibility based on satellite's showCoverage property
-          if (satelliteRenderablesRef.current[sat.id]) {
-            satelliteRenderablesRef.current[sat.id].coveragePolygon.enabled = sat.showCoverage !== false;
           }
 
           // Update label - THROTTLED

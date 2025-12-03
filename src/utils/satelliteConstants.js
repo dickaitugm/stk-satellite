@@ -267,6 +267,51 @@ export const createDefaultObject = (index = 1, presetColor = null) => ({
   customParams: {},
 });
 
+// Create Default Coverage Object - special object that follows satellite altitude
+export const createDefaultCoverageObject = (satelliteColor = null) => ({
+  id: "coverage-default",
+  name: "Coverage",
+  type: "coverage",
+  isDefaultCoverage: true,
+  axis: "+z",
+  // Coverage mode: "auto" = based on altitude, "manual" = fixed radius
+  coverageMode: "auto",
+  // For auto mode - uses satellite altitude to calculate coverage
+  // For manual mode - uses fixed radius
+  manualRadius: 500, // km - only used when coverageMode is "manual"
+  // Minimum elevation angle for coverage calculation (auto mode)
+  minElevationAngle: 0, // degrees (0 = horizon, same as before)
+  // Swath shape - coverage is always circle
+  swathShape: "circle",
+  scanWidth: 0, // Will be calculated from altitude in auto mode
+  scanAngle: 0,
+  // Visual settings
+  color: satelliteColor || { name: "Cyan", r: 0, g: 1, b: 1, a: 0.15 },
+  fillOpacity: 0.15,
+  outlineOpacity: 0.6,
+  outlineWidth: 1,
+  isVisible: true,
+  showSwath: true,
+  showLabel: false,
+  labelSize: 10,
+});
+
+// Coverage mode options
+export const COVERAGE_MODES = [
+  { 
+    id: "auto", 
+    name: "Auto (Altitude-based)", 
+    description: "Coverage radius calculated from satellite altitude",
+    iconName: "Radar"
+  },
+  { 
+    id: "manual", 
+    name: "Manual (Fixed Radius)", 
+    description: "Use a fixed coverage radius",
+    iconName: "Circle"
+  },
+];
+
 // Parse TLE epoch to Date
 export const parseTleEpoch = (line1) => {
   if (!line1 || line1.length < 32) return null;

@@ -30,6 +30,8 @@ import {
   FileText,
   Globe,
   Download,
+  Radar,
+  Circle,
 } from "lucide-react";
 import { useSatelliteStore } from "../../stores";
 import {
@@ -41,14 +43,17 @@ import {
   SWATH_SHAPES,
   EARTH_RADIUS_KM,
   EARTH_MU,
+  COVERAGE_MODES,
   calculateMeanMotion,
   calculateOrbitalPeriod,
   calculateAltitude,
   createDefaultObject,
+  createDefaultCoverageObject,
   extractOrbitalElements,
   keplerianToTLE,
   extractNoradId,
 } from "../../utils/satelliteConstants";
+import { calculateCoverageRadius } from "../../utils/geodesic";
 
 // Tree Item Component
 const TreeItem = ({ icon: Icon, label, isSelected, isExpanded, hasChildren, onClick, onToggle, level = 0 }) => {
@@ -101,8 +106,7 @@ const SatellitePropertiesTab = ({ satelliteId }) => {
     name: "",
     noradId: "",
     color: PRESET_COLORS[0],
-    showCoverage: true,
-    objects: [],
+    objects: [], // Now includes coverage as first object
     // TLE fields
     tleLine1: "",
     tleLine2: "",
@@ -149,12 +153,25 @@ const SatellitePropertiesTab = ({ satelliteId }) => {
   // Initialize form when satellite changes
   useEffect(() => {
     if (satellite) {
+      // Ensure coverage object exists - migrate from showCoverage if needed
+      let objects = satellite.objects || [];
+      const hasCoverageObject = objects.some(obj => obj.isDefaultCoverage);
+      
+      if (!hasCoverageObject) {
+        // Create default coverage object and add it as first item
+        const coverageObj = createDefaultCoverageObject(satellite.color);
+        // Migrate showCoverage setting if it exists
+        if (satellite.showCoverage === false) {
+          coverageObj.isVisible = false;
+        }
+        objects = [coverageObj, ...objects];
+      }
+
       setFormData({
         name: satellite.name || "",
         noradId: satellite.noradId || "",
         color: satellite.color || PRESET_COLORS[0],
-        showCoverage: satellite.showCoverage !== false,
-        objects: satellite.objects || [],
+        objects: objects,
         // TLE fields
         tleLine1: satellite.tle?.line1 || "",
         tleLine2: satellite.tle?.line2 || "",
@@ -188,10 +205,16 @@ const SatellitePropertiesTab = ({ satelliteId }) => {
     }
   };
 
+  // Get non-coverage objects count for display
+  const getSensorObjectsCount = () => {
+    return formData.objects.filter(obj => !obj.isDefaultCoverage).length;
+  };
+
   // Add new object
   const addObject = () => {
-    const newObject = createDefaultObject();
-    newObject.name = `Object ${formData.objects.length + 1}`;
+    // Count only non-coverage objects for naming
+    const sensorCount = getSensorObjectsCount();
+    const newObject = createDefaultObject(sensorCount + 1);
     setFormData((prev) => ({
       ...prev,
       objects: [...prev.objects, newObject],
@@ -476,11 +499,15 @@ const SatellitePropertiesTab = ({ satelliteId }) => {
       return;
     }
 
+    // Derive showCoverage from the coverage object for backward compatibility
+    const coverageObj = formData.objects.find(obj => obj.isDefaultCoverage);
+    const showCoverage = coverageObj ? coverageObj.isVisible : true;
+
     const satelliteData = {
       name: formData.name.trim(),
       noradId: formData.noradId || extractNoradId(formData.tleLine1),
       color: formData.color,
-      showCoverage: formData.showCoverage,
+      showCoverage: showCoverage, // For backward compatibility with Globe2D
       objects: formData.objects,
       orbitSource: formData.orbitSource,
       tleSource: formData.tleSource,
@@ -597,22 +624,6 @@ const SatellitePropertiesTab = ({ satelliteId }) => {
             </div>
           </div>
 
-          {/* Show Coverage Toggle */}
-          <div className="flex items-center justify-between p-3 bg-slate-800/50 rounded-lg border border-slate-700">
-            <span className="text-sm text-slate-300 flex items-center gap-2">
-              {formData.showCoverage ? <Eye className="w-4 h-4" /> : <EyeOff className="w-4 h-4" />}
-              Show Coverage Area
-            </span>
-            <button
-              onClick={() => handleChange("showCoverage", !formData.showCoverage)}
-              className={`relative w-10 h-5 rounded-full transition-colors ${formData.showCoverage ? "bg-cyan-500" : "bg-slate-600"}`}
-            >
-              <span
-                className={`absolute top-0.5 left-0.5 w-4 h-4 rounded-full bg-white transition-transform ${formData.showCoverage ? "translate-x-5" : "translate-x-0"}`}
-              />
-            </button>
-          </div>
-
           {/* Save/Cancel for Basic */}
           <div className="flex items-center justify-end gap-2 pt-4 border-t border-slate-700">
             {hasChanges && (
@@ -668,22 +679,6 @@ const SatellitePropertiesTab = ({ satelliteId }) => {
                 </button>
               ))}
             </div>
-          </div>
-
-          {/* Show Coverage Toggle */}
-          <div className="flex items-center justify-between p-3 bg-slate-800/50 rounded-lg border border-slate-700">
-            <span className="text-sm text-slate-300 flex items-center gap-2">
-              {formData.showCoverage ? <Eye className="w-4 h-4" /> : <EyeOff className="w-4 h-4" />}
-              Show Coverage Area
-            </span>
-            <button
-              onClick={() => handleChange("showCoverage", !formData.showCoverage)}
-              className={`relative w-10 h-5 rounded-full transition-colors ${formData.showCoverage ? "bg-cyan-500" : "bg-slate-600"}`}
-            >
-              <span
-                className={`absolute top-0.5 left-0.5 w-4 h-4 rounded-full bg-white transition-transform ${formData.showCoverage ? "translate-x-5" : "translate-x-0"}`}
-              />
-            </button>
           </div>
 
           {/* Save/Cancel */}
@@ -1179,30 +1174,83 @@ const SatellitePropertiesTab = ({ satelliteId }) => {
 
     // Objects list view
     if (selectedNode === "objects") {
+      // Separate coverage object from sensor objects
+      const coverageObject = formData.objects.find(obj => obj.isDefaultCoverage);
+      const sensorObjects = formData.objects.filter(obj => !obj.isDefaultCoverage);
+
       return (
         <div className="space-y-4">
-          <div className="flex items-center justify-between">
-            <h3 className="text-sm font-medium text-slate-200 flex items-center gap-2">
-              <Box className="w-4 h-4 text-blue-400" />
-              Sensor Objects
-            </h3>
-            <button
-              onClick={addObject}
-              className="flex items-center gap-1.5 px-2.5 py-1.5 text-xs bg-blue-600/20 text-blue-400 rounded-lg hover:bg-blue-600/30 transition-colors border border-blue-500/30"
-            >
-              <Plus className="w-3.5 h-3.5" />
-              Add Object
-            </button>
-          </div>
+          {/* Coverage Section */}
+          {coverageObject && (
+            <div className="space-y-2">
+              <h3 className="text-sm font-medium text-slate-200 flex items-center gap-2">
+                <Radar className="w-4 h-4 text-cyan-400" />
+                Coverage Area
+              </h3>
+              <div
+                onClick={() => setSelectedNode(`objects.${coverageObject.id}`)}
+                className={`flex items-center gap-3 p-3 rounded-lg border cursor-pointer transition-all ${
+                  selectedNode === `objects.${coverageObject.id}` 
+                    ? "border-cyan-500/50 bg-cyan-900/20" 
+                    : "border-slate-700 bg-slate-800/50 hover:border-slate-600"
+                }`}
+              >
+                <div
+                  className="w-4 h-4 rounded-full border border-slate-500 shrink-0"
+                  style={{
+                    backgroundColor: `rgba(${coverageObject.color.r * 255}, ${coverageObject.color.g * 255}, ${coverageObject.color.b * 255}, 0.5)`,
+                  }}
+                />
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm text-white truncate">{coverageObject.name}</p>
+                  <div className="flex items-center gap-2 text-xs text-slate-400">
+                    {coverageObject.coverageMode === "auto" ? (
+                      <span className="flex items-center gap-1 text-cyan-400">
+                        <Radar className="w-3 h-3" />
+                        Auto (Altitude-based)
+                      </span>
+                    ) : (
+                      <span className="flex items-center gap-1 text-purple-400">
+                        <Circle className="w-3 h-3" />
+                        Manual: {coverageObject.manualRadius} km
+                      </span>
+                    )}
+                  </div>
+                </div>
+                <div className="flex items-center gap-1 shrink-0">
+                  {coverageObject.isVisible ? (
+                    <Eye className="w-4 h-4 text-green-400" />
+                  ) : (
+                    <EyeOff className="w-4 h-4 text-slate-600" />
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
 
+          {/* Sensor Objects Section */}
           <div className="space-y-2">
-            {formData.objects.length === 0 ? (
+            <div className="flex items-center justify-between">
+              <h3 className="text-sm font-medium text-slate-200 flex items-center gap-2">
+                <Box className="w-4 h-4 text-blue-400" />
+                Sensor Objects
+              </h3>
+              <button
+                onClick={addObject}
+                className="flex items-center gap-1.5 px-2.5 py-1.5 text-xs bg-blue-600/20 text-blue-400 rounded-lg hover:bg-blue-600/30 transition-colors border border-blue-500/30"
+              >
+                <Plus className="w-3.5 h-3.5" />
+                Add Object
+              </button>
+            </div>
+
+            {sensorObjects.length === 0 ? (
               <div className="p-4 bg-slate-800/50 rounded-lg border border-slate-700 text-center">
-                <p className="text-sm text-slate-400">No objects configured</p>
+                <p className="text-sm text-slate-400">No sensor objects configured</p>
                 <p className="text-xs text-slate-500 mt-1">Add sensor objects to define scanning areas</p>
               </div>
             ) : (
-              formData.objects.map((obj) => (
+              sensorObjects.map((obj) => (
                 <div
                   key={obj.id}
                   onClick={() => setSelectedNode(`objects.${obj.id}`)}
@@ -1272,6 +1320,227 @@ const SatellitePropertiesTab = ({ satelliteId }) => {
 
     // Object detail settings
     if (selectedObject) {
+      // Check if this is the default coverage object
+      if (selectedObject.isDefaultCoverage) {
+        // Calculate current coverage radius based on altitude
+        const altitude = currentPosition?.alt || 600;
+        const autoRadius = calculateCoverageRadius(altitude, selectedObject.minElevationAngle ?? 0);
+
+        return (
+          <div className="space-y-4">
+            <div className="flex items-center justify-between">
+              <h3 className="text-sm font-medium text-slate-200 flex items-center gap-2">
+                <Radar className="w-4 h-4 text-cyan-400" />
+                Coverage Configuration
+              </h3>
+            </div>
+
+            {/* Coverage Info */}
+            <div className="p-3 bg-cyan-900/20 rounded-lg border border-cyan-800/30">
+              <div className="text-xs text-cyan-400 mb-2">Coverage Area</div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <p className="text-xs text-slate-500">Current Altitude</p>
+                  <p className="text-sm font-medium text-white">{altitude.toFixed(1)} km</p>
+                </div>
+                <div>
+                  <p className="text-xs text-slate-500">Coverage Radius</p>
+                  <p className="text-sm font-medium text-cyan-400">
+                    {selectedObject.coverageMode === "auto" 
+                      ? `${autoRadius.toFixed(1)} km` 
+                      : `${selectedObject.manualRadius} km`}
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            {/* Coverage Mode Selection */}
+            <div className="space-y-3">
+              <div className="flex items-center gap-2 text-xs text-slate-300 font-medium">
+                <Settings className="w-3.5 h-3.5 text-slate-400" />
+                Coverage Mode
+              </div>
+              <div className="grid grid-cols-1 gap-2">
+                {COVERAGE_MODES.map((mode) => {
+                  const iconMap = { Radar, Circle };
+                  const ModeIcon = iconMap[mode.iconName] || Circle;
+                  return (
+                    <button
+                      key={mode.id}
+                      onClick={() => updateObject(selectedObject.id, "coverageMode", mode.id)}
+                      className={`flex items-start gap-3 p-3 rounded-lg border transition-all text-left ${
+                        selectedObject.coverageMode === mode.id
+                          ? "border-cyan-500 bg-cyan-500/10"
+                          : "border-slate-600 hover:border-slate-500"
+                      }`}
+                    >
+                      <ModeIcon className={`w-5 h-5 mt-0.5 ${
+                        selectedObject.coverageMode === mode.id ? "text-cyan-400" : "text-slate-500"
+                      }`} />
+                      <div>
+                        <div className={`text-sm font-medium ${
+                          selectedObject.coverageMode === mode.id ? "text-cyan-300" : "text-slate-300"
+                        }`}>
+                          {mode.name}
+                        </div>
+                        <div className="text-xs text-slate-500">{mode.description}</div>
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Auto Mode Settings */}
+            {selectedObject.coverageMode === "auto" && (
+              <div className="space-y-3 p-3 bg-slate-800/50 rounded-lg border border-slate-700">
+                <h5 className="text-xs font-medium text-slate-400 uppercase">Auto Coverage Settings</h5>
+                <div>
+                  <label className="block text-xs text-slate-400 mb-1">Minimum Elevation Angle (°)</label>
+                  <input
+                    type="number"
+                    step="1"
+                    min="0"
+                    max="90"
+                    value={selectedObject.minElevationAngle ?? 0}
+                    onChange={(e) => updateObject(selectedObject.id, "minElevationAngle", Math.max(0, Math.min(90, parseFloat(e.target.value) || 0)))}
+                    className="w-full px-3 py-2 bg-slate-800 border border-slate-600 rounded-lg text-white text-sm focus:outline-none focus:ring-2 focus:ring-cyan-500/50"
+                  />
+                  <p className="text-xs text-slate-500 mt-1">
+                    0° = horizon (max coverage), 90° = directly overhead (min coverage)
+                  </p>
+                </div>
+                <div className="p-2 bg-slate-900/50 rounded text-center">
+                  <p className="text-xs text-slate-500">Calculated Radius</p>
+                  <p className="text-lg font-medium text-cyan-400">{autoRadius.toFixed(1)} km</p>
+                </div>
+              </div>
+            )}
+
+            {/* Manual Mode Settings */}
+            {selectedObject.coverageMode === "manual" && (
+              <div className="space-y-3 p-3 bg-slate-800/50 rounded-lg border border-slate-700">
+                <h5 className="text-xs font-medium text-slate-400 uppercase">Manual Coverage Settings</h5>
+                <div>
+                  <label className="block text-xs text-slate-400 mb-1">Coverage Radius (km)</label>
+                  <input
+                    type="number"
+                    step="10"
+                    min="1"
+                    value={selectedObject.manualRadius || 500}
+                    onChange={(e) => updateObject(selectedObject.id, "manualRadius", parseFloat(e.target.value) || 500)}
+                    className="w-full px-3 py-2 bg-slate-800 border border-slate-600 rounded-lg text-white text-sm focus:outline-none focus:ring-2 focus:ring-cyan-500/50"
+                  />
+                </div>
+              </div>
+            )}
+
+            {/* Visual Settings */}
+            <div className="space-y-3">
+              <div className="flex items-center gap-2 text-xs text-slate-300 font-medium">
+                <Palette className="w-3.5 h-3.5 text-pink-400" />
+                Visual Settings
+              </div>
+              
+              <div>
+                <label className="block text-xs text-slate-400 mb-2">Coverage Color</label>
+                <div className="grid grid-cols-3 gap-2">
+                  {PRESET_COLORS.map((color, index) => (
+                    <button
+                      key={index}
+                      onClick={() => updateObject(selectedObject.id, "color", color)}
+                      className={`flex items-center gap-2 px-2 py-1.5 rounded-lg border transition-all ${
+                        selectedObject.color?.name === color.name
+                          ? "border-cyan-500 bg-cyan-600/20 ring-1 ring-cyan-500/50"
+                          : "border-slate-600 hover:border-slate-500"
+                      }`}
+                    >
+                      <span
+                        className="w-4 h-4 rounded-full border border-slate-500"
+                        style={{
+                          backgroundColor: `rgb(${color.r * 255}, ${color.g * 255}, ${color.b * 255})`,
+                        }}
+                      />
+                      <span className="text-xs text-slate-300">{color.name}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs text-slate-400 mb-1">Fill Opacity</label>
+                  <input
+                    type="number"
+                    step="0.05"
+                    min="0"
+                    max="1"
+                    value={selectedObject.fillOpacity || 0.15}
+                    onChange={(e) => updateObject(selectedObject.id, "fillOpacity", parseFloat(e.target.value) || 0.15)}
+                    className="w-full px-3 py-2 bg-slate-800 border border-slate-600 rounded-lg text-white text-sm focus:outline-none focus:ring-2 focus:ring-cyan-500/50"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs text-slate-400 mb-1">Outline Opacity</label>
+                  <input
+                    type="number"
+                    step="0.1"
+                    min="0"
+                    max="1"
+                    value={selectedObject.outlineOpacity || 0.6}
+                    onChange={(e) => updateObject(selectedObject.id, "outlineOpacity", parseFloat(e.target.value) || 0.6)}
+                    className="w-full px-3 py-2 bg-slate-800 border border-slate-600 rounded-lg text-white text-sm focus:outline-none focus:ring-2 focus:ring-cyan-500/50"
+                  />
+                </div>
+              </div>
+            </div>
+
+            {/* Visibility Toggle */}
+            <div className="flex items-center justify-between p-3 bg-slate-800/50 rounded-lg border border-slate-700">
+              <span className="text-sm text-slate-300 flex items-center gap-2">
+                {selectedObject.isVisible ? <Eye className="w-4 h-4" /> : <EyeOff className="w-4 h-4" />}
+                Show Coverage
+              </span>
+              <button
+                onClick={() => updateObject(selectedObject.id, "isVisible", !selectedObject.isVisible)}
+                className={`relative w-10 h-5 rounded-full transition-colors ${
+                  selectedObject.isVisible ? "bg-cyan-500" : "bg-slate-600"
+                }`}
+              >
+                <span
+                  className={`absolute top-0.5 left-0.5 w-4 h-4 rounded-full bg-white transition-transform ${
+                    selectedObject.isVisible ? "translate-x-5" : "translate-x-0"
+                  }`}
+                />
+              </button>
+            </div>
+
+            {/* Save Button */}
+            <div className="flex items-center justify-end gap-2 pt-4 border-t border-slate-700">
+              {hasChanges && (
+                <span className="text-xs text-amber-400 flex items-center gap-1 mr-auto">
+                  <span className="w-1.5 h-1.5 rounded-full bg-amber-400" />
+                  Unsaved changes
+                </span>
+              )}
+              <button
+                onClick={handleSave}
+                disabled={!hasChanges}
+                className={`flex items-center gap-1.5 px-4 py-1.5 text-sm rounded-lg transition-all font-medium ${
+                  hasChanges
+                    ? "bg-gradient-to-r from-cyan-500 to-cyan-600 text-white hover:from-cyan-400 hover:to-cyan-500 shadow-lg shadow-cyan-500/20"
+                    : "bg-slate-700 text-slate-500 cursor-not-allowed"
+                }`}
+              >
+                <Save className="w-4 h-4" />
+                Save
+              </button>
+            </div>
+          </div>
+        );
+      }
+
+      // Regular sensor object form
       return (
         <div className="space-y-4">
           <div className="flex items-center justify-between">
@@ -1786,7 +2055,7 @@ const SatellitePropertiesTab = ({ satelliteId }) => {
             formData.objects.map((obj) => (
               <TreeItem
                 key={obj.id}
-                icon={Box}
+                icon={obj.isDefaultCoverage ? Radar : Box}
                 label={obj.name}
                 isSelected={selectedNode === `objects.${obj.id}`}
                 onClick={() => setSelectedNode(`objects.${obj.id}`)}
