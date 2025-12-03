@@ -252,16 +252,13 @@ export const createDefaultObject = (index = 1, presetColor = null) => ({
   coneAngle: 30,    // Half-cone angle (degrees)
   sectorStart: 0,   // Sector start angle (degrees, 0=forward)
   sectorEnd: 360,   // Sector end angle (degrees)
-  // Field of view
-  fovCrossTrack: 30,
-  fovAlongTrack: 30,
   // Polygon vertices (for custom polygon) - offsets in km from nadir
   polygonVertices: [],
   // Visual settings
   color: presetColor || PRESET_COLORS[0],
   isVisible: true,
   showSwath: true,
-  showLabel: true,
+  showLabel: false,
   labelSize: 10,
   // Custom parameters
   customParams: {},

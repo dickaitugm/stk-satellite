@@ -633,6 +633,7 @@ const Globe2D = ({ onMouseMove }) => {
 
             // Create swath polygons for each sensor object (skip coverage object - it's rendered separately)
             const objectSwaths = {};
+            const objectLabels = {};
             satObjects.forEach((obj) => {
               // Skip default coverage object - it's handled by the main coverage polygon
               if (obj.isDefaultCoverage) return;
@@ -655,6 +656,21 @@ const Globe2D = ({ onMouseMove }) => {
                 const swathPolygon = new WorldWind.SurfacePolygon(swathLocations, swathAttributes);
                 satelliteLayerRef.current.addRenderable(swathPolygon);
                 objectSwaths[obj.id] = swathPolygon;
+
+                // Create label for sensor object if showLabel is enabled
+                if (obj.showLabel) {
+                  const labelAttributes = new WorldWind.PlacemarkAttributes(null);
+                  labelAttributes.imageSource = WorldWind.configuration.baseUrl + "images/pushpins/plain-white.png";
+                  labelAttributes.imageScale = 0;
+                  labelAttributes.labelAttributes.color = new WorldWind.Color(objColor.r ?? 0, objColor.g ?? 1, objColor.b ?? 0, 1);
+                  labelAttributes.labelAttributes.offset = new WorldWind.Offset(WorldWind.OFFSET_FRACTION, 0.5, WorldWind.OFFSET_FRACTION, 0.5);
+                  
+                  const labelPlacemark = new WorldWind.Placemark(new WorldWind.Position(pos.lat, pos.lon, 0), false, labelAttributes);
+                  labelPlacemark.label = obj.name;
+                  labelPlacemark.altitudeMode = WorldWind.CLAMP_TO_GROUND;
+                  satelliteLayerRef.current.addRenderable(labelPlacemark);
+                  objectLabels[obj.id] = labelPlacemark;
+                }
               }
             });
 
@@ -662,6 +678,7 @@ const Globe2D = ({ onMouseMove }) => {
               coveragePolygon,
               placemark,
               objectSwaths,
+              objectLabels,
             };
           } else {
             // Update existing renderables - EVERY FRAME for smooth visual
@@ -672,12 +689,15 @@ const Globe2D = ({ onMouseMove }) => {
             // Calculate satellite heading for swath orientation
             const satHeading = pos.heading || pos.track || 0;
 
-            // Update sensor object swaths
+            // Update sensor object swaths and labels
             const existingSwaths = satelliteRenderablesRef.current[sat.id].objectSwaths || {};
+            const existingLabels = satelliteRenderablesRef.current[sat.id].objectLabels || {};
             
             satObjects.forEach((obj) => {
               // Skip default coverage object
               if (obj.isDefaultCoverage) return;
+              
+              const objColor = obj.color || sat.color || { r: 0, g: 1, b: 0 };
               
               if (obj.isVisible !== false && obj.showSwath !== false && (obj.scanWidth > 0 || obj.swathWidth > 0)) {
                 // Use generateSwathCoords for shape-aware swath generation
@@ -695,7 +715,6 @@ const Globe2D = ({ onMouseMove }) => {
                 } else {
                   // Create new swath for this object
                   const swathAttributes = new WorldWind.ShapeAttributes(null);
-                  const objColor = obj.color || sat.color || { r: 0, g: 1, b: 0 };
                   swathAttributes.interiorColor = new WorldWind.Color(objColor.r ?? 0, objColor.g ?? 1, objColor.b ?? 0, 0.25);
                   swathAttributes.outlineColor = new WorldWind.Color(objColor.r ?? 0, objColor.g ?? 1, objColor.b ?? 0, 0.9);
                   swathAttributes.outlineWidth = 2;
@@ -704,20 +723,57 @@ const Globe2D = ({ onMouseMove }) => {
                   satelliteLayerRef.current.addRenderable(swathPolygon);
                   existingSwaths[obj.id] = swathPolygon;
                 }
-              } else if (existingSwaths[obj.id]) {
+
+                // Handle label for sensor object
+                if (obj.showLabel) {
+                  if (existingLabels[obj.id]) {
+                    // Update existing label position
+                    existingLabels[obj.id].position = new WorldWind.Position(pos.lat, pos.lon, 0);
+                    existingLabels[obj.id].enabled = true;
+                  } else {
+                    // Create new label
+                    const labelAttributes = new WorldWind.PlacemarkAttributes(null);
+                    labelAttributes.imageSource = WorldWind.configuration.baseUrl + "images/pushpins/plain-white.png";
+                    labelAttributes.imageScale = 0;
+                    labelAttributes.labelAttributes.color = new WorldWind.Color(objColor.r ?? 0, objColor.g ?? 1, objColor.b ?? 0, 1);
+                    labelAttributes.labelAttributes.offset = new WorldWind.Offset(WorldWind.OFFSET_FRACTION, 0.5, WorldWind.OFFSET_FRACTION, 0.5);
+                    
+                    const labelPlacemark = new WorldWind.Placemark(new WorldWind.Position(pos.lat, pos.lon, 0), false, labelAttributes);
+                    labelPlacemark.label = obj.name;
+                    labelPlacemark.altitudeMode = WorldWind.CLAMP_TO_GROUND;
+                    satelliteLayerRef.current.addRenderable(labelPlacemark);
+                    existingLabels[obj.id] = labelPlacemark;
+                  }
+                } else if (existingLabels[obj.id]) {
+                  // Hide label if showLabel is false
+                  existingLabels[obj.id].enabled = false;
+                }
+              } else {
                 // Hide swath if object is not visible or showSwath is false
-                existingSwaths[obj.id].enabled = false;
+                if (existingSwaths[obj.id]) {
+                  existingSwaths[obj.id].enabled = false;
+                }
+                // Also hide label
+                if (existingLabels[obj.id]) {
+                  existingLabels[obj.id].enabled = false;
+                }
               }
             });
 
-            // Hide swaths for removed objects
+            // Hide swaths and labels for removed objects
             Object.keys(existingSwaths).forEach((objId) => {
               if (!satObjects.find((o) => o.id === objId)) {
                 existingSwaths[objId].enabled = false;
               }
             });
+            Object.keys(existingLabels).forEach((objId) => {
+              if (!satObjects.find((o) => o.id === objId)) {
+                existingLabels[objId].enabled = false;
+              }
+            });
 
             satelliteRenderablesRef.current[sat.id].objectSwaths = existingSwaths;
+            satelliteRenderablesRef.current[sat.id].objectLabels = existingLabels;
           }
 
           // Update label - THROTTLED

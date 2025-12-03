@@ -93,6 +93,9 @@ const SatellitePropertiesTab = ({ satelliteId }) => {
   // Toast notification state
   const [toast, setToast] = useState(null);
 
+  // Delete confirmation dialog state
+  const [deleteConfirm, setDeleteConfirm] = useState({ show: false, objectId: null, objectName: "" });
+
   // Tree state
   const [expandedNodes, setExpandedNodes] = useState({
     basic: true,
@@ -225,23 +228,45 @@ const SatellitePropertiesTab = ({ satelliteId }) => {
     setExpandedNodes((prev) => ({ ...prev, objects: true }));
   };
 
-  // Update object
+  // Update object - visibility changes are saved instantly
   const updateObject = (objectId, field, value) => {
+    const newObjects = formData.objects.map((obj) => (obj.id === objectId ? { ...obj, [field]: value } : obj));
+    
     setFormData((prev) => ({
       ...prev,
-      objects: prev.objects.map((obj) => (obj.id === objectId ? { ...obj, [field]: value } : obj)),
+      objects: newObjects,
     }));
-    setHasChanges(true);
+    
+    // Instantly save visibility changes without requiring Save button
+    if (field === "isVisible") {
+      updateSatellite(satelliteId, { objects: newObjects });
+      // Don't set hasChanges for visibility toggle
+    } else {
+      setHasChanges(true);
+    }
   };
 
-  // Remove object
+  // Show delete confirmation
+  const confirmDeleteObject = (objectId, objectName) => {
+    setDeleteConfirm({ show: true, objectId, objectName });
+  };
+
+  // Remove object after confirmation
   const removeObject = (objectId) => {
+    const newObjects = formData.objects.filter((obj) => obj.id !== objectId);
+    
     setFormData((prev) => ({
       ...prev,
-      objects: prev.objects.filter((obj) => obj.id !== objectId),
+      objects: newObjects,
     }));
-    setHasChanges(true);
-    setSelectedNode("basic.name");
+    
+    // Instantly save to store
+    updateSatellite(satelliteId, { objects: newObjects });
+    
+    // Navigate back to objects list
+    setSelectedNode("objects");
+    setDeleteConfirm({ show: false, objectId: null, objectName: "" });
+    showToast("success", "Object deleted successfully");
   };
 
   // Build TLE URL based on source and satellite name
@@ -1217,13 +1242,20 @@ const SatellitePropertiesTab = ({ satelliteId }) => {
                     )}
                   </div>
                 </div>
-                <div className="flex items-center gap-1 shrink-0">
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    updateObject(coverageObject.id, "isVisible", !coverageObject.isVisible);
+                  }}
+                  title={coverageObject.isVisible ? "Hide Coverage" : "Show Coverage"}
+                  className="p-1 hover:bg-slate-700 rounded transition-colors shrink-0"
+                >
                   {coverageObject.isVisible ? (
                     <Eye className="w-4 h-4 text-green-400" />
                   ) : (
                     <EyeOff className="w-4 h-4 text-slate-600" />
                   )}
-                </div>
+                </button>
               </div>
             </div>
           )}
@@ -1272,15 +1304,24 @@ const SatellitePropertiesTab = ({ satelliteId }) => {
                         <span className="text-green-300">{obj.scanWidth} km</span>
                       </span>
                       <span className="text-slate-600">•</span>
-                      <span className="text-purple-400">FOV {obj.fovCrossTrack}°×{obj.fovAlongTrack}°</span>
+                      <span className="text-blue-400">{obj.swathShape || "circle"}</span>
                     </div>
                   </div>
                   <div className="flex items-center gap-1 shrink-0">
-                    {obj.isVisible ? <Eye className="w-4 h-4 text-green-400" /> : <EyeOff className="w-4 h-4 text-slate-600" />}
                     <button
                       onClick={(e) => {
                         e.stopPropagation();
-                        removeObject(obj.id);
+                        updateObject(obj.id, "isVisible", !obj.isVisible);
+                      }}
+                      title={obj.isVisible ? "Hide Object" : "Show Object"}
+                      className="p-1 hover:bg-slate-700 rounded transition-colors"
+                    >
+                      {obj.isVisible ? <Eye className="w-4 h-4 text-green-400" /> : <EyeOff className="w-4 h-4 text-slate-600" />}
+                    </button>
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        confirmDeleteObject(obj.id, obj.name);
                       }}
                       title="Delete Object"
                       className="p-1 hover:bg-red-500/20 rounded text-slate-500 hover:text-red-400 transition-colors"
@@ -1291,28 +1332,6 @@ const SatellitePropertiesTab = ({ satelliteId }) => {
                 </div>
               ))
             )}
-          </div>
-
-          {/* Save/Cancel */}
-          <div className="flex items-center justify-end gap-2 pt-4 border-t border-slate-700">
-            {hasChanges && (
-              <span className="text-xs text-amber-400 flex items-center gap-1 mr-auto">
-                <span className="w-1.5 h-1.5 rounded-full bg-amber-400" />
-                Unsaved changes
-              </span>
-            )}
-            <button
-              onClick={handleSave}
-              disabled={!hasChanges}
-              className={`flex items-center gap-1.5 px-4 py-1.5 text-sm rounded-lg transition-all font-medium ${
-                hasChanges
-                  ? "bg-gradient-to-r from-cyan-500 to-cyan-600 text-white hover:from-cyan-400 hover:to-cyan-500 shadow-lg shadow-cyan-500/20"
-                  : "bg-slate-700 text-slate-500 cursor-not-allowed"
-              }`}
-            >
-              <Save className="w-4 h-4" />
-              Save
-            </button>
           </div>
         </div>
       );
@@ -1549,7 +1568,7 @@ const SatellitePropertiesTab = ({ satelliteId }) => {
               {selectedObject.name}
             </h3>
             <button
-              onClick={() => removeObject(selectedObject.id)}
+              onClick={() => confirmDeleteObject(selectedObject.id, selectedObject.name)}
               className="p-1.5 hover:bg-red-500/20 rounded-lg text-slate-500 hover:text-red-400 transition-colors"
               title="Delete Object"
             >
@@ -1817,40 +1836,6 @@ const SatellitePropertiesTab = ({ satelliteId }) => {
             )}
           </div>
 
-          {/* Field of View */}
-          <div className="space-y-3">
-            <div className="flex items-center gap-2 text-xs text-slate-300 font-medium">
-              <Move className="w-3.5 h-3.5 text-purple-400" />
-              Field of View
-            </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label className="block text-xs text-slate-500 mb-1">Cross-track (°)</label>
-                <input
-                  type="number"
-                  value={selectedObject.fovCrossTrack}
-                  onChange={(e) => updateObject(selectedObject.id, "fovCrossTrack", parseFloat(e.target.value) || 0)}
-                  className="w-full px-3 py-2 bg-slate-800 border border-slate-600 rounded-lg text-white text-sm focus:outline-none focus:ring-2 focus:ring-purple-500/50"
-                  min="0"
-                  max="180"
-                  step="1"
-                />
-              </div>
-              <div>
-                <label className="block text-xs text-slate-500 mb-1">Along-track (°)</label>
-                <input
-                  type="number"
-                  value={selectedObject.fovAlongTrack}
-                  onChange={(e) => updateObject(selectedObject.id, "fovAlongTrack", parseFloat(e.target.value) || 0)}
-                  className="w-full px-3 py-2 bg-slate-800 border border-slate-600 rounded-lg text-white text-sm focus:outline-none focus:ring-2 focus:ring-purple-500/50"
-                  min="0"
-                  max="180"
-                  step="1"
-                />
-              </div>
-            </div>
-          </div>
-
           {/* Color Selection */}
           <div>
             <label className="block text-xs text-slate-400 mb-2">Object Color</label>
@@ -1976,7 +1961,7 @@ const SatellitePropertiesTab = ({ satelliteId }) => {
   };
 
   return (
-    <div className="flex flex-col h-full bg-slate-900">
+    <div className="flex flex-col h-full bg-slate-900 relative">
       {/* Toast Notification */}
       {toast && (
         <div
@@ -1986,6 +1971,40 @@ const SatellitePropertiesTab = ({ satelliteId }) => {
         >
           {toast.type === "success" ? <CheckCircle className="w-4 h-4" /> : <AlertCircle className="w-4 h-4" />}
           {toast.message}
+        </div>
+      )}
+
+      {/* Delete Confirmation Dialog */}
+      {deleteConfirm.show && (
+        <div className="absolute inset-0 z-50 flex items-center justify-center bg-black/50">
+          <div className="bg-slate-800 rounded-lg border border-slate-700 p-4 max-w-sm mx-4 shadow-xl">
+            <div className="flex items-center gap-3 mb-3">
+              <div className="p-2 bg-red-500/20 rounded-full">
+                <Trash2 className="w-5 h-5 text-red-400" />
+              </div>
+              <div>
+                <h4 className="text-sm font-medium text-white">Delete Object</h4>
+                <p className="text-xs text-slate-400">This action cannot be undone</p>
+              </div>
+            </div>
+            <p className="text-sm text-slate-300 mb-4">
+              Are you sure you want to delete <span className="font-medium text-white">"{deleteConfirm.objectName}"</span>?
+            </p>
+            <div className="flex justify-end gap-2">
+              <button
+                onClick={() => setDeleteConfirm({ show: false, objectId: null, objectName: "" })}
+                className="px-3 py-1.5 text-sm text-slate-300 hover:bg-slate-700 rounded-lg transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => removeObject(deleteConfirm.objectId)}
+                className="px-3 py-1.5 text-sm bg-red-500 hover:bg-red-600 text-white rounded-lg transition-colors"
+              >
+                Delete
+              </button>
+            </div>
+          </div>
         </div>
       )}
 
@@ -2053,14 +2072,42 @@ const SatellitePropertiesTab = ({ satelliteId }) => {
           />
           {expandedNodes.objects &&
             formData.objects.map((obj) => (
-              <TreeItem
+              <div
                 key={obj.id}
-                icon={obj.isDefaultCoverage ? Radar : Box}
-                label={obj.name}
-                isSelected={selectedNode === `objects.${obj.id}`}
-                onClick={() => setSelectedNode(`objects.${obj.id}`)}
-                level={1}
-              />
+                className={`flex items-center gap-1 py-1.5 cursor-pointer transition-colors text-xs ${
+                  selectedNode === `objects.${obj.id}` 
+                    ? "bg-cyan-600/30 text-cyan-300 border-l-2 border-cyan-500" 
+                    : "text-slate-300 hover:bg-slate-700/50 border-l-2 border-transparent"
+                }`}
+                style={{ paddingLeft: "20px", paddingRight: "8px" }}
+              >
+                <span className="w-4" />
+                {obj.isDefaultCoverage ? (
+                  <Radar className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                ) : (
+                  <Box className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                )}
+                <span 
+                  className="truncate flex-1 ml-1.5"
+                  onClick={() => setSelectedNode(`objects.${obj.id}`)}
+                >
+                  {obj.name}
+                </span>
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    updateObject(obj.id, "isVisible", !obj.isVisible);
+                  }}
+                  className="p-0.5 hover:bg-slate-600 rounded shrink-0"
+                  title={obj.isVisible ? "Hide" : "Show"}
+                >
+                  {obj.isVisible !== false ? (
+                    <Eye className="w-3 h-3 text-green-400" />
+                  ) : (
+                    <EyeOff className="w-3 h-3 text-slate-600" />
+                  )}
+                </button>
+              </div>
             ))}
         </div>
 
