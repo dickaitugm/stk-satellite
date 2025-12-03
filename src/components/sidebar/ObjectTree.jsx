@@ -4,7 +4,7 @@
  */
 
 import React, { useState } from "react";
-import { Satellite, Radio, Target, Plus, FolderOpen, Folder, Camera, Compass, Antenna, Edit, Circle, MapPin, Orbit, Settings2, Box, FileDown, Clock, Trash2 } from "lucide-react";
+import { Satellite, Radio, Target, Plus, FolderOpen, Folder, Camera, Compass, Antenna, Edit, Circle, MapPin, Orbit, Settings2, Box, FileDown, Clock, Trash2, RefreshCw, Loader2, Eye, EyeOff } from "lucide-react";
 
 import TreeNode from "./TreeNode";
 import ContextMenu from "./ContextMenu";
@@ -66,6 +66,9 @@ const ObjectTree = () => {
 
   // Export status state: { [satelliteId]: "loading" | "success" | "error" | null }
   const [exportStatus, setExportStatus] = useState({});
+
+  // TLE update status state: { [satelliteId]: "loading" | "success" | "error" | null }
+  const [tleUpdateStatus, setTleUpdateStatus] = useState({});
 
   // Close context menu
   const closeContextMenu = () => setContextMenu(null);
@@ -144,6 +147,117 @@ const ObjectTree = () => {
     } else {
       addSatellite(satelliteData);
     }
+  };
+
+  // Handle TLE update from sidebar
+  const handleUpdateTLE = async (sat) => {
+    if (tleUpdateStatus[sat.id] === "loading") return;
+    
+    // Check if satellite has TLE URL source
+    if (sat.orbitSource !== "tle-url" && sat.orbitSource !== "tle-url-history") {
+      console.log("TLE update only available for URL-based sources");
+      return;
+    }
+
+    const tleUrl = sat.tleUrl;
+    if (!tleUrl) {
+      setTleUpdateStatus((prev) => ({ ...prev, [sat.id]: "error" }));
+      setTimeout(() => setTleUpdateStatus((prev) => ({ ...prev, [sat.id]: null })), 3000);
+      return;
+    }
+
+    setTleUpdateStatus((prev) => ({ ...prev, [sat.id]: "loading" }));
+
+    try {
+      let text;
+      if (window.electronAPI?.fetchTLE) {
+        const result = await window.electronAPI.fetchTLE(tleUrl);
+        if (!result.success) throw new Error(result.error);
+        text = result.data;
+      } else {
+        const response = await fetch(tleUrl);
+        if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+        text = await response.text();
+      }
+
+      const lines = text.split("\n").map((l) => l.trimEnd()).filter((l) => l.trim());
+
+      // Parse all TLEs from the file
+      const allTLEs = [];
+      for (let i = 0; i < lines.length; i++) {
+        if (lines[i].startsWith("1 ") && lines[i + 1]?.startsWith("2 ")) {
+          const name = i > 0 && !lines[i - 1].startsWith("1 ") && !lines[i - 1].startsWith("2 ") 
+            ? lines[i - 1].trim() 
+            : "UNKNOWN";
+          allTLEs.push({ name, line1: lines[i], line2: lines[i + 1] });
+          i++;
+        }
+      }
+
+      if (allTLEs.length === 0) {
+        throw new Error("No valid TLE found in response");
+      }
+
+      // Find matching TLE
+      const searchName = sat.name.trim().toUpperCase();
+      const matchingTLEs = allTLEs.filter(
+        (tle) =>
+          tle.name.toUpperCase().includes(searchName) ||
+          searchName.includes(tle.name.toUpperCase().replace(/\s+/g, ""))
+      );
+
+      if (matchingTLEs.length > 0) {
+        const latestTle = matchingTLEs[0];
+        
+        // Update satellite with new TLE
+        updateSatellite(sat.id, {
+          tle: { line1: latestTle.line1, line2: latestTle.line2 },
+          tleHistory: sat.orbitSource === "tle-url-history" 
+            ? matchingTLEs.map(t => ({
+                line1: t.line1,
+                line2: t.line2,
+                epoch: extractEpochFromTLE(t.line1),
+                fetchedAt: new Date().toISOString()
+              }))
+            : sat.tleHistory
+        });
+
+        setTleUpdateStatus((prev) => ({ ...prev, [sat.id]: "success" }));
+        setTimeout(() => setTleUpdateStatus((prev) => ({ ...prev, [sat.id]: null })), 3000);
+      } else {
+        throw new Error(`No matching TLE found for "${sat.name}"`);
+      }
+    } catch (error) {
+      console.error("TLE update error:", error);
+      setTleUpdateStatus((prev) => ({ ...prev, [sat.id]: "error" }));
+      setTimeout(() => setTleUpdateStatus((prev) => ({ ...prev, [sat.id]: null })), 3000);
+    }
+  };
+
+  // Helper to extract epoch from TLE line 1
+  const extractEpochFromTLE = (line1) => {
+    try {
+      const epochStr = line1.substring(18, 32).trim();
+      const year = parseInt(epochStr.substring(0, 2));
+      const dayOfYear = parseFloat(epochStr.substring(2));
+      const fullYear = year > 56 ? 1900 + year : 2000 + year;
+      const date = new Date(Date.UTC(fullYear, 0, 1));
+      date.setTime(date.getTime() + (dayOfYear - 1) * 24 * 60 * 60 * 1000);
+      return date.toISOString();
+    } catch {
+      return new Date().toISOString();
+    }
+  };
+
+  // Toggle object visibility within a satellite
+  const toggleObjectVisibility = (satId, objId) => {
+    const sat = satellites.find((s) => s.id === satId);
+    if (!sat || !sat.objects) return;
+
+    const updatedObjects = sat.objects.map((obj) => 
+      obj.id === objId ? { ...obj, isVisible: !obj.isVisible } : obj
+    );
+    updateSatellite(satId, { objects: updatedObjects });
   };
 
   // Open add satellite dialog
@@ -367,23 +481,99 @@ const ObjectTree = () => {
                   onContextMenu={(e, item) => handleContextMenu(e, item, "satellite")}
                   level={1}
                 >
-                  {/* Orbit Elements */}
-                  <TreeNode
-                    key={`${sat.id}-orbit`}
-                    item={{
-                      id: `${sat.id}-orbit`,
-                      name: "Orbit Elements",
-                      isVisible: undefined,
-                    }}
-                    icon={Orbit}
-                    level={2}
-                    renderLabel={() => (
-                      <span className="flex items-center gap-1">
-                        Orbit Elements
-                        <span className="text-xs text-slate-500">({sat.orbitSource === "keplerian" ? "Keplerian" : "TLE"})</span>
+                  {/* Orbit Elements with Update Button */}
+                  <div
+                    className="flex items-center gap-1 py-1 px-1 rounded cursor-pointer transition-colors text-slate-300 hover:bg-slate-800"
+                    style={{ paddingLeft: "36px" }}
+                  >
+                    <span className="w-4" />
+                    <Orbit className="w-4 h-4 flex-shrink-0 text-slate-400" />
+                    <span className="flex-1 text-sm truncate flex items-center gap-1">
+                      Orbit Elements
+                      <span className="text-xs text-slate-500">
+                        ({sat.orbitSource === "keplerian" ? "Keplerian" : "TLE"})
                       </span>
+                    </span>
+                    {/* Update TLE button - only for URL-based sources */}
+                    {(sat.orbitSource === "tle-url" || sat.orbitSource === "tle-url-history") && (
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleUpdateTLE(sat);
+                        }}
+                        disabled={tleUpdateStatus[sat.id] === "loading"}
+                        className={`p-0.5 rounded transition-colors ${
+                          tleUpdateStatus[sat.id] === "loading"
+                            ? "text-slate-500"
+                            : tleUpdateStatus[sat.id] === "success"
+                            ? "text-green-400"
+                            : tleUpdateStatus[sat.id] === "error"
+                            ? "text-red-400"
+                            : "text-cyan-400 hover:bg-cyan-600/20"
+                        }`}
+                        title="Update TLE"
+                      >
+                        {tleUpdateStatus[sat.id] === "loading" ? (
+                          <Loader2 className="w-3 h-3 animate-spin" />
+                        ) : (
+                          <RefreshCw className="w-3 h-3" />
+                        )}
+                      </button>
                     )}
-                  />
+                  </div>
+
+                  {/* Objects (Sensors/Coverage) */}
+                  {sat.objects && sat.objects.length > 0 && (
+                    <TreeNode
+                      key={`${sat.id}-objects`}
+                      item={{
+                        id: `${sat.id}-objects`,
+                        name: `Objects (${sat.objects.length})`,
+                        isVisible: undefined,
+                      }}
+                      icon={Box}
+                      level={2}
+                    >
+                      {sat.objects.map((obj) => (
+                        <div
+                          key={obj.id}
+                          className="flex items-center gap-1 py-1 px-1 rounded cursor-pointer transition-colors text-slate-300 hover:bg-slate-800"
+                          style={{ paddingLeft: "68px" }}
+                        >
+                          <span className="w-4" />
+                          <Box 
+                            className="w-4 h-4 flex-shrink-0"
+                            style={{
+                              color: obj.color 
+                                ? `rgba(${Math.round(obj.color.r * 255)}, ${Math.round(obj.color.g * 255)}, ${Math.round(obj.color.b * 255)}, 1)` 
+                                : undefined,
+                            }}
+                          />
+                          <span className="flex-1 text-sm truncate">
+                            {obj.name}
+                            {obj.isDefaultCoverage && (
+                              <span className="text-xs text-slate-500 ml-1">(Coverage)</span>
+                            )}
+                          </span>
+                          {/* Visibility toggle */}
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              toggleObjectVisibility(sat.id, obj.id);
+                            }}
+                            className="p-0.5 hover:bg-slate-700 rounded opacity-60 hover:opacity-100"
+                            title={obj.isVisible !== false ? "Hide" : "Show"}
+                          >
+                            {obj.isVisible !== false ? (
+                              <Eye className="w-3 h-3 text-green-400" />
+                            ) : (
+                              <EyeOff className="w-3 h-3 text-slate-600" />
+                            )}
+                          </button>
+                        </div>
+                      ))}
+                    </TreeNode>
+                  )}
 
                   {/* Payloads */}
                   {sat.payloads && sat.payloads.length > 0 && (
