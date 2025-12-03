@@ -274,7 +274,7 @@ const SatellitePropertiesTab = ({ satelliteId }) => {
   // Tree state
   const [expandedNodes, setExpandedNodes] = useState({
     basic: true,
-    orbit: false,
+    orbit: true,
     objects: true,
   });
   const [selectedNode, setSelectedNode] = useState("basic.name");

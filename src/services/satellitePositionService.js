@@ -171,15 +171,24 @@ export async function getCoverageCircle(id, position) {
 /**
  * Get cached orbit path or generate new one
  * @param {string} id - Satellite ID
- * @param {Object} tle - {line1, line2}
+ * @param {Object} satellite - Satellite object with tle and tleHistory
  * @param {number} currentTime - Current simulation time (ms)
  * @returns {Promise<Array|null>} Orbit path points
  */
-export async function getOrbitPath(id, tle, currentTime) {
+export async function getOrbitPath(id, satellite, currentTime) {
     const cached = orbitPathCache.get(id);
 
-    // Return cached if still fresh
-    if (cached && currentTime - cached.lastUpdateTime < CONFIG.ORBIT_PATH_UPDATE_INTERVAL) {
+    // Select best TLE for current simulation time
+    const tle = selectBestTLE(satellite, currentTime);
+    
+    // Create cache key based on TLE epoch to detect TLE changes
+    const tleEpoch = tle?.line1?.substring(18, 32) || '';
+    const cachedTleEpoch = cached?.tleEpoch || '';
+
+    // Return cached if still fresh AND using same TLE
+    if (cached && 
+        currentTime - cached.lastUpdateTime < CONFIG.ORBIT_PATH_UPDATE_INTERVAL &&
+        tleEpoch === cachedTleEpoch) {
         return cached.path;
     }
 
@@ -199,6 +208,7 @@ export async function getOrbitPath(id, tle, currentTime) {
             orbitPathCache.set(id, {
                 path: result.path,
                 lastUpdateTime: currentTime,
+                tleEpoch: tleEpoch, // Store TLE epoch to detect changes
             });
             return result.path;
         }
@@ -207,6 +217,47 @@ export async function getOrbitPath(id, tle, currentTime) {
     }
 
     return cached?.path || null;
+}
+
+/**
+ * Select the best TLE for a given simulation time (for tle-url-history mode)
+ * @param {Object} satellite - Satellite with tleHistory
+ * @param {number} timestamp - Target simulation time in ms
+ * @returns {Object} Best TLE {line1, line2}
+ */
+function selectBestTLE(satellite, timestamp) {
+    // If no TLE history or not using history mode, use current TLE
+    if (!satellite.tleHistory || satellite.tleHistory.length === 0 || 
+        (satellite.orbitSource !== "tle-url-history" && satellite.orbitSource !== "tle-url")) {
+        return satellite.tle;
+    }
+
+    // Find best TLE for target time
+    let bestTle = satellite.tle;
+    let bestDiff = Infinity;
+
+    for (const tle of satellite.tleHistory) {
+        if (!tle.epoch) continue;
+        const epochMs = new Date(tle.epoch).getTime();
+        const diff = timestamp - epochMs;
+        const absDiff = Math.abs(diff);
+
+        // Prefer TLEs before or near target time (within 24 hours after is OK)
+        if (diff >= 0 || diff > -86400000) {
+            if (absDiff < bestDiff) {
+                bestDiff = absDiff;
+                bestTle = { line1: tle.line1, line2: tle.line2 };
+            }
+        }
+    }
+
+    // If no suitable TLE found, use most recent from history
+    if (!bestTle && satellite.tleHistory.length > 0) {
+        const mostRecent = satellite.tleHistory[0];
+        bestTle = { line1: mostRecent.line1, line2: mostRecent.line2 };
+    }
+
+    return bestTle || satellite.tle;
 }
 
 /**
@@ -219,8 +270,13 @@ async function fetchPositions(satellites, timestamp) {
         return;
     }
 
-    // Filter visible satellites only
-    const visibleSatellites = satellites.filter((s) => s.isVisible && s.tle);
+    // Filter visible satellites and select best TLE for simulation time
+    const visibleSatellites = satellites
+        .filter((s) => s.isVisible && s.tle)
+        .map((s) => ({
+            ...s,
+            tle: selectBestTLE(s, timestamp) // Select best TLE based on simulation time
+        }));
 
     if (visibleSatellites.length === 0) {
         currentPositions = {};

@@ -119,9 +119,10 @@ export const useSatellitePositions = (options = {}) => {
     /**
      * Get orbit path for a satellite
      */
-    const getOrbit = useCallback(async (satelliteId, tle) => {
+    const getOrbit = useCallback(async (satelliteId, satellite) => {
         const currentTime = useTimeStore.getState().currentTime.getTime();
-        return getOrbitPath(satelliteId, tle, currentTime);
+        // Pass full satellite object for TLE history selection
+        return getOrbitPath(satelliteId, satellite, currentTime);
     }, []);
 
     /**

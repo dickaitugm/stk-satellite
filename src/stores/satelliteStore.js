@@ -159,6 +159,67 @@ export const useSatelliteStore = create(
         }
       },
       
+      // Get TLE info for a specific time (returns TLE and age info for warnings)
+      getTleInfoForTime: (id, targetTime) => {
+        const sat = get().satellites.find(s => s.id === id);
+        if (!sat) return null;
+        
+        const targetMs = new Date(targetTime).getTime();
+        let bestTle = sat.tle;
+        let bestEpoch = null;
+        let bestDiff = Infinity;
+        
+        // Extract epoch from current TLE if no history
+        if (!sat.tleHistory || sat.tleHistory.length === 0) {
+          if (sat.tle?.line1) {
+            try {
+              const epochStr = sat.tle.line1.substring(18, 32).trim();
+              const year = parseInt(epochStr.substring(0, 2));
+              const dayOfYear = parseFloat(epochStr.substring(2));
+              const fullYear = year > 56 ? 1900 + year : 2000 + year;
+              const date = new Date(Date.UTC(fullYear, 0, 1));
+              date.setTime(date.getTime() + (dayOfYear - 1) * 24 * 60 * 60 * 1000);
+              bestEpoch = date.toISOString();
+            } catch (e) {
+              bestEpoch = null;
+            }
+          }
+        } else {
+          // Find best TLE from history
+          for (const tle of sat.tleHistory) {
+            if (!tle.epoch) continue;
+            const epochMs = new Date(tle.epoch).getTime();
+            const diff = targetMs - epochMs;
+            const absDiff = Math.abs(diff);
+            
+            if (diff >= 0 || diff > -86400000) {
+              if (absDiff < bestDiff) {
+                bestDiff = absDiff;
+                bestTle = { line1: tle.line1, line2: tle.line2 };
+                bestEpoch = tle.epoch;
+              }
+            }
+          }
+          
+          // Fallback to most recent
+          if (!bestEpoch && sat.tleHistory.length > 0) {
+            bestEpoch = sat.tleHistory[0].epoch;
+          }
+        }
+        
+        // Calculate age in days
+        const ageMs = bestEpoch ? targetMs - new Date(bestEpoch).getTime() : null;
+        const ageDays = ageMs !== null ? Math.abs(ageMs) / (1000 * 60 * 60 * 24) : null;
+        
+        return {
+          tle: bestTle,
+          epoch: bestEpoch,
+          ageDays: ageDays,
+          isOld: ageDays !== null && ageDays > 10, // Warning threshold: 10 days
+          isFuture: ageMs !== null && ageMs < 0, // TLE is from future
+        };
+      },
+      
       // Calculate position at given time (uses TLE history for backdated propagation)
       calculatePosition: (id, date = new Date()) => {
         // Use getSatrecForTime to automatically select best TLE based on simulation time

@@ -55,6 +55,7 @@ const Globe2D = ({ onMouseMove }) => {
   const calculatePosition = useSatelliteStore((state) => state.calculatePosition);
   const updatePosition = useSatelliteStore((state) => state.updatePosition);
   const getSatrec = useSatelliteStore((state) => state.getSatrec);
+  const getSatrecForTime = useSatelliteStore((state) => state.getSatrecForTime);
 
   const groundStations = useGroundStationStore((state) => state.groundStations);
   const getVisibleStations = useGroundStationStore((state) => state.getVisibleStations);
@@ -110,9 +111,11 @@ const Globe2D = ({ onMouseMove }) => {
   });
 
   // Generate orbit path for a satellite - returns array of {time, lat, lon, alt}
+  // Uses getSatrecForTime to automatically select best TLE for backdated propagation
   const generateOrbitPath = useCallback(
     (satelliteId, startTime) => {
-      const satrec = getSatrec(satelliteId);
+      // Use getSatrecForTime to automatically select best TLE for the start time
+      const satrec = getSatrecForTime(satelliteId, startTime);
       if (!satrec) return [];
 
       const points = [];
@@ -134,10 +137,12 @@ const Globe2D = ({ onMouseMove }) => {
 
       return points;
     },
-    [getSatrec, calculatePosition]
+    [getSatrecForTime, calculatePosition]
   );
 
-  // Check if orbit path needs update (satellite is 5 points before end)
+  // Check if orbit path needs update
+  // - When satellite is near end of current path
+  // - When simulation time jumps outside current path range (backdated simulation)
   const checkOrbitPathUpdate = useCallback((satelliteId, currentTime) => {
     const orbitData = orbitPathDataRef.current[satelliteId];
     if (!orbitData || !orbitData.points || orbitData.points.length === 0) {
@@ -145,14 +150,20 @@ const Globe2D = ({ onMouseMove }) => {
     }
 
     const points = orbitData.points;
-    // Find current position in orbit path
     const currentTimeMs = currentTime.getTime();
+    const startTimeMs = points[0].time.getTime();
+    const endTimeMs = points[points.length - 1].time.getTime();
+
+    // Check if current time is outside the path range (backdated/forward simulation)
+    // Give 5 minute buffer
+    const bufferMs = 5 * 60 * 1000;
+    if (currentTimeMs < startTimeMs - bufferMs || currentTimeMs > endTimeMs - bufferMs) {
+      return true; // Time is outside path range, need new path
+    }
 
     // Check if we're within 5 minutes of the end
-    const endTime = points[points.length - 1].time.getTime();
     const thresholdMs = 5 * 60 * 1000; // 5 minutes before end
-
-    return currentTimeMs >= endTime - thresholdMs;
+    return currentTimeMs >= endTimeMs - thresholdMs;
   }, []);
 
   // Update orbit path for a satellite

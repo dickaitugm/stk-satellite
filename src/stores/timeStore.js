@@ -179,25 +179,8 @@ export const useTimeStore = create((set, get) => ({
     const simDeltaMs = deltaTime * state.playbackSpeed * state.playbackDirection;
     const newTime = new Date(state.currentTime.getTime() + simDeltaMs);
 
-    // Stop at end time (forward) or start time (backward)
-    if (state.playbackDirection > 0 && newTime >= state.endTime) {
-      set({
-        currentTime: state.endTime,
-        isPlaying: false,
-        lastFrameTime: now,
-      });
-      return deltaTime;
-    }
-
-    if (state.playbackDirection < 0 && newTime <= state.startTime) {
-      set({
-        currentTime: state.startTime,
-        isPlaying: false,
-        lastFrameTime: now,
-      });
-      return deltaTime;
-    }
-
+    // Simulation time is now UNLIMITED - no bounds checking
+    // User can simulate any time in the past or future
     set({
       currentTime: newTime,
       lastFrameTime: now,

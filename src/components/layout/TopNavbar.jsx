@@ -3,9 +3,9 @@
  * Navigation bar with simulation controls and time display
  */
 
-import React, { useState, useEffect, useRef } from "react";
-import { Play, Pause, FastForward, Rewind, Settings, Globe, SkipBack, SkipForward, Clock, Radio, Activity } from "lucide-react";
-import { useTimeStore, useScenarioStore, useTabsStore } from "../../stores";
+import React, { useState, useEffect, useRef, useMemo } from "react";
+import { Play, Pause, FastForward, Rewind, Settings, Globe, SkipBack, SkipForward, Clock, Radio, Activity, AlertTriangle } from "lucide-react";
+import { useTimeStore, useScenarioStore, useTabsStore, useSatelliteStore } from "../../stores";
 
 const TopNavbar = () => {
   // Time store
@@ -30,9 +30,32 @@ const TopNavbar = () => {
   const getElapsedTime = useTimeStore((state) => state.getElapsedTime);
   const setCurrentTime = useTimeStore((state) => state.setCurrentTime);
 
+  // Satellite store for TLE age warnings
+  const satellites = useSatelliteStore((state) => state.satellites);
+  const getTleInfoForTime = useSatelliteStore((state) => state.getTleInfoForTime);
+
   // Check if globe tab is active
   const activeTabId = useTabsStore((state) => state.activeTabId);
   const isGlobeActive = activeTabId === "tab-globe-main";
+
+  // Calculate TLE age warnings for visible satellites in simulation mode
+  const tleWarnings = useMemo(() => {
+    if (mode !== "simulation") return [];
+    
+    const warnings = [];
+    satellites.filter(s => s.isVisible).forEach(sat => {
+      const info = getTleInfoForTime(sat.id, currentTime);
+      if (info?.isOld) {
+        warnings.push({
+          id: sat.id,
+          name: sat.name,
+          ageDays: Math.round(info.ageDays),
+          isFuture: info.isFuture,
+        });
+      }
+    });
+    return warnings;
+  }, [mode, satellites, currentTime, getTleInfoForTime]);
 
   // Always tick time when globe is NOT active (Globe handles its own tick when active)
   // This ensures time keeps running in realtime mode even when viewing other tabs
@@ -311,6 +334,37 @@ const TopNavbar = () => {
         >
           {mode === "realtime" ? "LIVE" : isPlaying ? "RUNNING" : "PAUSED"}
         </div>
+
+        {/* TLE Age Warning Indicator */}
+        {tleWarnings.length > 0 && (
+          <div 
+            className="relative group"
+            title={`${tleWarnings.length} satellite(s) with old TLE`}
+          >
+            <div className="flex items-center gap-1 px-2 py-1 bg-amber-600/20 border border-amber-600/30 rounded text-amber-400 text-[10px] cursor-help">
+              <AlertTriangle className="w-3.5 h-3.5" />
+              <span className="hidden sm:inline">TLE &gt;10d</span>
+              <span className="font-bold">{tleWarnings.length}</span>
+            </div>
+            {/* Tooltip with details */}
+            <div className="absolute top-full right-0 mt-1 w-64 bg-slate-800 border border-amber-600/30 rounded-lg shadow-xl p-2 z-50 hidden group-hover:block">
+              <div className="text-xs text-amber-400 font-medium mb-1">⚠️ TLE Age Warning</div>
+              <div className="text-[10px] text-slate-300 mb-2">
+                The following satellites have TLE data more than 10 days old compared to simulation time. Accuracy may be degraded.
+              </div>
+              <div className="space-y-1 max-h-32 overflow-y-auto">
+                {tleWarnings.map(w => (
+                  <div key={w.id} className="flex justify-between text-[10px] text-slate-400">
+                    <span className="truncate">{w.name}</span>
+                    <span className="text-amber-400 ml-2">
+                      {w.isFuture ? `${w.ageDays}d ahead` : `${w.ageDays}d old`}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
 
         <div className="text-xs text-right hidden sm:block bg-slate-800 px-3 py-1.5 rounded border border-slate-700">
           <div className="text-slate-400 text-[10px]">{mode === "realtime" ? "Current Time (UTC)" : "Simulation Time (UTC)"}</div>
