@@ -107,9 +107,62 @@ export const useSatelliteStore = create(
         }
       },
       
-      // Calculate position at given time
+      // Get satrec for a specific time using TLE history (for backdated propagation)
+      getSatrecForTime: (id, targetTime) => {
+        const sat = get().satellites.find(s => s.id === id);
+        if (!sat) return null;
+        
+        // If no TLE history, use current TLE
+        if (!sat.tleHistory || sat.tleHistory.length === 0) {
+          if (!sat.tle) return null;
+          try {
+            return satellite.twoline2satrec(sat.tle.line1, sat.tle.line2);
+          } catch (error) {
+            console.error(`Failed to parse TLE for ${id}:`, error);
+            return null;
+          }
+        }
+        
+        // Find best TLE for target time
+        const targetMs = new Date(targetTime).getTime();
+        let bestTle = sat.tle;
+        let bestDiff = Infinity;
+        
+        for (const tle of sat.tleHistory) {
+          if (!tle.epoch) continue;
+          const epochMs = new Date(tle.epoch).getTime();
+          const diff = targetMs - epochMs;
+          const absDiff = Math.abs(diff);
+          
+          // Prefer TLEs before target time
+          if (diff >= 0 || diff > -86400000) {
+            if (absDiff < bestDiff) {
+              bestDiff = absDiff;
+              bestTle = { line1: tle.line1, line2: tle.line2 };
+            }
+          }
+        }
+        
+        // If no suitable TLE found, use most recent
+        if (!bestTle && sat.tleHistory.length > 0) {
+          const mostRecent = sat.tleHistory[0];
+          bestTle = { line1: mostRecent.line1, line2: mostRecent.line2 };
+        }
+        
+        if (!bestTle) return null;
+        
+        try {
+          return satellite.twoline2satrec(bestTle.line1, bestTle.line2);
+        } catch (error) {
+          console.error(`Failed to parse TLE for ${id}:`, error);
+          return null;
+        }
+      },
+      
+      // Calculate position at given time (uses TLE history for backdated propagation)
       calculatePosition: (id, date = new Date()) => {
-        const satrec = get().getSatrec(id);
+        // Use getSatrecForTime to automatically select best TLE based on simulation time
+        const satrec = get().getSatrecForTime(id, date);
         if (!satrec) return null;
         
         const positionAndVelocity = satellite.propagate(satrec, date);

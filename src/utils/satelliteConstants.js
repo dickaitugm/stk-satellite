@@ -366,3 +366,101 @@ export const extractOrbitalElements = (line1, line2) => {
     return null;
   }
 };
+
+/**
+ * Merge new TLEs into existing TLE history
+ * - Replace duplicates based on epoch (same epoch = same TLE)
+ * - Sort by epoch descending (newest first)
+ * - No limit on entries
+ * @param {Array} existingHistory - Current TLE history array
+ * @param {Array} newTLEs - New TLEs to merge
+ * @returns {Array} Merged and sorted TLE history
+ */
+export const mergeTleHistory = (existingHistory = [], newTLEs = []) => {
+  // Create a map with epoch as key for deduplication
+  const tleMap = new Map();
+  
+  // Add existing history first
+  existingHistory.forEach(tle => {
+    if (tle.epoch) {
+      tleMap.set(tle.epoch, tle);
+    }
+  });
+  
+  // Add/replace with new TLEs
+  const now = new Date().toISOString();
+  newTLEs.forEach(tle => {
+    if (tle.epoch) {
+      tleMap.set(tle.epoch, {
+        ...tle,
+        fetchedAt: now, // Track when this TLE was fetched
+      });
+    }
+  });
+  
+  // Convert back to array and sort by epoch descending (newest first)
+  return Array.from(tleMap.values()).sort(
+    (a, b) => new Date(b.epoch) - new Date(a.epoch)
+  );
+};
+
+/**
+ * Get the most appropriate TLE for a given target time
+ * - Finds TLE with epoch closest to (but not significantly after) target time
+ * - TLEs are most accurate near their epoch, accuracy decreases over time
+ * @param {Array} tleHistory - Array of TLE objects with epoch field
+ * @param {Date|string} targetTime - The time to find TLE for
+ * @param {Object} currentTle - Fallback TLE if no history available
+ * @returns {Object} The best TLE for the target time { line1, line2, epoch }
+ */
+export const getTleForTime = (tleHistory = [], targetTime, currentTle = null) => {
+  const targetMs = new Date(targetTime).getTime();
+  
+  // If no history, return current TLE
+  if (!tleHistory || tleHistory.length === 0) {
+    return currentTle;
+  }
+  
+  let bestTle = null;
+  let bestDiff = Infinity;
+  
+  for (const tle of tleHistory) {
+    if (!tle.epoch) continue;
+    
+    const epochMs = new Date(tle.epoch).getTime();
+    const diff = targetMs - epochMs;
+    
+    // TLE epoch should ideally be before or close to target time
+    // TLEs predict forward in time, so we prefer epochs before target
+    // But we also consider TLEs slightly after (within 1 day) if closer
+    const absDiff = Math.abs(diff);
+    
+    // Prefer TLEs before target time, but allow TLEs up to 1 day after
+    if (diff >= 0 || diff > -86400000) { // -86400000 = -1 day in ms
+      if (absDiff < bestDiff) {
+        bestDiff = absDiff;
+        bestTle = {
+          line1: tle.line1,
+          line2: tle.line2,
+          epoch: tle.epoch,
+          name: tle.name,
+          noradId: tle.noradId,
+        };
+      }
+    }
+  }
+  
+  // If no suitable TLE found, use the most recent one
+  if (!bestTle && tleHistory.length > 0) {
+    const mostRecent = tleHistory[0]; // Already sorted by epoch desc
+    bestTle = {
+      line1: mostRecent.line1,
+      line2: mostRecent.line2,
+      epoch: mostRecent.epoch,
+      name: mostRecent.name,
+      noradId: mostRecent.noradId,
+    };
+  }
+  
+  return bestTle || currentTle;
+};

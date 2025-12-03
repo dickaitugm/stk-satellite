@@ -53,6 +53,8 @@ import {
   extractOrbitalElements,
   keplerianToTLE,
   extractNoradId,
+  mergeTleHistory,
+  getTleForTime,
 } from "../../utils/satelliteConstants";
 import { calculateCoverageRadius } from "../../utils/geodesic";
 
@@ -405,18 +407,20 @@ const SatellitePropertiesTab = ({ satelliteId }) => {
       if (formData.orbitSource === "tle-url-history") {
         if (matchingTLEs.length > 0) {
           matchingTLEs.sort((a, b) => new Date(b.epoch) - new Date(a.epoch));
+          // Merge with existing history
+          const mergedHistory = mergeTleHistory(formData.tleHistory || [], matchingTLEs);
           setFormData((prev) => ({
             ...prev,
-            tleHistory: matchingTLEs,
+            tleHistory: mergedHistory,
             selectedTleIndex: 0,
-            tleLine1: matchingTLEs[0].line1,
-            tleLine2: matchingTLEs[0].line2,
-            noradId: matchingTLEs[0].noradId,
+            tleLine1: mergedHistory[0].line1,
+            tleLine2: mergedHistory[0].line2,
+            noradId: mergedHistory[0].noradId,
             tleUrl: url,
           }));
           setHasChanges(true);
           setFetchStatus("success");
-          setFetchMessage(`Found ${matchingTLEs.length} TLE records for "${formData.name}"`);
+          setFetchMessage(`Found ${matchingTLEs.length} TLE records. Total: ${mergedHistory.length} in history.`);
         } else {
           const availableNames = [...new Set(allTLEs.map((t) => t.name))].slice(0, 10);
           throw new Error(
@@ -427,16 +431,19 @@ const SatellitePropertiesTab = ({ satelliteId }) => {
         if (matchingTLEs.length > 0) {
           matchingTLEs.sort((a, b) => new Date(b.epoch) - new Date(a.epoch));
           const tle = matchingTLEs[0];
+          // Merge with existing history for backdated propagation
+          const mergedHistory = mergeTleHistory(formData.tleHistory || [], matchingTLEs);
           setFormData((prev) => ({
             ...prev,
             tleLine1: tle.line1,
             tleLine2: tle.line2,
             noradId: tle.noradId,
             tleUrl: url,
+            tleHistory: mergedHistory,
           }));
           setHasChanges(true);
           setFetchStatus("success");
-          setFetchMessage(`TLE found for "${tle.name}" (Epoch: ${new Date(tle.epoch).toLocaleDateString()})`);
+          setFetchMessage(`TLE found for "${tle.name}" (Epoch: ${new Date(tle.epoch).toLocaleDateString()}). ${mergedHistory.length} TLE(s) in history.`);
         } else {
           const availableNames = [...new Set(allTLEs.map((t) => t.name))].slice(0, 10);
           throw new Error(
@@ -584,44 +591,59 @@ const SatellitePropertiesTab = ({ satelliteId }) => {
 
       matchingTLEs.sort((a, b) => new Date(b.epoch) - new Date(a.epoch));
 
+      // Merge new TLEs with existing history (replace duplicates, keep all)
+      const mergedHistory = mergeTleHistory(formData.tleHistory || [], matchingTLEs);
+
       if (formData.orbitSource === "tle-url") {
         // For TLE URL: Update and save immediately, show popup
+        // Also save ALL fetched TLEs to history for backdated propagation
         const tle = matchingTLEs[0];
-        const updatedData = {
-          ...formData,
+        
+        setFormData((prev) => ({
+          ...prev,
           tleLine1: tle.line1,
           tleLine2: tle.line2,
           noradId: tle.noradId,
           tleUrl: url,
-        };
+          tleHistory: mergedHistory,
+          selectedTleIndex: 0,
+        }));
         
-        setFormData(updatedData);
-        
-        // Save to store immediately
+        // Save to store immediately - include tleHistory for persistence
         updateSatellite(satelliteId, {
           tleLine1: tle.line1,
           tleLine2: tle.line2,
+          tle: { line1: tle.line1, line2: tle.line2 },
           noradId: tle.noradId,
           tleUrl: url,
+          tleHistory: mergedHistory,
         });
         
         setUpdatePopup({ 
           show: true, 
           type: "success", 
-          message: `TLE updated successfully!\nEpoch: ${new Date(tle.epoch).toLocaleString()}` 
+          message: `TLE updated successfully!\nEpoch: ${new Date(tle.epoch).toLocaleString()}\n${mergedHistory.length} TLE(s) in history` 
         });
         setHasChanges(false);
       } else if (formData.orbitSource === "tle-url-history") {
         // For TLE History URL: Update form, navigate to orbit.tle, focus on dropdown
+        // Save merged history
         setFormData((prev) => ({
           ...prev,
-          tleHistory: matchingTLEs,
+          tleHistory: mergedHistory,
           selectedTleIndex: 0,
-          tleLine1: matchingTLEs[0].line1,
-          tleLine2: matchingTLEs[0].line2,
-          noradId: matchingTLEs[0].noradId,
+          tleLine1: mergedHistory[0].line1,
+          tleLine2: mergedHistory[0].line2,
+          noradId: mergedHistory[0].noradId,
           tleUrl: url,
         }));
+        
+        // Save tleHistory to store immediately for persistence
+        updateSatellite(satelliteId, {
+          tleHistory: mergedHistory,
+          tleUrl: url,
+        });
+        
         setHasChanges(true);
         
         // Navigate to orbit.tle to show the dropdown
@@ -629,7 +651,7 @@ const SatellitePropertiesTab = ({ satelliteId }) => {
         setExpandedNodes((prev) => ({ ...prev, orbit: true }));
         
         // Show toast notification instead of popup
-        showToast("success", `Found ${matchingTLEs.length} TLE records. Select from dropdown.`);
+        showToast("success", `Found ${matchingTLEs.length} new TLE(s). Total: ${mergedHistory.length} in history.`);
       }
     } catch (error) {
       console.error("Failed to update TLE:", error);
