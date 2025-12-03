@@ -124,7 +124,7 @@ const TleHistoryPicker = ({ tleHistory, selectedIndex, onSelect, orbitSource }) 
           <Clock className="w-3 h-3 inline mr-1" />
           TLE History ({tleHistory.length.toLocaleString()})
         </label>
-        {orbitSource === "tle-url" && (
+        {(orbitSource === "tle-url" || orbitSource === "tle-url-history") && (
           <span className="text-[10px] text-cyan-400 bg-cyan-500/10 px-1.5 py-0.5 rounded">
             Auto-select by sim time
           </span>
@@ -215,6 +215,15 @@ const TleHistoryPicker = ({ tleHistory, selectedIndex, onSelect, orbitSource }) 
               </div>
             )}
           </div>
+          
+          {/* Info text for tle-url mode */}
+          {(orbitSource === "tle-url" || orbitSource === "tle-url-history") && (
+            <div className="p-2 border-t border-slate-700">
+              <p className="text-[10px] text-slate-500 italic">
+                💡 During simulation, the system auto-selects the best TLE based on simulation time for accurate backdated propagation.
+              </p>
+            </div>
+          )}
         </div>
       )}
     </div>
@@ -1245,11 +1254,9 @@ const SatellitePropertiesTab = ({ satelliteId }) => {
                     }
                   })()}
                   
-                  {formData.orbitSource === "tle-url" && (
-                    <p className="text-[10px] text-slate-500 italic">
-                      💡 During simulation, the system auto-selects the best TLE based on simulation time for accurate backdated propagation.
-                    </p>
-                  )}
+                  <p className="text-[10px] text-slate-500 italic">
+                    💡 During simulation, the system auto-selects the best TLE based on simulation time for accurate backdated propagation.
+                  </p>
                 </div>
               )}
             </div>
