@@ -483,6 +483,162 @@ const SatellitePropertiesTab = ({ satelliteId }) => {
     }
   };
 
+  // State for update popup
+  const [updatePopup, setUpdatePopup] = useState({ show: false, type: "", message: "" });
+
+  // Handle Update button click from tree navigation
+  const handleTreeUpdate = async () => {
+    const url = formData.tleSource === "custom" ? formData.tleUrl : buildTleUrl();
+
+    if (!url) {
+      setUpdatePopup({ show: true, type: "error", message: "Please configure a valid TLE URL first" });
+      return;
+    }
+
+    if (!formData.name.trim()) {
+      setUpdatePopup({ show: true, type: "error", message: "Please enter satellite name first" });
+      return;
+    }
+
+    setLoading(true);
+
+    try {
+      let text;
+
+      if (window.electronAPI?.fetchTLE) {
+        const result = await window.electronAPI.fetchTLE(url);
+        if (!result.success) {
+          throw new Error(result.error);
+        }
+        text = result.data;
+      } else {
+        const response = await fetch(url);
+        if (!response.ok) {
+          throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+        }
+        text = await response.text();
+      }
+
+      const lines = text
+        .split("\n")
+        .map((l) => l.trimEnd())
+        .filter((l) => l.trim());
+
+      // Parse all TLEs from the file
+      const allTLEs = [];
+      for (let i = 0; i < lines.length; i++) {
+        const line = lines[i].trim();
+
+        if (line.startsWith("1 ") && i + 1 < lines.length) {
+          const line1 = line;
+          const line2 = lines[i + 1].trim();
+
+          let name = "";
+          if (i > 0) {
+            const prevLine = lines[i - 1].trim();
+            if (!prevLine.startsWith("1 ") && !prevLine.startsWith("2 ")) {
+              name = prevLine;
+            }
+          }
+
+          if (line2.startsWith("2 ")) {
+            const epochStr = line1.substring(18, 32).trim();
+            const epochYear = parseInt(epochStr.substring(0, 2));
+            const epochDayFull = parseFloat(epochStr.substring(2));
+            const epochDayInt = Math.floor(epochDayFull);
+            const epochDayFrac = epochDayFull - epochDayInt;
+            const totalSecondsFloat = epochDayFrac * 86400;
+            const hours = Math.floor(totalSecondsFloat / 3600);
+            const minutes = Math.floor((totalSecondsFloat % 3600) / 60);
+            const seconds = Math.floor(totalSecondsFloat % 60);
+            const milliseconds = Math.round((totalSecondsFloat % 1) * 1000);
+            const fullYear = epochYear > 56 ? 1900 + epochYear : 2000 + epochYear;
+            const epochDate = new Date(Date.UTC(fullYear, 0, epochDayInt, hours, minutes, seconds, milliseconds));
+
+            allTLEs.push({
+              name: name.trim(),
+              line1,
+              line2,
+              epoch: epochDate.toISOString(),
+              noradId: line1.substring(2, 7).trim(),
+            });
+            i++;
+          }
+        }
+      }
+
+      if (allTLEs.length === 0) {
+        throw new Error("No valid TLE data found");
+      }
+
+      const searchName = formData.name.trim().toUpperCase();
+      const matchingTLEs = allTLEs.filter(
+        (tle) =>
+          tle.name.toUpperCase().includes(searchName) ||
+          searchName.includes(tle.name.toUpperCase().replace(/\s+/g, ""))
+      );
+
+      if (matchingTLEs.length === 0) {
+        throw new Error(`Satellite "${formData.name}" not found in TLE source`);
+      }
+
+      matchingTLEs.sort((a, b) => new Date(b.epoch) - new Date(a.epoch));
+
+      if (formData.orbitSource === "tle-url") {
+        // For TLE URL: Update and save immediately, show popup
+        const tle = matchingTLEs[0];
+        const updatedData = {
+          ...formData,
+          tleLine1: tle.line1,
+          tleLine2: tle.line2,
+          noradId: tle.noradId,
+          tleUrl: url,
+        };
+        
+        setFormData(updatedData);
+        
+        // Save to store immediately
+        updateSatellite(satelliteId, {
+          tleLine1: tle.line1,
+          tleLine2: tle.line2,
+          noradId: tle.noradId,
+          tleUrl: url,
+        });
+        
+        setUpdatePopup({ 
+          show: true, 
+          type: "success", 
+          message: `TLE updated successfully!\nEpoch: ${new Date(tle.epoch).toLocaleString()}` 
+        });
+        setHasChanges(false);
+      } else if (formData.orbitSource === "tle-url-history") {
+        // For TLE History URL: Update form, navigate to orbit.tle, focus on dropdown
+        setFormData((prev) => ({
+          ...prev,
+          tleHistory: matchingTLEs,
+          selectedTleIndex: 0,
+          tleLine1: matchingTLEs[0].line1,
+          tleLine2: matchingTLEs[0].line2,
+          noradId: matchingTLEs[0].noradId,
+          tleUrl: url,
+        }));
+        setHasChanges(true);
+        
+        // Navigate to orbit.tle to show the dropdown
+        setSelectedNode("orbit.tle");
+        setExpandedNodes((prev) => ({ ...prev, orbit: true }));
+        
+        // Show toast notification instead of popup
+        showToast("success", `Found ${matchingTLEs.length} TLE records. Select from dropdown.`);
+      }
+    } catch (error) {
+      console.error("Failed to update TLE:", error);
+      setUpdatePopup({ show: true, type: "error", message: error.message || "Failed to update TLE" });
+    } finally {
+      setLoading(false);
+    }
+  };
+
   // Validate form
   const validateForm = () => {
     const newErrors = {};
@@ -1169,31 +1325,6 @@ const SatellitePropertiesTab = ({ satelliteId }) => {
                   onChange={(e) => handleChange("epoch", e.target.value)}
                   className="w-full px-3 py-2 bg-slate-800 border border-slate-600 rounded-lg text-white text-sm focus:outline-none focus:border-cyan-500"
                 />
-              </div>
-            </div>
-          )}
-
-          {/* Current Orbit Info Display */}
-          {currentPosition && (
-            <div className="p-3 bg-slate-800/50 rounded-lg border border-slate-700">
-              <div className="text-xs font-medium text-slate-300 mb-2">Current Orbit Info</div>
-              <div className="grid grid-cols-2 gap-3 text-sm">
-                <div className="p-2 bg-slate-900/50 rounded">
-                  <p className="text-xs text-slate-500">Altitude</p>
-                  <p className="text-cyan-400 font-medium">{currentPosition.altitude?.toFixed(1)} km</p>
-                </div>
-                <div className="p-2 bg-slate-900/50 rounded">
-                  <p className="text-xs text-slate-500">Velocity</p>
-                  <p className="text-cyan-400 font-medium">{currentPosition.velocity?.toFixed(2)} km/s</p>
-                </div>
-                <div className="p-2 bg-slate-900/50 rounded">
-                  <p className="text-xs text-slate-500">Latitude</p>
-                  <p className="text-white">{currentPosition.latitude?.toFixed(4)}°</p>
-                </div>
-                <div className="p-2 bg-slate-900/50 rounded">
-                  <p className="text-xs text-slate-500">Longitude</p>
-                  <p className="text-white">{currentPosition.longitude?.toFixed(4)}°</p>
-                </div>
               </div>
             </div>
           )}
@@ -2044,6 +2175,43 @@ const SatellitePropertiesTab = ({ satelliteId }) => {
         </div>
       )}
 
+      {/* Update TLE Popup */}
+      {updatePopup.show && (
+        <div className="absolute inset-0 z-50 flex items-center justify-center bg-black/50">
+          <div className="bg-slate-800 rounded-lg border border-slate-700 p-4 max-w-sm mx-4 shadow-xl">
+            <div className="flex items-center gap-3 mb-3">
+              <div className={`p-2 rounded-full ${updatePopup.type === "success" ? "bg-green-500/20" : "bg-red-500/20"}`}>
+                {updatePopup.type === "success" ? (
+                  <CheckCircle className="w-5 h-5 text-green-400" />
+                ) : (
+                  <AlertCircle className="w-5 h-5 text-red-400" />
+                )}
+              </div>
+              <div>
+                <h4 className="text-sm font-medium text-white">
+                  {updatePopup.type === "success" ? "TLE Updated" : "Update Failed"}
+                </h4>
+              </div>
+            </div>
+            <p className="text-sm text-slate-300 mb-4 whitespace-pre-line">
+              {updatePopup.message}
+            </p>
+            <div className="flex justify-end">
+              <button
+                onClick={() => setUpdatePopup({ show: false, type: "", message: "" })}
+                className={`px-4 py-1.5 text-sm rounded-lg transition-colors ${
+                  updatePopup.type === "success" 
+                    ? "bg-green-500 hover:bg-green-600 text-white" 
+                    : "bg-slate-600 hover:bg-slate-500 text-white"
+                }`}
+              >
+                OK
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Main Content - 2 Column Layout */}
       <div className="flex-1 flex overflow-hidden">
         {/* Left Column - Object Tree */}
@@ -2088,12 +2256,45 @@ const SatellitePropertiesTab = ({ satelliteId }) => {
             onToggle={() => toggleNode("orbit")}
           />
           {expandedNodes.orbit && (
-            <TreeItem
-              label="TLE Data"
-              isSelected={selectedNode === "orbit.tle"}
-              onClick={() => setSelectedNode("orbit.tle")}
-              level={1}
-            />
+            <div
+              className={`flex items-center gap-1 py-1.5 cursor-pointer transition-colors text-xs ${
+                selectedNode === "orbit.tle" 
+                  ? "bg-cyan-600/30 text-cyan-300 border-l-2 border-cyan-500" 
+                  : "text-slate-300 hover:bg-slate-700/50 border-l-2 border-transparent"
+              }`}
+              style={{ paddingLeft: "20px", paddingRight: "8px" }}
+            >
+              <span className="w-4" />
+              <Globe className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+              <span 
+                className="truncate flex-1 ml-1.5"
+                onClick={() => setSelectedNode("orbit.tle")}
+              >
+                Orbit Element
+              </span>
+              {/* Show Update button for TLE URL sources */}
+              {(formData.orbitSource === "tle-url" || formData.orbitSource === "tle-url-history") ? (
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleTreeUpdate();
+                  }}
+                  disabled={loading}
+                  className="p-0.5 hover:bg-cyan-600/30 rounded shrink-0"
+                  title="Update TLE"
+                >
+                  {loading ? (
+                    <Loader2 className="w-3 h-3 text-cyan-400 animate-spin" />
+                  ) : (
+                    <RefreshCw className="w-3 h-3 text-cyan-400" />
+                  )}
+                </button>
+              ) : (
+                <span className="text-xs text-slate-500 shrink-0">
+                  {formData.orbitSource === "keplerian" ? "Kepler" : "Manual"}
+                </span>
+              )}
+            </div>
           )}
 
           {/* Objects */}
