@@ -1,5 +1,6 @@
 import { app, BrowserWindow, Menu } from "electron";
 import { registerIpcHandlers } from "./src/services/ipcHandlers.js";
+import { terminateWorkerPool } from "./src/workers/workerPool.js";
 import { fileURLToPath } from 'url';
 import path from 'path';
 
@@ -12,7 +13,7 @@ let win;
 const __filename = fileURLToPath(import.meta.url); // Mendapatkan file saat ini
 const __dirname = path.dirname(__filename); // Dapatkan direktori dari file saat ini
 
-function createWindow() {
+async function createWindow() {
   win = new BrowserWindow({
     // Ukuran dasar (fallback), tidak terlalu penting karena akan di-maximize
     width: 1280, 
@@ -42,14 +43,16 @@ function createWindow() {
   }
   // win.webContents.openDevTools(); // Optional: Open dev tools in dev mode
 
-  // Daftarkan IPC handlers
-  registerIpcHandlers();
+  // Daftarkan IPC handlers (async untuk worker pool initialization)
+  await registerIpcHandlers();
 }
 
 app.whenReady().then(() => {
   createWindow();
 });
 
-app.on("window-all-closed", () => {
+app.on("window-all-closed", async () => {
+  // Terminate worker pool before quitting
+  await terminateWorkerPool();
   if (process.platform !== "darwin") app.quit();
 });

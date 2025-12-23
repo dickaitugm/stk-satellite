@@ -1,10 +1,15 @@
 /**
  * Satellite Store
  * Manages multiple satellites with TLE data
+ * 
+ * PERFORMANCE OPTIMIZED:
+ * - Uses subscribeWithSelector for granular subscriptions
+ * - Components can subscribe to specific slices of state
+ * - Reduces unnecessary re-renders
  */
 
 import { create } from 'zustand';
-import { persist } from 'zustand/middleware';
+import { persist, subscribeWithSelector } from 'zustand/middleware';
 import * as satellite from 'satellite.js';
 import { useLicenseStore } from './licenseStore';
 
@@ -27,57 +32,58 @@ const DEFAULT_SATELLITES = [
 ];
 
 export const useSatelliteStore = create(
-  persist(
-    (set, get) => ({
-      // State
-      satellites: DEFAULT_SATELLITES,
-      selectedSatelliteId: 'lapan-a2',
-      positions: {}, // { [id]: { lat, lon, alt, time } }
-      
-      // Computed - get selected satellite
-      getSelectedSatellite: () => {
-        const state = get();
-        return state.satellites.find(s => s.id === state.selectedSatelliteId);
-      },
-      
-      // Check if can add more satellites (license limit)
-      canAddSatellite: () => {
-        const licenseStore = useLicenseStore.getState();
-        return licenseStore.canAddObject('satellite', get().satellites.length);
-      },
-      
-      // Actions
-      addSatellite: (satellite) => {
-        // Check license limit before adding
-        const licenseStore = useLicenseStore.getState();
-        if (!licenseStore.canAddObject('satellite', get().satellites.length)) {
-          console.warn('Satellite limit reached. Please upgrade your license.');
-          return { success: false, error: 'LIMIT_REACHED', message: `Free tier is limited to ${licenseStore.tierLimits.maxSatellites} satellite(s). Please activate a license to add more.` };
-        }
+  subscribeWithSelector(
+    persist(
+      (set, get) => ({
+        // State
+        satellites: DEFAULT_SATELLITES,
+        selectedSatelliteId: 'lapan-a2',
+        positions: {}, // { [id]: { lat, lon, alt, time } }
         
-        set((state) => ({
-          satellites: [...state.satellites, {
-            ...satellite,
-            id: satellite.id || `sat-${Date.now()}`,
-            isActive: true,
-            isVisible: true
-          }]
-        }));
-        return { success: true };
-      },
-      
-      removeSatellite: (id) => set((state) => ({
-        satellites: state.satellites.filter(s => s.id !== id),
-        selectedSatelliteId: state.selectedSatelliteId === id 
-          ? state.satellites[0]?.id 
-          : state.selectedSatelliteId
-      })),
-      
-      updateSatellite: (id, updates) => set((state) => ({
-        satellites: state.satellites.map(s => 
-          s.id === id ? { ...s, ...updates } : s
-        )
-      })),
+        // Computed - get selected satellite
+        getSelectedSatellite: () => {
+          const state = get();
+          return state.satellites.find(s => s.id === state.selectedSatelliteId);
+        },
+        
+        // Check if can add more satellites (license limit)
+        canAddSatellite: () => {
+          const licenseStore = useLicenseStore.getState();
+          return licenseStore.canAddObject('satellite', get().satellites.length);
+        },
+        
+        // Actions
+        addSatellite: (satellite) => {
+          // Check license limit before adding
+          const licenseStore = useLicenseStore.getState();
+          if (!licenseStore.canAddObject('satellite', get().satellites.length)) {
+            console.warn('Satellite limit reached. Please upgrade your license.');
+            return { success: false, error: 'LIMIT_REACHED', message: `Free tier is limited to ${licenseStore.tierLimits.maxSatellites} satellite(s). Please activate a license to add more.` };
+          }
+          
+          set((state) => ({
+            satellites: [...state.satellites, {
+              ...satellite,
+              id: satellite.id || `sat-${Date.now()}`,
+              isActive: true,
+              isVisible: true
+            }]
+          }));
+          return { success: true };
+        },
+        
+        removeSatellite: (id) => set((state) => ({
+          satellites: state.satellites.filter(s => s.id !== id),
+          selectedSatelliteId: state.selectedSatelliteId === id 
+            ? state.satellites[0]?.id 
+            : state.selectedSatelliteId
+        })),
+        
+        updateSatellite: (id, updates) => set((state) => ({
+          satellites: state.satellites.map(s => 
+            s.id === id ? { ...s, ...updates } : s
+          )
+        })),
       
       selectSatellite: (id) => set({ selectedSatelliteId: id }),
       
@@ -326,5 +332,5 @@ export const useSatelliteStore = create(
         selectedSatelliteId: state.selectedSatelliteId
       })
     }
-  )
+  ))
 );

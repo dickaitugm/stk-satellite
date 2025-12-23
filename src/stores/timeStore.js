@@ -152,40 +152,80 @@ export const useTimeStore = create((set, get) => ({
       lastFrameTime: Date.now(),
     }),
 
-  // Smooth tick function for animation loop - called every frame
-  // Returns deltaTime in ms for the frame
-  tick: () => {
+  // ============================================
+  // PERFORMANCE OPTIMIZED TICK SYSTEM
+  // ============================================
+  // 
+  // Internal time tracking (updated every frame, NOT triggering React re-renders)
+  // Use getInternalTime() for high-frequency reads (e.g., WorldWind updates)
+  // Use currentTime (Zustand state) for UI display (throttled to 10Hz)
+  //
+  // This prevents 60 FPS state updates that cause expensive React re-renders
+
+  // Internal time (mutable, not reactive)
+  _internalTime: Date.now(),
+  _lastStoreUpdate: 0,
+  
+  // Throttle interval for Zustand state updates (ms)
+  // 100ms = 10 Hz updates to React, sufficient for UI display
+  STORE_UPDATE_INTERVAL: 100,
+
+  // Get internal time without triggering re-renders
+  // Use this in animation loops for smooth updates
+  getInternalTime: () => {
+    return get()._internalTime;
+  },
+
+  // Optimized tick function for animation loop
+  // Updates internal time every frame, but only updates Zustand state at 10 Hz
+  // Returns: { deltaTime, internalTime, shouldUpdateUI }
+  tickOptimized: () => {
     const state = get();
     const now = Date.now();
     const deltaTime = now - state.lastFrameTime;
+    const shouldUpdateUI = now - state._lastStoreUpdate >= state.STORE_UPDATE_INTERVAL;
+
+    let newInternalTime;
 
     if (state.mode === "realtime") {
-      // Realtime mode: always sync to actual clock (smooth)
+      // Realtime mode: sync to actual clock
+      newInternalTime = now;
+    } else if (!state.isPlaying) {
+      // Simulation paused: keep current time
+      newInternalTime = state._internalTime;
+    } else {
+      // Simulation playing: advance by delta * speed * direction
+      const simDeltaMs = deltaTime * state.playbackSpeed * state.playbackDirection;
+      newInternalTime = state._internalTime + simDeltaMs;
+    }
+
+    // Always update internal time (mutable, no re-render)
+    state._internalTime = newInternalTime;
+
+    // Only update Zustand state (and trigger re-renders) at 10 Hz
+    if (shouldUpdateUI) {
       set({
-        currentTime: new Date(),
+        currentTime: new Date(newInternalTime),
         lastFrameTime: now,
+        _lastStoreUpdate: now,
       });
-      return deltaTime;
+    } else {
+      // Just update lastFrameTime for delta calculation
+      state.lastFrameTime = now;
     }
 
-    // Simulation mode: only advance if playing
-    if (!state.isPlaying) {
-      set({ lastFrameTime: now });
-      return 0;
-    }
+    return {
+      deltaTime,
+      internalTime: newInternalTime,
+      shouldUpdateUI,
+    };
+  },
 
-    // Calculate new time based on delta, playback speed, and direction
-    // deltaTime is real ms elapsed, multiply by playbackSpeed and direction
-    const simDeltaMs = deltaTime * state.playbackSpeed * state.playbackDirection;
-    const newTime = new Date(state.currentTime.getTime() + simDeltaMs);
-
-    // Simulation time is now UNLIMITED - no bounds checking
-    // User can simulate any time in the past or future
-    set({
-      currentTime: newTime,
-      lastFrameTime: now,
-    });
-    return deltaTime;
+  // Legacy tick function - still works but now uses optimized path
+  // Kept for backward compatibility
+  tick: () => {
+    const result = get().tickOptimized();
+    return result.deltaTime;
   },
 
   // Reset to current real time

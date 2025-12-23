@@ -1,6 +1,8 @@
 import { ipcMain, dialog, app, shell } from "electron";
 import fs from "fs";
 import path from "path";
+import { getWorkerPool } from "../workers/workerPool.js";
+// Keep imports for fallback and non-heavy operations
 import {
   calculateSatellitePositions,
   calculatePositionsForInterpolation,
@@ -10,6 +12,8 @@ import {
   getUnitCircle,
   calculateCoverageRadius,
   clearCache,
+  calculateSatellitePasses,
+  generatePassPath,
 } from "./satelliteCalculator.js";
 import { colorToKml, generateGroundTrackKml, generatePassKml, generateMultiPassKml } from "./kmlGenerator.js";
 import {
@@ -21,6 +25,44 @@ import {
   getHardwareInfo,
   validateLicenseKeyFormat,
 } from "./licenseService.js";
+
+// Worker pool initialization flag
+let workerPoolReady = false;
+let workerPool = null;
+
+/**
+ * Initialize worker pool for heavy calculations
+ */
+async function initWorkerPool() {
+  if (workerPoolReady) return;
+  
+  try {
+    workerPool = getWorkerPool();
+    await workerPool.waitForReady(10000);
+    workerPoolReady = true;
+    console.log("✅ Worker pool initialized for satellite calculations");
+  } catch (error) {
+    console.warn("⚠️ Worker pool initialization failed, using fallback:", error.message);
+    workerPoolReady = false;
+  }
+}
+
+/**
+ * Execute task on worker pool with fallback
+ */
+async function execWithFallback(type, payload, fallbackFn) {
+  // Try worker pool first
+  if (workerPoolReady && workerPool) {
+    try {
+      return await workerPool.exec(type, payload);
+    } catch (error) {
+      console.warn(`Worker task ${type} failed, using fallback:`, error.message);
+    }
+  }
+  
+  // Fallback to synchronous calculation
+  return fallbackFn();
+}
 
 // ============================================
 // Version Check Configuration
@@ -89,7 +131,10 @@ function writeUpdateCheckData(data) {
   }
 }
 
-export function registerIpcHandlers() {
+export async function registerIpcHandlers() {
+  // Initialize worker pool for heavy calculations
+  await initWorkerPool();
+
   // Fetch TLE from URL (bypasses CORS)
   ipcMain.handle("fetch-tle", async (event, url) => {
     try {
@@ -108,13 +153,18 @@ export function registerIpcHandlers() {
   /**
    * Calculate positions for multiple satellites (batch)
    * Called at ~10-20 Hz from renderer, positions are interpolated between calls
+   * NOW USES WORKER THREAD for non-blocking calculation
    *
    * @param {Array} satellites - Array of {id, tle: {line1, line2}}
    * @param {number} timestamp - Unix timestamp in ms
    */
   ipcMain.handle("calculate-satellite-positions", async (event, satellites, timestamp) => {
     try {
-      const result = calculateSatellitePositions(satellites, timestamp);
+      const result = await execWithFallback(
+        'calculate-positions',
+        { satellites, timestamp },
+        () => calculateSatellitePositions(satellites, timestamp)
+      );
       return { success: true, ...result };
     } catch (error) {
       console.error("Failed to calculate positions:", error);
@@ -125,6 +175,7 @@ export function registerIpcHandlers() {
   /**
    * Calculate positions with delta for smooth interpolation
    * Returns current and next positions for velocity-based interpolation
+   * NOW USES WORKER THREAD for non-blocking calculation
    *
    * @param {Array} satellites - Array of {id, tle: {line1, line2}}
    * @param {number} timestamp - Current Unix timestamp in ms
@@ -132,7 +183,11 @@ export function registerIpcHandlers() {
    */
   ipcMain.handle("calculate-positions-interpolated", async (event, satellites, timestamp, deltaMs = 100) => {
     try {
-      const result = calculatePositionsForInterpolation(satellites, timestamp, deltaMs);
+      const result = await execWithFallback(
+        'calculate-positions-interpolated',
+        { satellites, timestamp, deltaMs },
+        () => calculatePositionsForInterpolation(satellites, timestamp, deltaMs)
+      );
       return { success: true, ...result };
     } catch (error) {
       console.error("Failed to calculate interpolated positions:", error);
@@ -143,6 +198,7 @@ export function registerIpcHandlers() {
   /**
    * Generate orbit path for a single satellite
    * Called on-demand when satellite is added or periodically (~every 10 seconds)
+   * NOW USES WORKER THREAD for non-blocking calculation
    *
    * @param {Object} tle - {line1, line2}
    * @param {number} startTimestamp - Start time in Unix ms
@@ -150,8 +206,12 @@ export function registerIpcHandlers() {
    */
   ipcMain.handle("generate-orbit-path", async (event, tle, startTimestamp, numPoints = 100) => {
     try {
-      const path = generateOrbitPath(tle, startTimestamp, null, numPoints);
-      return { success: true, path };
+      const orbitPath = await execWithFallback(
+        'generate-orbit-path',
+        { tle, startTimestamp, numPoints },
+        () => generateOrbitPath(tle, startTimestamp, null, numPoints)
+      );
+      return { success: true, path: orbitPath };
     } catch (error) {
       console.error("Failed to generate orbit path:", error);
       return { success: false, error: error.message };
@@ -160,6 +220,7 @@ export function registerIpcHandlers() {
 
   /**
    * Batch generate orbit paths for multiple satellites
+   * NOW USES WORKER THREAD for non-blocking calculation
    *
    * @param {Array} satellites - Array of {id, tle: {line1, line2}}
    * @param {number} startTimestamp - Start time in Unix ms
@@ -167,7 +228,11 @@ export function registerIpcHandlers() {
    */
   ipcMain.handle("generate-orbit-paths-batch", async (event, satellites, startTimestamp, numPoints = 100) => {
     try {
-      const paths = generateOrbitPathsBatch(satellites, startTimestamp, numPoints);
+      const paths = await execWithFallback(
+        'generate-orbit-paths-batch',
+        { satellites, startTimestamp, numPoints },
+        () => generateOrbitPathsBatch(satellites, startTimestamp, numPoints)
+      );
       return { success: true, paths };
     } catch (error) {
       console.error("Failed to generate orbit paths batch:", error);
@@ -178,6 +243,7 @@ export function registerIpcHandlers() {
   /**
    * Generate geodesic circle coordinates
    * Uses optimized calculation with pre-computed unit circle
+   * NOW USES WORKER THREAD for non-blocking calculation
    *
    * @param {Object} center - {latitude, longitude}
    * @param {number} radiusKm - Radius in kilometers
@@ -185,8 +251,14 @@ export function registerIpcHandlers() {
    */
   ipcMain.handle("generate-coverage-circle", async (event, center, radiusKm, nPoints = 72) => {
     try {
-      const unitCircle = getUnitCircle(nPoints);
-      const coords = generateGeodesicCircleFast(center, radiusKm, unitCircle);
+      const coords = await execWithFallback(
+        'generate-coverage-circle',
+        { center, radiusKm, nPoints },
+        () => {
+          const unitCircle = getUnitCircle(nPoints);
+          return generateGeodesicCircleFast(center, radiusKm, unitCircle);
+        }
+      );
       return { success: true, coords };
     } catch (error) {
       console.error("Failed to generate coverage circle:", error);
@@ -196,13 +268,18 @@ export function registerIpcHandlers() {
 
   /**
    * Calculate coverage radius from altitude
+   * NOW USES WORKER THREAD for non-blocking calculation
    *
    * @param {number} altitudeKm - Satellite altitude in km
    * @param {number} minElevationDeg - Minimum elevation angle in degrees (default 0)
    */
   ipcMain.handle("calculate-coverage-radius", async (event, altitudeKm, minElevationDeg = 0) => {
     try {
-      const radius = calculateCoverageRadius(altitudeKm, minElevationDeg);
+      const radius = await execWithFallback(
+        'calculate-coverage-radius',
+        { altitudeKm, minElevationDeg },
+        () => calculateCoverageRadius(altitudeKm, minElevationDeg)
+      );
       return { success: true, radius };
     } catch (error) {
       console.error("Failed to calculate coverage radius:", error);
@@ -211,18 +288,83 @@ export function registerIpcHandlers() {
   });
 
   /**
+   * Calculate satellite passes (AOS/LOS) over a ground station
+   * NOW USES WORKER THREAD for non-blocking calculation (this is HEAVY)
+   *
+   * @param {Object} tle - {line1, line2} TLE data
+   * @param {Object} groundStation - {lat, lon, alt} ground station location
+   * @param {number} startTimestamp - Start time (Unix ms)
+   * @param {number} endTimestamp - End time (Unix ms)
+   * @param {number} minElevation - Minimum elevation in degrees (default: 5)
+   */
+  ipcMain.handle("calculate-satellite-passes", async (event, tle, groundStation, startTimestamp, endTimestamp, minElevation = 5) => {
+    try {
+      const passes = await execWithFallback(
+        'calculate-satellite-passes',
+        { tle, groundStation, startTimestamp, endTimestamp, minElevation },
+        () => calculateSatellitePasses(tle, groundStation, startTimestamp, endTimestamp, minElevation)
+      );
+      return { success: true, passes };
+    } catch (error) {
+      console.error("Failed to calculate satellite passes:", error);
+      return { success: false, error: error.message };
+    }
+  });
+
+  /**
+   * Generate pass path for visualization
+   * NOW USES WORKER THREAD for non-blocking calculation
+   *
+   * @param {Object} tle - {line1, line2} TLE data
+   * @param {Object} groundStation - {lat, lon, alt} ground station location
+   * @param {Object} pass - Pass object with aos, los times
+   * @param {number} numPoints - Number of points (default: 60)
+   */
+  ipcMain.handle("generate-pass-path", async (event, tle, groundStation, pass, numPoints = 60) => {
+    try {
+      const passPath = await execWithFallback(
+        'generate-pass-path',
+        { tle, groundStation, pass, numPoints },
+        () => generatePassPath(tle, groundStation, pass, numPoints)
+      );
+      return { success: true, path: passPath };
+    } catch (error) {
+      console.error("Failed to generate pass path:", error);
+      return { success: false, error: error.message };
+    }
+  });
+
+  /**
    * Clear satellite cache (when TLE is updated)
+   * Clears both local cache and worker cache
    *
    * @param {string} id - Optional satellite ID
    */
   ipcMain.handle("clear-satellite-cache", async (event, id = null) => {
     try {
+      // Clear local cache
       clearCache(id);
+      
+      // Clear worker cache
+      if (workerPoolReady && workerPool) {
+        await workerPool.exec('clear-cache', { id });
+      }
+      
       return { success: true };
     } catch (error) {
       console.error("Failed to clear cache:", error);
       return { success: false, error: error.message };
     }
+  });
+
+  /**
+   * Get worker pool status
+   */
+  ipcMain.handle("get-worker-status", async () => {
+    if (workerPoolReady && workerPool) {
+      return { success: true, ...workerPool.getStats() };
+    }
+    return { success: true, poolSize: 0, readyWorkers: 0, usingFallback: true };
   });
 
   // ============================================

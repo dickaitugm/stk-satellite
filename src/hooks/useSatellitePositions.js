@@ -7,6 +7,11 @@
  * - Smooth interpolation for 60 FPS rendering
  * - Coverage circle caching
  * - Orbit path caching
+ * 
+ * PERFORMANCE OPTIMIZED:
+ * - Uses refs for high-frequency position data (no re-renders)
+ * - State updates throttled to 10 Hz for UI components
+ * - Direct ref access available via getPositionRef() for animation loops
  */
 
 import { useState, useEffect, useRef, useCallback } from "react";
@@ -25,22 +30,33 @@ import {
 } from "../services/satellitePositionService";
 import { useSatelliteStore, useTimeStore } from "../stores";
 
+// Throttle interval for React state updates
+const STATE_UPDATE_INTERVAL = 100; // 10 Hz
+
 /**
  * Hook that provides optimized satellite positions
  *
  * @param {Object} options
  * @param {boolean} options.autoStart - Auto-start position service (default: true)
  * @param {boolean} options.enableInterpolation - Use interpolation (default: true)
+ * @param {boolean} options.throttleStateUpdates - Throttle React state updates (default: true)
  * @returns {Object} { positions, getPosition, getCoverage, getOrbit, isReady, refresh }
  */
 export const useSatellitePositions = (options = {}) => {
-    const { autoStart = true, enableInterpolation = true } = options;
+    const { 
+        autoStart = true, 
+        enableInterpolation = true,
+        throttleStateUpdates = true,
+    } = options;
 
+    // React state for UI components (updated at 10 Hz)
     const [positions, setPositions] = useState({});
     const [isReady, setIsReady] = useState(false);
     const [usingIPC, setUsingIPC] = useState(false);
 
-    // Store refs for callbacks
+    // Refs for high-frequency access (updated every frame, no re-renders)
+    const positionsRef = useRef({});
+    const lastStateUpdateRef = useRef(0);
     const satellitesRef = useRef([]);
 
     // Check if IPC is available
@@ -65,44 +81,63 @@ export const useSatellitePositions = (options = {}) => {
         if (!autoStart || !usingIPC) return;
 
         const getSatellites = () => satellitesRef.current;
-        const getSimulationTime = () => useTimeStore.getState().currentTime.getTime();
+        const getSimulationTime = () => useTimeStore.getState().getInternalTime();
 
         startPositionService(getSatellites, getSimulationTime);
         setIsReady(true);
 
         // Subscribe to position updates
         const unsubscribe = subscribe((newPositions) => {
-            setPositions(newPositions);
+            // Always update ref (no re-render)
+            positionsRef.current = newPositions;
+
+            // Throttle React state updates
+            if (throttleStateUpdates) {
+                const now = Date.now();
+                if (now - lastStateUpdateRef.current >= STATE_UPDATE_INTERVAL) {
+                    lastStateUpdateRef.current = now;
+                    setPositions(newPositions);
+                }
+            } else {
+                setPositions(newPositions);
+            }
         });
 
         return () => {
             unsubscribe();
             stopPositionService();
         };
-    }, [autoStart, usingIPC]);
+    }, [autoStart, usingIPC, throttleStateUpdates]);
 
     /**
-     * Get position for a specific satellite
+     * Get position for a specific satellite (uses ref for latest data)
      */
     const getPosition = useCallback(
         (satelliteId) => {
             if (enableInterpolation && usingIPC) {
                 return getInterpolatedPosition(satelliteId);
             }
-            return positions[satelliteId] || null;
+            return positionsRef.current[satelliteId] || null;
         },
-        [positions, enableInterpolation, usingIPC]
+        [enableInterpolation, usingIPC]
     );
 
     /**
-     * Get all positions
+     * Get position ref directly (for animation loops - no re-render)
+     */
+    const getPositionRef = useCallback(() => {
+        return positionsRef.current;
+    }, []);
+
+    /**
+     * Get all positions (uses ref for latest data)
      */
     const getAllPositions = useCallback(() => {
         if (enableInterpolation && usingIPC) {
             return getAllInterpolatedPositions();
         }
-        return positions;
-    }, [positions, enableInterpolation, usingIPC]);
+        return positionsRef.current;
+    }, [enableInterpolation, usingIPC]);
 
     /**
      * Get coverage circle for a satellite
@@ -153,7 +188,9 @@ export const useSatellitePositions = (options = {}) => {
 
     return {
         positions,
+        positionsRef, // Direct ref access for animation loops
         getPosition,
+        getPositionRef,
         getAllPositions,
         getCoverage,
         getOrbit,

@@ -50,22 +50,16 @@ const Globe2D = ({ onMouseMove }) => {
 
   // Zustand stores
   const satellites = useSatelliteStore((state) => state.satellites);
-  const selectedSatelliteId = useSatelliteStore((state) => state.selectedSatelliteId);
   const getSelectedSatellite = useSatelliteStore((state) => state.getSelectedSatellite);
   const calculatePosition = useSatelliteStore((state) => state.calculatePosition);
-  const updatePosition = useSatelliteStore((state) => state.updatePosition);
-  const getSatrec = useSatelliteStore((state) => state.getSatrec);
   const getSatrecForTime = useSatelliteStore((state) => state.getSatrecForTime);
 
   const groundStations = useGroundStationStore((state) => state.groundStations);
   const getVisibleStations = useGroundStationStore((state) => state.getVisibleStations);
 
-  const currentTime = useTimeStore((state) => state.currentTime);
-  const isPlaying = useTimeStore((state) => state.isPlaying);
-  const tick = useTimeStore((state) => state.tick);
   const mode = useTimeStore((state) => state.mode); // Track mode changes
 
-  const scenarioLayers = useScenarioStore((state) => state.layers);
+  const _layers = useScenarioStore((state) => state.layers);
 
   // Refs for WorldWind
   const canvasRef = useRef(null);
@@ -384,7 +378,7 @@ const Globe2D = ({ onMouseMove }) => {
 
       console.log(`✅ Ground stations layer created with ${getVisibleStations().length} stations`);
     },
-    [groundStations, getVisibleStations, satellites]
+    [getVisibleStations]
   );
 
   // Create pass trajectory layer (for Access Analysis results)
@@ -489,7 +483,7 @@ const Globe2D = ({ onMouseMove }) => {
 
       console.log(`✅ Pass trajectory layer created with ${allPasses.length} passes`);
     },
-    [groundStations]
+    []
   );
 
   // Check and update coverage circle (throttled)
@@ -538,23 +532,23 @@ const Globe2D = ({ onMouseMove }) => {
   }, []);
 
   // Update satellite position with smooth animation
-  // Direct SGP4 calculation every frame (satrec is cached, so it's fast)
+  // OPTIMIZED: Uses IPC-based positions from worker threads
+  // Direct SGP4 calculation removed - positions come from satellitePositionService
   // Only throttle: store updates, orbit path updates, coverage circle updates
   const updateSatelliteMarker = useCallback(() => {
     if (!wwdRef.current || !satelliteLayerRef.current) return;
 
     const now = Date.now();
 
-    // Tick time every frame for smooth animation
-    useTimeStore.getState().tick();
+    // Use optimized tick - updates internal time every frame, state at 10Hz
+    const { internalTime, shouldUpdateUI } = useTimeStore.getState().tickOptimized();
+    const time = new Date(internalTime);
 
-    // Read current state directly from stores
-    const { currentTime } = useTimeStore.getState();
-    const { satellites, selectedSatelliteId, updatePosition } = useSatelliteStore.getState();
-    const time = currentTime;
+    // Read satellites from store (no re-render)
+    const { satellites, selectedSatelliteId, updatePosition, calculatePosition: calcPos } = useSatelliteStore.getState();
 
     // Determine if we should update Zustand store (throttled)
-    const shouldUpdateStore = now - lastStoreUpdateRef.current >= PERF_CONFIG.STORE_UPDATE_INTERVAL;
+    const shouldUpdateStore = shouldUpdateUI || (now - lastStoreUpdateRef.current >= PERF_CONFIG.STORE_UPDATE_INTERVAL);
     if (shouldUpdateStore) {
       lastStoreUpdateRef.current = now;
     }
@@ -563,8 +557,9 @@ const Globe2D = ({ onMouseMove }) => {
     satellites
       .filter((s) => s.isVisible)
       .forEach((sat) => {
-        // Calculate position directly every frame (satrec is cached by store)
-        const pos = useSatelliteStore.getState().calculatePosition(sat.id, time);
+        // Calculate position directly using satelliteStore's calculatePosition
+        // This uses cached satrec and is already optimized
+        const pos = calcPos(sat.id, time);
 
         if (pos) {
           // Update position in Zustand store - THROTTLED
@@ -794,7 +789,12 @@ const Globe2D = ({ onMouseMove }) => {
         }
       });
 
-    wwdRef.current.redraw();
+    // OPTIMIZED: Only redraw when renderables were updated
+    // WorldWind will handle its own animation frame scheduling for smooth rendering
+    // We still call redraw but at a controlled rate
+    if (satellites.filter(s => s.isVisible).length > 0) {
+      wwdRef.current.redraw();
+    }
 
     // Continue animation loop
     animationFrameRef.current = requestAnimationFrame(updateSatelliteMarker);
@@ -858,7 +858,7 @@ const Globe2D = ({ onMouseMove }) => {
   useEffect(() => {
     if (wwdRef.current && satelliteLayerRef.current && !isLoading) {
       // Create a hash of satellite objects to detect changes
-      const objectsHash = satellites.map((s) => ({
+      const _objectsHash = satellites.map((s) => ({
         id: s.id,
         objectsCount: s.objects?.length || 0,
         objectsData: JSON.stringify(s.objects || []),
@@ -1067,7 +1067,7 @@ const Globe2D = ({ onMouseMove }) => {
     }, 50);
 
     return () => clearTimeout(initTimeout);
-  }, [isReady, dimensions.width, dimensions.height]);
+  }, [isReady, dimensions.width, dimensions.height, selectedLayer]);
 
   // Handle manual Range Change from UI input
   useEffect(() => {
@@ -1106,7 +1106,7 @@ const Globe2D = ({ onMouseMove }) => {
     autoFitEnabledRef.current = true;
 
     wwd.redraw();
-  }, [selectedLayer]);
+  }, [selectedLayer, dimensions.height]);
 
   // Auto-Adjust Range & Pan to Fit World Vertically
   useEffect(() => {

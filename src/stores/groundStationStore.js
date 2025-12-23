@@ -1,10 +1,13 @@
 /**
  * Ground Station Store
  * Manages ground stations / facilities
+ * 
+ * PERFORMANCE OPTIMIZED:
+ * - Uses subscribeWithSelector for granular subscriptions
  */
 
 import { create } from "zustand";
-import { persist } from "zustand/middleware";
+import { persist, subscribeWithSelector } from "zustand/middleware";
 import { useLicenseStore } from "./licenseStore";
 
 // Default ground stations
@@ -48,23 +51,24 @@ const DEFAULT_GROUND_STATIONS = [
 ];
 
 export const useGroundStationStore = create(
-  persist(
-    (set, get) => ({
-      // State
-      groundStations: DEFAULT_GROUND_STATIONS,
-      selectedStationId: null,
+  subscribeWithSelector(
+    persist(
+      (set, get) => ({
+        // State
+        groundStations: DEFAULT_GROUND_STATIONS,
+        selectedStationId: null,
 
-      // Access Analysis State (persisted per station)
-      accessAnalysisCache: {}, // { [gsId]: { config, results, expandedPasses, passDetails } }
+        // Access Analysis State (persisted per station)
+        accessAnalysisCache: {}, // { [gsId]: { config, results, expandedPasses, passDetails } }
 
-      // Computed
-      getSelectedStation: () => {
-        const state = get();
-        return state.groundStations.find((gs) => gs.id === state.selectedStationId);
-      },
+        // Computed
+        getSelectedStation: () => {
+          const state = get();
+          return state.groundStations.find((gs) => gs.id === state.selectedStationId);
+        },
 
-      getVisibleStations: () => {
-        return get().groundStations.filter((gs) => gs.isVisible);
+        getVisibleStations: () => {
+          return get().groundStations.filter((gs) => gs.isVisible);
       },
 
       getStationById: (id) => {
@@ -316,5 +320,5 @@ export const useGroundStationStore = create(
         return state;
       },
     }
-  )
+  ))
 );
