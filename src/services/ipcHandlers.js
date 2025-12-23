@@ -16,15 +16,7 @@ import {
   generatePassPath,
 } from "./satelliteCalculator.js";
 import { colorToKml, generateGroundTrackKml, generatePassKml, generateMultiPassKml } from "./kmlGenerator.js";
-import {
-  activateLicense,
-  verifyLicense,
-  deactivateLicense,
-  getLicenseInfo,
-  getLicenseStatus,
-  getHardwareInfo,
-  validateLicenseKeyFormat,
-} from "./licenseService.js";
+import { activateLicense, verifyLicense, deactivateLicense, getLicenseInfo, getLicenseStatus, getHardwareInfo, validateLicenseKeyFormat } from "./licenseService.js";
 
 // Worker pool initialization flag
 let workerPoolReady = false;
@@ -35,7 +27,7 @@ let workerPool = null;
  */
 async function initWorkerPool() {
   if (workerPoolReady) return;
-  
+
   try {
     workerPool = getWorkerPool();
     await workerPool.waitForReady(10000);
@@ -59,7 +51,7 @@ async function execWithFallback(type, payload, fallbackFn) {
       console.warn(`Worker task ${type} failed, using fallback:`, error.message);
     }
   }
-  
+
   // Fallback to synchronous calculation
   return fallbackFn();
 }
@@ -160,11 +152,7 @@ export async function registerIpcHandlers() {
    */
   ipcMain.handle("calculate-satellite-positions", async (event, satellites, timestamp) => {
     try {
-      const result = await execWithFallback(
-        'calculate-positions',
-        { satellites, timestamp },
-        () => calculateSatellitePositions(satellites, timestamp)
-      );
+      const result = await execWithFallback("calculate-positions", { satellites, timestamp }, () => calculateSatellitePositions(satellites, timestamp));
       return { success: true, ...result };
     } catch (error) {
       console.error("Failed to calculate positions:", error);
@@ -183,10 +171,8 @@ export async function registerIpcHandlers() {
    */
   ipcMain.handle("calculate-positions-interpolated", async (event, satellites, timestamp, deltaMs = 100) => {
     try {
-      const result = await execWithFallback(
-        'calculate-positions-interpolated',
-        { satellites, timestamp, deltaMs },
-        () => calculatePositionsForInterpolation(satellites, timestamp, deltaMs)
+      const result = await execWithFallback("calculate-positions-interpolated", { satellites, timestamp, deltaMs }, () =>
+        calculatePositionsForInterpolation(satellites, timestamp, deltaMs)
       );
       return { success: true, ...result };
     } catch (error) {
@@ -206,11 +192,7 @@ export async function registerIpcHandlers() {
    */
   ipcMain.handle("generate-orbit-path", async (event, tle, startTimestamp, numPoints = 100) => {
     try {
-      const orbitPath = await execWithFallback(
-        'generate-orbit-path',
-        { tle, startTimestamp, numPoints },
-        () => generateOrbitPath(tle, startTimestamp, null, numPoints)
-      );
+      const orbitPath = await execWithFallback("generate-orbit-path", { tle, startTimestamp, numPoints }, () => generateOrbitPath(tle, startTimestamp, null, numPoints));
       return { success: true, path: orbitPath };
     } catch (error) {
       console.error("Failed to generate orbit path:", error);
@@ -228,10 +210,8 @@ export async function registerIpcHandlers() {
    */
   ipcMain.handle("generate-orbit-paths-batch", async (event, satellites, startTimestamp, numPoints = 100) => {
     try {
-      const paths = await execWithFallback(
-        'generate-orbit-paths-batch',
-        { satellites, startTimestamp, numPoints },
-        () => generateOrbitPathsBatch(satellites, startTimestamp, numPoints)
+      const paths = await execWithFallback("generate-orbit-paths-batch", { satellites, startTimestamp, numPoints }, () =>
+        generateOrbitPathsBatch(satellites, startTimestamp, numPoints)
       );
       return { success: true, paths };
     } catch (error) {
@@ -251,14 +231,10 @@ export async function registerIpcHandlers() {
    */
   ipcMain.handle("generate-coverage-circle", async (event, center, radiusKm, nPoints = 72) => {
     try {
-      const coords = await execWithFallback(
-        'generate-coverage-circle',
-        { center, radiusKm, nPoints },
-        () => {
-          const unitCircle = getUnitCircle(nPoints);
-          return generateGeodesicCircleFast(center, radiusKm, unitCircle);
-        }
-      );
+      const coords = await execWithFallback("generate-coverage-circle", { center, radiusKm, nPoints }, () => {
+        const unitCircle = getUnitCircle(nPoints);
+        return generateGeodesicCircleFast(center, radiusKm, unitCircle);
+      });
       return { success: true, coords };
     } catch (error) {
       console.error("Failed to generate coverage circle:", error);
@@ -275,11 +251,7 @@ export async function registerIpcHandlers() {
    */
   ipcMain.handle("calculate-coverage-radius", async (event, altitudeKm, minElevationDeg = 0) => {
     try {
-      const radius = await execWithFallback(
-        'calculate-coverage-radius',
-        { altitudeKm, minElevationDeg },
-        () => calculateCoverageRadius(altitudeKm, minElevationDeg)
-      );
+      const radius = await execWithFallback("calculate-coverage-radius", { altitudeKm, minElevationDeg }, () => calculateCoverageRadius(altitudeKm, minElevationDeg));
       return { success: true, radius };
     } catch (error) {
       console.error("Failed to calculate coverage radius:", error);
@@ -299,10 +271,8 @@ export async function registerIpcHandlers() {
    */
   ipcMain.handle("calculate-satellite-passes", async (event, tle, groundStation, startTimestamp, endTimestamp, minElevation = 5) => {
     try {
-      const passes = await execWithFallback(
-        'calculate-satellite-passes',
-        { tle, groundStation, startTimestamp, endTimestamp, minElevation },
-        () => calculateSatellitePasses(tle, groundStation, startTimestamp, endTimestamp, minElevation)
+      const passes = await execWithFallback("calculate-satellite-passes", { tle, groundStation, startTimestamp, endTimestamp, minElevation }, () =>
+        calculateSatellitePasses(tle, groundStation, startTimestamp, endTimestamp, minElevation)
       );
       return { success: true, passes };
     } catch (error) {
@@ -322,11 +292,7 @@ export async function registerIpcHandlers() {
    */
   ipcMain.handle("generate-pass-path", async (event, tle, groundStation, pass, numPoints = 60) => {
     try {
-      const passPath = await execWithFallback(
-        'generate-pass-path',
-        { tle, groundStation, pass, numPoints },
-        () => generatePassPath(tle, groundStation, pass, numPoints)
-      );
+      const passPath = await execWithFallback("generate-pass-path", { tle, groundStation, pass, numPoints }, () => generatePassPath(tle, groundStation, pass, numPoints));
       return { success: true, path: passPath };
     } catch (error) {
       console.error("Failed to generate pass path:", error);
@@ -344,12 +310,12 @@ export async function registerIpcHandlers() {
     try {
       // Clear local cache
       clearCache(id);
-      
+
       // Clear worker cache
       if (workerPoolReady && workerPool) {
-        await workerPool.exec('clear-cache', { id });
+        await workerPool.exec("clear-cache", { id });
       }
-      
+
       return { success: true };
     } catch (error) {
       console.error("Failed to clear cache:", error);

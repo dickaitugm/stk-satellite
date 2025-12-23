@@ -1,7 +1,7 @@
 /**
  * Worker Pool Manager
  * Manages a pool of satellite worker threads for parallel computation
- * 
+ *
  * Features:
  * - Round-robin task distribution
  * - Promise-based async interface
@@ -9,10 +9,10 @@
  * - Graceful shutdown
  */
 
-import { Worker } from 'worker_threads';
-import { fileURLToPath } from 'url';
-import path from 'path';
-import os from 'os';
+import { Worker } from "worker_threads";
+import { fileURLToPath } from "url";
+import path from "path";
+import os from "os";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -29,16 +29,16 @@ class WorkerPool {
     this.currentWorkerIndex = 0;
     this.isTerminated = false;
     this.readyWorkers = 0;
-    
+
     this._initWorkers();
   }
 
   _initWorkers() {
     for (let i = 0; i < this.poolSize; i++) {
       const worker = new Worker(this.workerPath);
-      
-      worker.on('message', (message) => {
-        if (message.type === 'ready') {
+
+      worker.on("message", (message) => {
+        if (message.type === "ready") {
           this.readyWorkers++;
           console.log(`✅ Worker ${i + 1}/${this.poolSize} ready`);
           return;
@@ -46,7 +46,7 @@ class WorkerPool {
 
         const { id, success, result, error } = message;
         const task = this.pendingTasks.get(id);
-        
+
         if (task) {
           this.pendingTasks.delete(id);
           if (success) {
@@ -60,7 +60,7 @@ class WorkerPool {
         this._processQueue(worker);
       });
 
-      worker.on('error', (error) => {
+      worker.on("error", (error) => {
         console.error(`Worker ${i} error:`, error);
         // Reject all pending tasks for this worker
         for (const [id, task] of this.pendingTasks) {
@@ -69,7 +69,7 @@ class WorkerPool {
         }
       });
 
-      worker.on('exit', (code) => {
+      worker.on("exit", (code) => {
         if (code !== 0 && !this.isTerminated) {
           console.error(`Worker ${i} exited with code ${code}`);
         }
@@ -88,7 +88,7 @@ class WorkerPool {
     do {
       const workerInfo = this.workers[this.currentWorkerIndex];
       this.currentWorkerIndex = (this.currentWorkerIndex + 1) % this.poolSize;
-      
+
       if (!workerInfo.busy) {
         return workerInfo;
       }
@@ -100,9 +100,7 @@ class WorkerPool {
   _processQueue(workerRef = null) {
     if (this.taskQueue.length === 0) return;
 
-    let workerInfo = workerRef 
-      ? this.workers.find(w => w.worker === workerRef)
-      : this._getNextWorker();
+    let workerInfo = workerRef ? this.workers.find((w) => w.worker === workerRef) : this._getNextWorker();
 
     if (!workerInfo || workerInfo.busy) {
       workerInfo = this._getNextWorker();
@@ -112,7 +110,7 @@ class WorkerPool {
       const task = this.taskQueue.shift();
       workerInfo.busy = true;
       workerInfo.worker.postMessage(task.message);
-      
+
       // Mark worker as not busy after response
       const originalResolve = task.resolve;
       task.resolve = (result) => {
@@ -135,21 +133,21 @@ class WorkerPool {
    */
   exec(type, payload) {
     if (this.isTerminated) {
-      return Promise.reject(new Error('Worker pool is terminated'));
+      return Promise.reject(new Error("Worker pool is terminated"));
     }
 
     return new Promise((resolve, reject) => {
       const id = this.nextTaskId++;
       const message = { type, id, payload };
-      
+
       this.pendingTasks.set(id, { resolve, reject });
 
       const workerInfo = this._getNextWorker();
-      
+
       if (workerInfo && !workerInfo.busy) {
         workerInfo.busy = true;
         workerInfo.worker.postMessage(message);
-        
+
         // Update resolve/reject to mark worker as not busy
         const originalResolve = resolve;
         const originalReject = reject;
@@ -191,9 +189,9 @@ class WorkerPool {
     const start = Date.now();
     while (this.readyWorkers < this.poolSize) {
       if (Date.now() - start > timeout) {
-        throw new Error('Worker pool initialization timeout');
+        throw new Error("Worker pool initialization timeout");
       }
-      await new Promise(resolve => setTimeout(resolve, 50));
+      await new Promise((resolve) => setTimeout(resolve, 50));
     }
   }
 
@@ -205,7 +203,7 @@ class WorkerPool {
     return {
       poolSize: this.poolSize,
       readyWorkers: this.readyWorkers,
-      busyWorkers: this.workers.filter(w => w.busy).length,
+      busyWorkers: this.workers.filter((w) => w.busy).length,
       queuedTasks: this.taskQueue.length,
       pendingTasks: this.pendingTasks.size,
     };
@@ -216,25 +214,25 @@ class WorkerPool {
    */
   async terminate() {
     this.isTerminated = true;
-    
+
     // Reject all queued tasks
     for (const task of this.taskQueue) {
-      task.reject(new Error('Worker pool terminated'));
+      task.reject(new Error("Worker pool terminated"));
     }
     this.taskQueue = [];
 
     // Reject all pending tasks
     for (const task of this.pendingTasks.values()) {
-      task.reject(new Error('Worker pool terminated'));
+      task.reject(new Error("Worker pool terminated"));
     }
     this.pendingTasks.clear();
 
     // Terminate workers
     const terminatePromises = this.workers.map(({ worker }) => worker.terminate());
     await Promise.all(terminatePromises);
-    
+
     this.workers = [];
-    console.log('🛑 Worker pool terminated');
+    console.log("🛑 Worker pool terminated");
   }
 }
 
@@ -247,7 +245,7 @@ let workerPoolInstance = null;
  */
 export function getWorkerPool() {
   if (!workerPoolInstance) {
-    const workerPath = path.join(__dirname, 'satelliteWorker.js');
+    const workerPath = path.join(__dirname, "satelliteWorker.js");
     workerPoolInstance = new WorkerPool(workerPath);
     console.log(`🚀 Worker pool created with ${workerPoolInstance.poolSize} workers`);
   }

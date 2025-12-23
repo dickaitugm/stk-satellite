@@ -382,109 +382,106 @@ const Globe2D = ({ onMouseMove }) => {
   );
 
   // Create pass trajectory layer (for Access Analysis results)
-  const createPassTrajectoryLayer = useCallback(
-    (wwd) => {
-      if (passTrajectoryLayerRef.current) {
-        wwd.removeLayer(passTrajectoryLayerRef.current);
+  const createPassTrajectoryLayer = useCallback((wwd) => {
+    if (passTrajectoryLayerRef.current) {
+      wwd.removeLayer(passTrajectoryLayerRef.current);
+    }
+
+    const passLayer = new WorldWind.RenderableLayer("Pass Trajectories");
+
+    // Get all visible passes from all ground stations
+    const allPasses = useGroundStationStore.getState().getVisiblePasses();
+
+    allPasses.forEach((pass) => {
+      if (!pass.path || pass.path.length < 2) return;
+
+      // Create path positions from pass trajectory
+      const pathPositions = pass.path.map(
+        (point) => new WorldWind.Position(point.lat, point.lon, point.alt * 1000) // Convert km to m
+      );
+
+      // Use pass color or satellite color or default purple
+      const color = pass.color || { r: 0.7, g: 0.3, b: 0.9, a: 1 };
+
+      const pathAttributes = new WorldWind.ShapeAttributes(null);
+      pathAttributes.outlineColor = new WorldWind.Color(color.r ?? 0.7, color.g ?? 0.3, color.b ?? 0.9, color.a ?? 0.9);
+      pathAttributes.outlineWidth = 3;
+      pathAttributes.drawInterior = false;
+
+      const passPath = new WorldWind.Path(pathPositions, pathAttributes);
+      passPath.altitudeMode = WorldWind.ABSOLUTE;
+      passPath.extrude = false;
+      passPath.useSurfaceShapeFor2D = true;
+      passPath.followTerrain = false;
+
+      passLayer.addRenderable(passPath);
+
+      // Add AOS marker
+      if (pass.path.length > 0) {
+        const aosPoint = pass.path[0];
+        const aosAttrs = new WorldWind.PlacemarkAttributes(null);
+        aosAttrs.imageSource = WorldWind.configuration.baseUrl + "images/pushpins/castshadow-green.png";
+        aosAttrs.imageScale = 0.5;
+        aosAttrs.imageOffset = new WorldWind.Offset(WorldWind.OFFSET_FRACTION, 0.3, WorldWind.OFFSET_FRACTION, 0.0);
+        aosAttrs.labelAttributes.color = new WorldWind.Color(0.2, 1, 0.2, 1);
+        aosAttrs.labelAttributes.offset = new WorldWind.Offset(WorldWind.OFFSET_FRACTION, 0.5, WorldWind.OFFSET_FRACTION, 1.5);
+
+        const aosMarker = new WorldWind.Placemark(new WorldWind.Position(aosPoint.lat, aosPoint.lon, 0), false, aosAttrs);
+        aosMarker.label = `AOS`;
+        aosMarker.altitudeMode = WorldWind.ABSOLUTE;
+        passLayer.addRenderable(aosMarker);
       }
 
-      const passLayer = new WorldWind.RenderableLayer("Pass Trajectories");
+      // Add LOS marker
+      if (pass.path.length > 1) {
+        const losPoint = pass.path[pass.path.length - 1];
+        const losAttrs = new WorldWind.PlacemarkAttributes(null);
+        losAttrs.imageSource = WorldWind.configuration.baseUrl + "images/pushpins/castshadow-red.png";
+        losAttrs.imageScale = 0.5;
+        losAttrs.imageOffset = new WorldWind.Offset(WorldWind.OFFSET_FRACTION, 0.3, WorldWind.OFFSET_FRACTION, 0.0);
+        losAttrs.labelAttributes.color = new WorldWind.Color(1, 0.3, 0.3, 1);
+        losAttrs.labelAttributes.offset = new WorldWind.Offset(WorldWind.OFFSET_FRACTION, 0.5, WorldWind.OFFSET_FRACTION, 1.5);
 
-      // Get all visible passes from all ground stations
-      const allPasses = useGroundStationStore.getState().getVisiblePasses();
+        const losMarker = new WorldWind.Placemark(new WorldWind.Position(losPoint.lat, losPoint.lon, 0), false, losAttrs);
+        losMarker.label = `LOS`;
+        losMarker.altitudeMode = WorldWind.ABSOLUTE;
+        passLayer.addRenderable(losMarker);
+      }
 
-      allPasses.forEach((pass) => {
-        if (!pass.path || pass.path.length < 2) return;
+      // Add Max Elevation marker (middle of path approximately)
+      if (pass.maxElevation?.elevation && pass.path.length > 2) {
+        // Find the point closest to max elevation time
+        const maxElTime = pass.maxElevation.time;
+        let maxElPoint = pass.path[Math.floor(pass.path.length / 2)];
 
-        // Create path positions from pass trajectory
-        const pathPositions = pass.path.map(
-          (point) => new WorldWind.Position(point.lat, point.lon, point.alt * 1000) // Convert km to m
-        );
-
-        // Use pass color or satellite color or default purple
-        const color = pass.color || { r: 0.7, g: 0.3, b: 0.9, a: 1 };
-
-        const pathAttributes = new WorldWind.ShapeAttributes(null);
-        pathAttributes.outlineColor = new WorldWind.Color(color.r ?? 0.7, color.g ?? 0.3, color.b ?? 0.9, color.a ?? 0.9);
-        pathAttributes.outlineWidth = 3;
-        pathAttributes.drawInterior = false;
-
-        const passPath = new WorldWind.Path(pathPositions, pathAttributes);
-        passPath.altitudeMode = WorldWind.ABSOLUTE;
-        passPath.extrude = false;
-        passPath.useSurfaceShapeFor2D = true;
-        passPath.followTerrain = false;
-
-        passLayer.addRenderable(passPath);
-
-        // Add AOS marker
-        if (pass.path.length > 0) {
-          const aosPoint = pass.path[0];
-          const aosAttrs = new WorldWind.PlacemarkAttributes(null);
-          aosAttrs.imageSource = WorldWind.configuration.baseUrl + "images/pushpins/castshadow-green.png";
-          aosAttrs.imageScale = 0.5;
-          aosAttrs.imageOffset = new WorldWind.Offset(WorldWind.OFFSET_FRACTION, 0.3, WorldWind.OFFSET_FRACTION, 0.0);
-          aosAttrs.labelAttributes.color = new WorldWind.Color(0.2, 1, 0.2, 1);
-          aosAttrs.labelAttributes.offset = new WorldWind.Offset(WorldWind.OFFSET_FRACTION, 0.5, WorldWind.OFFSET_FRACTION, 1.5);
-
-          const aosMarker = new WorldWind.Placemark(new WorldWind.Position(aosPoint.lat, aosPoint.lon, 0), false, aosAttrs);
-          aosMarker.label = `AOS`;
-          aosMarker.altitudeMode = WorldWind.ABSOLUTE;
-          passLayer.addRenderable(aosMarker);
-        }
-
-        // Add LOS marker
-        if (pass.path.length > 1) {
-          const losPoint = pass.path[pass.path.length - 1];
-          const losAttrs = new WorldWind.PlacemarkAttributes(null);
-          losAttrs.imageSource = WorldWind.configuration.baseUrl + "images/pushpins/castshadow-red.png";
-          losAttrs.imageScale = 0.5;
-          losAttrs.imageOffset = new WorldWind.Offset(WorldWind.OFFSET_FRACTION, 0.3, WorldWind.OFFSET_FRACTION, 0.0);
-          losAttrs.labelAttributes.color = new WorldWind.Color(1, 0.3, 0.3, 1);
-          losAttrs.labelAttributes.offset = new WorldWind.Offset(WorldWind.OFFSET_FRACTION, 0.5, WorldWind.OFFSET_FRACTION, 1.5);
-
-          const losMarker = new WorldWind.Placemark(new WorldWind.Position(losPoint.lat, losPoint.lon, 0), false, losAttrs);
-          losMarker.label = `LOS`;
-          losMarker.altitudeMode = WorldWind.ABSOLUTE;
-          passLayer.addRenderable(losMarker);
-        }
-
-        // Add Max Elevation marker (middle of path approximately)
-        if (pass.maxElevation?.elevation && pass.path.length > 2) {
-          // Find the point closest to max elevation time
-          const maxElTime = pass.maxElevation.time;
-          let maxElPoint = pass.path[Math.floor(pass.path.length / 2)];
-
-          // Try to find exact point by time
-          for (const point of pass.path) {
-            if (Math.abs(point.time - maxElTime) < 30000) {
-              // Within 30 seconds
-              maxElPoint = point;
-              break;
-            }
+        // Try to find exact point by time
+        for (const point of pass.path) {
+          if (Math.abs(point.time - maxElTime) < 30000) {
+            // Within 30 seconds
+            maxElPoint = point;
+            break;
           }
-
-          const maxAttrs = new WorldWind.PlacemarkAttributes(null);
-          maxAttrs.imageSource = WorldWind.configuration.baseUrl + "images/pushpins/castshadow-blue.png";
-          maxAttrs.imageScale = 0.5;
-          maxAttrs.imageOffset = new WorldWind.Offset(WorldWind.OFFSET_FRACTION, 0.3, WorldWind.OFFSET_FRACTION, 0.0);
-          maxAttrs.labelAttributes.color = new WorldWind.Color(0.3, 0.6, 1, 1);
-          maxAttrs.labelAttributes.offset = new WorldWind.Offset(WorldWind.OFFSET_FRACTION, 0.5, WorldWind.OFFSET_FRACTION, 1.5);
-
-          const maxMarker = new WorldWind.Placemark(new WorldWind.Position(maxElPoint.lat, maxElPoint.lon, 0), false, maxAttrs);
-          maxMarker.label = `Max ${pass.maxElevation.elevation.toFixed(0)}°`;
-          maxMarker.altitudeMode = WorldWind.ABSOLUTE;
-          passLayer.addRenderable(maxMarker);
         }
-      });
 
-      passTrajectoryLayerRef.current = passLayer;
-      wwd.addLayer(passLayer);
+        const maxAttrs = new WorldWind.PlacemarkAttributes(null);
+        maxAttrs.imageSource = WorldWind.configuration.baseUrl + "images/pushpins/castshadow-blue.png";
+        maxAttrs.imageScale = 0.5;
+        maxAttrs.imageOffset = new WorldWind.Offset(WorldWind.OFFSET_FRACTION, 0.3, WorldWind.OFFSET_FRACTION, 0.0);
+        maxAttrs.labelAttributes.color = new WorldWind.Color(0.3, 0.6, 1, 1);
+        maxAttrs.labelAttributes.offset = new WorldWind.Offset(WorldWind.OFFSET_FRACTION, 0.5, WorldWind.OFFSET_FRACTION, 1.5);
 
-      console.log(`✅ Pass trajectory layer created with ${allPasses.length} passes`);
-    },
-    []
-  );
+        const maxMarker = new WorldWind.Placemark(new WorldWind.Position(maxElPoint.lat, maxElPoint.lon, 0), false, maxAttrs);
+        maxMarker.label = `Max ${pass.maxElevation.elevation.toFixed(0)}°`;
+        maxMarker.altitudeMode = WorldWind.ABSOLUTE;
+        passLayer.addRenderable(maxMarker);
+      }
+    });
+
+    passTrajectoryLayerRef.current = passLayer;
+    wwd.addLayer(passLayer);
+
+    console.log(`✅ Pass trajectory layer created with ${allPasses.length} passes`);
+  }, []);
 
   // Check and update coverage circle (throttled)
   // Now uses coverage object from satellite.objects if available
@@ -548,7 +545,7 @@ const Globe2D = ({ onMouseMove }) => {
     const { satellites, selectedSatelliteId, updatePosition, calculatePosition: calcPos } = useSatelliteStore.getState();
 
     // Determine if we should update Zustand store (throttled)
-    const shouldUpdateStore = shouldUpdateUI || (now - lastStoreUpdateRef.current >= PERF_CONFIG.STORE_UPDATE_INTERVAL);
+    const shouldUpdateStore = shouldUpdateUI || now - lastStoreUpdateRef.current >= PERF_CONFIG.STORE_UPDATE_INTERVAL;
     if (shouldUpdateStore) {
       lastStoreUpdateRef.current = now;
     }
@@ -583,10 +580,10 @@ const Globe2D = ({ onMouseMove }) => {
 
           // Get satellite objects (sensor/payload configurations)
           const satObjects = sat.objects || [];
-          
+
           // Find the default coverage object
-          const coverageObject = satObjects.find(obj => obj.isDefaultCoverage);
-          
+          const coverageObject = satObjects.find((obj) => obj.isDefaultCoverage);
+
           // Coverage circle - THROTTLED with caching
           // Pass coverage object to use its settings (auto/manual mode, elevation angle, etc.)
           const circleCoords = updateCoverageIfNeeded(sat.id, pos, coverageObject);
@@ -603,18 +600,8 @@ const Globe2D = ({ onMouseMove }) => {
           if (!satelliteRenderablesRef.current[sat.id]) {
             // Create main coverage polygon (satellite footprint)
             const polygonAttributes = new WorldWind.ShapeAttributes(null);
-            polygonAttributes.interiorColor = new WorldWind.Color(
-              coverageColor.r ?? 0, 
-              coverageColor.g ?? 1, 
-              coverageColor.b ?? 0, 
-              fillOpacity
-            );
-            polygonAttributes.outlineColor = new WorldWind.Color(
-              coverageColor.r ?? 0, 
-              coverageColor.g ?? 1, 
-              coverageColor.b ?? 0, 
-              outlineOpacity
-            );
+            polygonAttributes.interiorColor = new WorldWind.Color(coverageColor.r ?? 0, coverageColor.g ?? 1, coverageColor.b ?? 0, fillOpacity);
+            polygonAttributes.outlineColor = new WorldWind.Color(coverageColor.r ?? 0, coverageColor.g ?? 1, coverageColor.b ?? 0, outlineOpacity);
             polygonAttributes.outlineWidth = outlineWidth;
 
             const coveragePolygon = new WorldWind.SurfacePolygon(boundaryLocations, polygonAttributes);
@@ -643,14 +630,10 @@ const Globe2D = ({ onMouseMove }) => {
             satObjects.forEach((obj) => {
               // Skip default coverage object - it's handled by the main coverage polygon
               if (obj.isDefaultCoverage) return;
-              
+
               if (obj.isVisible !== false && obj.showSwath !== false && (obj.scanWidth > 0 || obj.swathWidth > 0)) {
                 // Use generateSwathCoords for shape-aware swath generation
-                const swathCoords = generateSwathCoords(
-                  { latitude: pos.lat, longitude: pos.lon },
-                  obj,
-                  satHeading
-                );
+                const swathCoords = generateSwathCoords({ latitude: pos.lat, longitude: pos.lon }, obj, satHeading);
                 const swathLocations = swathCoords.map((coord) => new WorldWind.Location(coord.latitude, coord.longitude));
 
                 const swathAttributes = new WorldWind.ShapeAttributes(null);
@@ -670,7 +653,7 @@ const Globe2D = ({ onMouseMove }) => {
                   labelAttributes.imageScale = 0;
                   labelAttributes.labelAttributes.color = new WorldWind.Color(objColor.r ?? 0, objColor.g ?? 1, objColor.b ?? 0, 1);
                   labelAttributes.labelAttributes.offset = new WorldWind.Offset(WorldWind.OFFSET_FRACTION, 0.5, WorldWind.OFFSET_FRACTION, 0.5);
-                  
+
                   const labelPlacemark = new WorldWind.Placemark(new WorldWind.Position(pos.lat, pos.lon, 0), false, labelAttributes);
                   labelPlacemark.label = obj.name;
                   labelPlacemark.altitudeMode = WorldWind.CLAMP_TO_GROUND;
@@ -698,20 +681,16 @@ const Globe2D = ({ onMouseMove }) => {
             // Update sensor object swaths and labels
             const existingSwaths = satelliteRenderablesRef.current[sat.id].objectSwaths || {};
             const existingLabels = satelliteRenderablesRef.current[sat.id].objectLabels || {};
-            
+
             satObjects.forEach((obj) => {
               // Skip default coverage object
               if (obj.isDefaultCoverage) return;
-              
+
               const objColor = obj.color || sat.color || { r: 0, g: 1, b: 0 };
-              
+
               if (obj.isVisible !== false && obj.showSwath !== false && (obj.scanWidth > 0 || obj.swathWidth > 0)) {
                 // Use generateSwathCoords for shape-aware swath generation
-                const swathCoords = generateSwathCoords(
-                  { latitude: pos.lat, longitude: pos.lon },
-                  obj,
-                  satHeading
-                );
+                const swathCoords = generateSwathCoords({ latitude: pos.lat, longitude: pos.lon }, obj, satHeading);
                 const swathLocations = swathCoords.map((coord) => new WorldWind.Location(coord.latitude, coord.longitude));
 
                 if (existingSwaths[obj.id]) {
@@ -743,7 +722,7 @@ const Globe2D = ({ onMouseMove }) => {
                     labelAttributes.imageScale = 0;
                     labelAttributes.labelAttributes.color = new WorldWind.Color(objColor.r ?? 0, objColor.g ?? 1, objColor.b ?? 0, 1);
                     labelAttributes.labelAttributes.offset = new WorldWind.Offset(WorldWind.OFFSET_FRACTION, 0.5, WorldWind.OFFSET_FRACTION, 0.5);
-                    
+
                     const labelPlacemark = new WorldWind.Placemark(new WorldWind.Position(pos.lat, pos.lon, 0), false, labelAttributes);
                     labelPlacemark.label = obj.name;
                     labelPlacemark.altitudeMode = WorldWind.CLAMP_TO_GROUND;
@@ -792,7 +771,7 @@ const Globe2D = ({ onMouseMove }) => {
     // OPTIMIZED: Only redraw when renderables were updated
     // WorldWind will handle its own animation frame scheduling for smooth rendering
     // We still call redraw but at a controlled rate
-    if (satellites.filter(s => s.isVisible).length > 0) {
+    if (satellites.filter((s) => s.isVisible).length > 0) {
       wwdRef.current.redraw();
     }
 

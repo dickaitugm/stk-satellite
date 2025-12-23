@@ -1,12 +1,12 @@
 /**
  * Coverage Worker
  * Web Worker for heavy geodesic calculations in renderer process
- * 
+ *
  * Handles:
  * - Coverage circle generation (geodesic circles)
  * - Swath polygon generation
  * - Coverage radius calculations
- * 
+ *
  * This offloads trigonometric calculations from main thread
  * to keep UI responsive and WorldWind rendering smooth.
  */
@@ -53,23 +53,23 @@ function calculateCoverageRadius(altitudeKm, minElevationDeg = 0) {
   const Re = EARTH_RADIUS_KM;
   const h = altitudeKm;
   const elevRad = (minElevationDeg * Math.PI) / 180;
-  
+
   if (minElevationDeg <= 0) {
     const cosTheta = Re / (Re + h);
     const theta = Math.acos(cosTheta);
     return Re * theta;
   }
-  
+
   const cosElev = Math.cos(elevRad);
   const sinLambda = (Re * cosElev) / (Re + h);
-  
+
   if (sinLambda > 1) return 0;
-  
+
   const lambda = Math.asin(sinLambda);
-  const theta = (Math.PI / 2) - elevRad - lambda;
-  
+  const theta = Math.PI / 2 - elevRad - lambda;
+
   if (theta <= 0) return 0;
-  
+
   return Re * theta;
 }
 
@@ -123,7 +123,7 @@ function generateSwathCoords(center, sensorConfig, heading = 0) {
   const {
     swathWidth = 0,
     scanWidth = 0,
-    swathShape = 'rectangle',
+    swathShape = "rectangle",
     // lookAngle and lookDirection could be used for off-nadir pointing in future
     // lookAngle = 0,
     // lookDirection = 'right',
@@ -139,7 +139,7 @@ function generateSwathCoords(center, sensorConfig, heading = 0) {
 
   const coords = [];
 
-  if (swathShape === 'circle') {
+  if (swathShape === "circle") {
     // Circular swath - just a circle
     return generateGeodesicCircle(center, halfWidth, 36);
   }
@@ -163,14 +163,8 @@ function generateSwathCoords(center, sensorConfig, heading = 0) {
     const dist = Math.sqrt(dx * dx + dy * dy) / EARTH_RADIUS_KM;
     const bearing = Math.atan2(dy, dx);
 
-    const lat2 = Math.asin(
-      Math.sin(lat1) * Math.cos(dist) +
-      Math.cos(lat1) * Math.sin(dist) * Math.cos(bearing)
-    );
-    const lon2 = lon1 + Math.atan2(
-      Math.sin(bearing) * Math.sin(dist) * Math.cos(lat1),
-      Math.cos(dist) - Math.sin(lat1) * Math.sin(lat2)
-    );
+    const lat2 = Math.asin(Math.sin(lat1) * Math.cos(dist) + Math.cos(lat1) * Math.sin(dist) * Math.cos(bearing));
+    const lon2 = lon1 + Math.atan2(Math.sin(bearing) * Math.sin(dist) * Math.cos(lat1), Math.cos(dist) - Math.sin(lat1) * Math.sin(lat2));
 
     coords.push({
       latitude: (lat2 * 180) / Math.PI,
@@ -193,61 +187,42 @@ function generateSwathCoords(center, sensorConfig, heading = 0) {
  */
 function batchGenerateCoverageCircles(requests) {
   const results = {};
-  
+
   for (const req of requests) {
-    results[req.id] = generateGeodesicCircle(
-      req.center,
-      req.radiusKm,
-      req.nPoints || 72
-    );
+    results[req.id] = generateGeodesicCircle(req.center, req.radiusKm, req.nPoints || 72);
   }
-  
+
   return results;
 }
 
 // Message handler
-self.onmessage = function(e) {
+self.onmessage = function (e) {
   const { type, id, payload } = e.data;
 
   try {
     let result;
 
     switch (type) {
-      case 'generate-coverage-circle':
-        result = generateGeodesicCircle(
-          payload.center,
-          payload.radiusKm,
-          payload.nPoints || 72
-        );
+      case "generate-coverage-circle":
+        result = generateGeodesicCircle(payload.center, payload.radiusKm, payload.nPoints || 72);
         break;
 
-      case 'batch-generate-coverage-circles':
+      case "batch-generate-coverage-circles":
         result = batchGenerateCoverageCircles(payload.requests);
         break;
 
-      case 'calculate-coverage-radius':
-        result = calculateCoverageRadius(
-          payload.altitudeKm,
-          payload.minElevationDeg || 0
-        );
+      case "calculate-coverage-radius":
+        result = calculateCoverageRadius(payload.altitudeKm, payload.minElevationDeg || 0);
         break;
 
-      case 'generate-swath':
-        result = generateSwathCoords(
-          payload.center,
-          payload.sensorConfig,
-          payload.heading || 0
-        );
+      case "generate-swath":
+        result = generateSwathCoords(payload.center, payload.sensorConfig, payload.heading || 0);
         break;
 
-      case 'batch-generate-swaths':
+      case "batch-generate-swaths":
         result = {};
         for (const req of payload.requests) {
-          result[req.id] = generateSwathCoords(
-            req.center,
-            req.sensorConfig,
-            req.heading || 0
-          );
+          result[req.id] = generateSwathCoords(req.center, req.sensorConfig, req.heading || 0);
         }
         break;
 
@@ -262,4 +237,4 @@ self.onmessage = function(e) {
 };
 
 // Signal ready
-self.postMessage({ type: 'ready' });
+self.postMessage({ type: "ready" });

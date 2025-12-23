@@ -1,8 +1,8 @@
 import { app, BrowserWindow, Menu } from "electron";
 import { registerIpcHandlers } from "./src/services/ipcHandlers.js";
 import { terminateWorkerPool } from "./src/workers/workerPool.js";
-import { fileURLToPath } from 'url';
-import path from 'path';
+import { fileURLToPath } from "url";
+import path from "path";
 
 // Hapus menubar sepenuhnya
 Menu.setApplicationMenu(null);
@@ -16,7 +16,7 @@ const __dirname = path.dirname(__filename); // Dapatkan direktori dari file saat
 async function createWindow() {
   win = new BrowserWindow({
     // Ukuran dasar (fallback), tidak terlalu penting karena akan di-maximize
-    width: 1280, 
+    width: 1280,
     height: 720,
     show: false, // PENTING: Sembunyikan dulu agar transisi mulus
     webPreferences: {
@@ -28,7 +28,7 @@ async function createWindow() {
 
   // LOGIKA MAXIMIZE:
   // Ini akan menyesuaikan dengan resolusi layar pengguna (1366x768, 1920x1080, 4K, dll)
-  win.maximize(); 
+  win.maximize();
   win.show();
 
   // Load the correct URL based on environment

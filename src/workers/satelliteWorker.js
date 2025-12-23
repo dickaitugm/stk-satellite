@@ -1,7 +1,7 @@
 /**
  * Satellite Worker Thread
  * Runs heavy SGP4 calculations in a separate thread to avoid blocking main process
- * 
+ *
  * Handles:
  * - Batch satellite position calculations
  * - Interpolated positions for smooth animation
@@ -10,8 +10,8 @@
  * - Coverage circle generation
  */
 
-import { parentPort } from 'worker_threads';
-import * as satellite from 'satellite.js';
+import { parentPort } from "worker_threads";
+import * as satellite from "satellite.js";
 
 // Cache for parsed satrec objects
 const satrecCache = new Map();
@@ -22,7 +22,7 @@ const MAX_CACHE_SIZE = 200; // Support up to 100 satellites with TLE history
  */
 function getSatrec(id, line1, line2) {
   const cacheKey = `${id}-${line1.substring(18, 32)}`;
-  
+
   if (satrecCache.has(cacheKey)) {
     return satrecCache.get(cacheKey);
   }
@@ -161,23 +161,23 @@ function calculateCoverageRadius(altitudeKm, minElevationDeg = 0) {
   const Re = EARTH_RADIUS_KM;
   const h = altitudeKm;
   const elevRad = (minElevationDeg * Math.PI) / 180;
-  
+
   if (minElevationDeg <= 0) {
     const cosTheta = Re / (Re + h);
     const theta = Math.acos(cosTheta);
     return Re * theta;
   }
-  
+
   const cosElev = Math.cos(elevRad);
   const sinLambda = (Re * cosElev) / (Re + h);
-  
+
   if (sinLambda > 1) return 0;
-  
+
   const lambda = Math.asin(sinLambda);
-  const theta = (Math.PI / 2) - elevRad - lambda;
-  
+  const theta = Math.PI / 2 - elevRad - lambda;
+
   if (theta <= 0) return 0;
-  
+
   return Re * theta;
 }
 
@@ -279,7 +279,7 @@ function calculateSatellitePasses(tle, groundStation, startTimestamp, endTimesta
   if (!satrec) return [];
 
   const passes = [];
-  
+
   // Adaptive step - larger for long time ranges
   const duration = endTimestamp - startTimestamp;
   const baseStep = 30 * 1000; // 30 seconds
@@ -345,7 +345,7 @@ function calculateSatellitePasses(tle, groundStation, startTimestamp, endTimesta
       }
     } else if (inPass) {
       inPass = false;
-      
+
       // Binary search for precise LOS
       let left = t - stepMs;
       let right = t;
@@ -475,7 +475,7 @@ function generatePassPath(tle, groundStation, pass, numPoints = 60) {
 function clearCache(id = null) {
   if (id) {
     for (const key of satrecCache.keys()) {
-      if (key.startsWith(id + '-')) {
+      if (key.startsWith(id + "-")) {
         satrecCache.delete(key);
       }
     }
@@ -485,72 +485,48 @@ function clearCache(id = null) {
 }
 
 // Message handler
-parentPort.on('message', (message) => {
+parentPort.on("message", (message) => {
   const { type, id, payload } = message;
 
   try {
     let result;
 
     switch (type) {
-      case 'calculate-positions':
+      case "calculate-positions":
         result = calculateSatellitePositions(payload.satellites, payload.timestamp);
         break;
 
-      case 'calculate-positions-interpolated':
-        result = calculatePositionsForInterpolation(
-          payload.satellites,
-          payload.timestamp,
-          payload.deltaMs
-        );
+      case "calculate-positions-interpolated":
+        result = calculatePositionsForInterpolation(payload.satellites, payload.timestamp, payload.deltaMs);
         break;
 
-      case 'generate-orbit-path':
-        result = generateOrbitPath(
-          payload.tle,
-          payload.startTimestamp,
-          payload.periodMinutes,
-          payload.numPoints
-        );
+      case "generate-orbit-path":
+        result = generateOrbitPath(payload.tle, payload.startTimestamp, payload.periodMinutes, payload.numPoints);
         break;
 
-      case 'generate-orbit-paths-batch':
-        result = generateOrbitPathsBatch(
-          payload.satellites,
-          payload.startTimestamp,
-          payload.numPoints
-        );
+      case "generate-orbit-paths-batch":
+        result = generateOrbitPathsBatch(payload.satellites, payload.startTimestamp, payload.numPoints);
         break;
 
-      case 'generate-coverage-circle': {
+      case "generate-coverage-circle": {
         const unitCircle = getUnitCircle(payload.nPoints);
         result = generateGeodesicCircleFast(payload.center, payload.radiusKm, unitCircle);
         break;
       }
 
-      case 'calculate-coverage-radius':
+      case "calculate-coverage-radius":
         result = calculateCoverageRadius(payload.altitudeKm, payload.minElevationDeg);
         break;
 
-      case 'calculate-satellite-passes':
-        result = calculateSatellitePasses(
-          payload.tle,
-          payload.groundStation,
-          payload.startTimestamp,
-          payload.endTimestamp,
-          payload.minElevation
-        );
+      case "calculate-satellite-passes":
+        result = calculateSatellitePasses(payload.tle, payload.groundStation, payload.startTimestamp, payload.endTimestamp, payload.minElevation);
         break;
 
-      case 'generate-pass-path':
-        result = generatePassPath(
-          payload.tle,
-          payload.groundStation,
-          payload.pass,
-          payload.numPoints
-        );
+      case "generate-pass-path":
+        result = generatePassPath(payload.tle, payload.groundStation, payload.pass, payload.numPoints);
         break;
 
-      case 'clear-cache':
+      case "clear-cache":
         clearCache(payload?.id);
         result = { cleared: true };
         break;
@@ -566,4 +542,4 @@ parentPort.on('message', (message) => {
 });
 
 // Signal ready
-parentPort.postMessage({ type: 'ready' });
+parentPort.postMessage({ type: "ready" });

@@ -155,7 +155,7 @@ export const useTimeStore = create((set, get) => ({
   // ============================================
   // PERFORMANCE OPTIMIZED TICK SYSTEM
   // ============================================
-  // 
+  //
   // Internal time tracking (updated every frame, NOT triggering React re-renders)
   // Use getInternalTime() for high-frequency reads (e.g., WorldWind updates)
   // Use currentTime (Zustand state) for UI display (throttled to 10Hz)
@@ -165,7 +165,7 @@ export const useTimeStore = create((set, get) => ({
   // Internal time (mutable, not reactive)
   _internalTime: Date.now(),
   _lastStoreUpdate: 0,
-  
+
   // Throttle interval for Zustand state updates (ms)
   // 100ms = 10 Hz updates to React, sufficient for UI display
   STORE_UPDATE_INTERVAL: 100,
