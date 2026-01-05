@@ -27,7 +27,7 @@ import { calculateCoverageRadius, geodesicCircleCoords, generateSwathCoords } fr
 // Sub-components
 import BorderSensors from "./BorderSensors";
 import EngineStatusPanel from "./EngineStatusPanel";
-import SatelliteInfoPanel from "./SatelliteInfoPanel";
+// import SatelliteInfoPanel from "./SatelliteInfoPanel";
 import LoadingOverlay from "./LoadingOverlay";
 
 // Configure WorldWind base URL
@@ -1246,14 +1246,14 @@ const Globe2D = ({ onMouseMove }) => {
           isLoading={isLoading}
         />
 
-        <SatelliteInfoPanel
+        {/* <SatelliteInfoPanel
           satelliteName={getSelectedSatellite()?.name || "No Satellite"}
           satellitePosition={currentSatellitePosition}
           noradId={getSelectedSatellite()?.noradId || "-"}
           period="~97.4 min"
           satellite={getSelectedSatellite()}
           isLoading={isLoading}
-        />
+        /> */}
 
         {/* Floating Zoom Controls */}
         {!isLoading && (
